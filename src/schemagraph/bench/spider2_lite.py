@@ -1,4 +1,4 @@
-"""Spider 2.0-Lite schema-linking benchmark: gold-table recall of ``link_schema``.
+"""Spider 2.0-Lite / -Snow schema-linking benchmark: gold-table recall of ``link_schema``.
 
 No execution, no credentials, no LLM (unless ``use_llm``). For each of the 547 tasks:
 build the graph of the task's database from the shipped schema files, link the
@@ -32,6 +32,30 @@ from schemagraph.connectors.spider2 import (
 from schemagraph.graph.build import build_graph
 from schemagraph.graph.infer import with_inferred_edges
 from schemagraph.linking.linker import Linker, LinkOptions
+
+
+@dataclass(frozen=True)
+class Suite:
+    """Where a Spider 2.0 variant keeps its tasks, gold tables, schema files and documents."""
+
+    name: str
+    tasks: str
+    gold: str
+    databases: str
+    documents: str
+    question_key: str
+    db_key: str
+    flat: bool  # True: databases/<db> (Snow); False: databases/<dialect>/<db> (Lite)
+
+    def db_dir(self, root: Path, dialect: str, db: str) -> Path:
+        base = root / self.databases
+        return base / db if self.flat else base / dialect / db
+
+
+SUITES: dict[str, Suite] = {
+    "lite": Suite("lite", "spider2-lite/spider2-lite.jsonl", "methods/gold-tables/spider2-lite-gold-tables.jsonl", "spider2-lite/resource/databases", "spider2-lite/resource/documents", "question", "db", False),
+    "snow": Suite("snow", "spider2-snow/spider2-snow.jsonl", "methods/gold-tables/spider2-snow-gold-tables.jsonl", "spider2-snow/resource/databases", "spider2-snow/resource/documents", "instruction", "db_id", True),
+}
 
 
 @dataclass
@@ -72,17 +96,17 @@ def _prefix(instance_id: str) -> str:
     return instance_id[:2]
 
 
-def load_instances(spider2_root: Path, *, limit: int | None = None, dialects: set[str] | None = None, only: set[str] | None = None, min_db_tables: int = 0) -> list[Instance]:
-    lite = spider2_root / "spider2-lite"
+def load_instances(spider2_root: Path, *, limit: int | None = None, dialects: set[str] | None = None, only: set[str] | None = None, min_db_tables: int = 0, suite: str = "lite") -> list[Instance]:
+    st = SUITES[suite]
     gold: dict[str, set[str]] = {}
     gold_raw: dict[str, set[str]] = {}
-    for line in (spider2_root / "methods" / "gold-tables" / "spider2-lite-gold-tables.jsonl").read_text(encoding="utf-8").splitlines():
+    for line in (spider2_root / st.gold).read_text(encoding="utf-8").splitlines():
         if line.strip():
             d = json.loads(line)
             gold[d["instance_id"]] = {canonical_table(t) for t in d["gold_tables"]}
             gold_raw[d["instance_id"]] = {t.strip().lower() for t in d["gold_tables"]}
     out: list[Instance] = []
-    for line in (lite / "spider2-lite.jsonl").read_text(encoding="utf-8").splitlines():
+    for line in (spider2_root / st.tasks).read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         d = json.loads(line)
@@ -96,31 +120,36 @@ def load_instances(spider2_root: Path, *, limit: int | None = None, dialects: se
             continue
         doc = None
         if d.get("external_knowledge"):
-            p = lite / "resource" / "documents" / d["external_knowledge"]
+            p = spider2_root / st.documents / d["external_knowledge"]
             if p.exists():
                 doc = p.read_text(encoding="utf-8", errors="replace")
         if min_db_tables:
-            folder = lite / "resource" / "databases" / dialect / d["db"]
+            folder = st.db_dir(spider2_root, dialect, d[st.db_key])
             if not folder.is_dir() or sum(1 for _ in folder.rglob("*.json")) < min_db_tables:
                 continue
-        out.append(Instance(iid, d["db"], dialect, d["question"], doc, gold[iid], gold_raw[iid]))
+        out.append(Instance(iid, d[st.db_key], dialect, d[st.question_key], doc, gold[iid], gold_raw[iid]))
         if limit and len(out) >= limit:
             break
     return out
 
 
 class _GraphCache:
-    def __init__(self, databases_root: Path, *, infer: bool, sample_values: int, collapse_families: bool = True):
-        self.root = databases_root
+    def __init__(self, spider2_root: Path, suite: Suite, *, infer: bool, sample_values: int, collapse_families: bool = True):
+        self.root = spider2_root
+        self.suite = suite
         self.infer = infer
         self.sample_values = sample_values
         self.collapse_families = collapse_families
         self.cache: dict[tuple[str, str], tuple[Linker, int, list[str], dict[str, str]]] = {}
 
+    def db_dir(self, dialect: str, db: str) -> Path:
+        return self.suite.db_dir(self.root, dialect, db)
+
     def get(self, dialect: str, db: str) -> tuple[Linker, int, list[str], dict[str, str]]:
         key = (dialect, db)
         if key not in self.cache:
-            snap = introspect_spider2(Spider2Config(root=str(self.root), dialect=dialect, db=db, sample_values=self.sample_values, collapse_families=self.collapse_families), f"spider2:{db}")
+            folder = self.db_dir(dialect, db)
+            snap = introspect_spider2(Spider2Config(root=str(folder.parent), dialect=dialect, db=db, path=str(folder), sample_values=self.sample_values, collapse_families=self.collapse_families), f"spider2:{db}")
             if self.infer:
                 with_inferred_edges(snap)
             sg = build_graph([snap])
@@ -165,16 +194,18 @@ def run(
     out_dir: str | Path | None = None,
     progress=None,
     tag: str | None = None,
+    suite: str = "lite",
     **link_kwargs,
 ) -> dict:
     root = Path(spider2_root)
-    instances = load_instances(root, limit=limit, dialects=dialects, only=only, min_db_tables=min_db_tables)
-    cache = _GraphCache(root / "spider2-lite" / "resource" / "databases", infer=infer, sample_values=sample_values, collapse_families=collapse_families)
-    opts = LinkOptions(max_tables=max_tables, anchor_k=anchor_k, render=False, use_llm=use_llm, debug=True, **link_kwargs)
+    st = SUITES[suite]
+    instances = load_instances(root, limit=limit, dialects=dialects, only=only, min_db_tables=min_db_tables, suite=suite)
+    cache = _GraphCache(root, st, infer=infer, sample_values=sample_values, collapse_families=collapse_families)
+    opts = LinkOptions(max_tables=max_tables, anchor_k=anchor_k, render=False, use_llm=use_llm, debug=True, **{"ranking_limit": 0, **link_kwargs})
     rows: list[Row] = []
     skipped: list[str] = []
     for i, inst in enumerate(instances):
-        if not (cache.root / inst.dialect / inst.db).is_dir():
+        if not cache.db_dir(inst.dialect, inst.db).is_dir():
             skipped.append(inst.instance_id)
             continue
         linker, n_tables, _warn, member_map = cache.get(inst.dialect, inst.db)
@@ -216,13 +247,13 @@ def run(
         if progress:
             progress(i + 1, len(instances), rows[-1])
     summary = summarize(rows)
-    summary["config"] = {"max_tables": max_tables, "anchor_k": anchor_k, "use_docs": use_docs, "doc_chars": doc_chars, "infer": infer, "sample_values": sample_values, "use_llm": use_llm, "min_db_tables": min_db_tables, "collapse_families": collapse_families, "link_kwargs": link_kwargs, "n": len(rows), "skipped_missing_schema": skipped}
+    summary["config"] = {"max_tables": max_tables, "anchor_k": anchor_k, "use_docs": use_docs, "doc_chars": doc_chars, "infer": infer, "sample_values": sample_values, "use_llm": use_llm, "min_db_tables": min_db_tables, "collapse_families": collapse_families, "link_kwargs": link_kwargs, "suite": suite, "n": len(rows), "skipped_missing_schema": skipped}
     if out_dir:
         od = Path(out_dir)
         od.mkdir(parents=True, exist_ok=True)
         tag = tag or f"mt{max_tables}_k{anchor_k}_{'docs' if use_docs else 'nodocs'}_{'infer' if infer else 'noinfer'}{'_llm' if use_llm else ''}"
-        (od / f"spider2_lite_{tag}.json").write_text(json.dumps({"summary": summary, "rows": [asdict(r) for r in rows]}, indent=2), encoding="utf-8")
-        with (od / f"spider2_lite_{tag}.csv").open("w", encoding="utf-8", newline="") as fh:
+        (od / f"spider2_{suite}_{tag}.json").write_text(json.dumps({"summary": summary, "rows": [asdict(r) for r in rows]}, indent=2), encoding="utf-8")
+        with (od / f"spider2_{suite}_{tag}.csv").open("w", encoding="utf-8", newline="") as fh:
             w = csv.writer(fh)
             w.writerow(["instance_id", "db", "dialect", "n_gold", "n_pred", "n_tables_db", "hit", "recall", "precision", "strict", "anchor_hit", "max_gold_rank", "ms", "missed"])
             for r in rows:

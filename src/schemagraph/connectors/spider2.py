@@ -37,6 +37,7 @@ class Spider2Config(BaseModel):
     root: str = Field(description="…/spider2-lite/resource/databases")
     dialect: str = Field(description="bigquery | snowflake | sqlite")
     db: str = Field(description="database folder name, e.g. austin, GITHUB_REPOS, Airlines")
+    path: str | None = Field(default=None, description="explicit database folder; overrides root/dialect/db (Spider2-Snow keeps databases flat under resource/databases/<DB>)")
     sample_values: int = 5
     collapse_shards: bool = True
     collapse_families: bool = Field(default=True, description="Merge tables whose names differ only in digit runs and share >= family_jaccard of their columns")
@@ -104,6 +105,24 @@ def load_table_json(path: Path, cfg: Spider2Config, source: str) -> Table:
     return Table(name=name, schema=schema, catalog=catalog, columns=cols, description=table_desc, source=source, properties={"fullname": full})
 
 
+def _cluster_name(names: list[str]) -> str:
+    """Family name for one cluster: digit runs that vary across members become ``*``, digit runs
+    shared by every member are kept, so two clusters with the same signature get distinct names
+    (``imaging_level2_metadata_r*`` vs ``imaging_level4_metadata_r*``)."""
+    parts = [re.split(r"(\d+)", n.strip().lower()) for n in names]
+    if len({len(p) for p in parts}) != 1:
+        return family_signature(names[0])
+    out: list[str] = []
+    for i, toks in enumerate(zip(*parts, strict=True)):
+        if i % 2 == 1:
+            out.append(toks[0] if len(set(toks)) == 1 else "*")
+        elif len(set(toks)) == 1:
+            out.append(toks[0])
+        else:
+            return family_signature(names[0])
+    return "".join(out)
+
+
 def _collapse_by_signature(tables: dict[str, Table], jaccard: float) -> dict[str, Table]:
     """Group tables (same catalog/schema) whose names share a digit-run signature and whose
     column sets overlap by >= ``jaccard``; keep one representative with a ``members`` list."""
@@ -114,7 +133,7 @@ def _collapse_by_signature(tables: dict[str, Table], jaccard: float) -> dict[str
             continue
         groups.setdefault((t.catalog, t.schema_name, sig), []).append((key, t))
     out = dict(tables)
-    for (_catalog, schema, sig), members in groups.items():
+    for (_catalog, schema, _sig), members in groups.items():
         if len(members) < 2:
             continue
         # cluster by column-set similarity (greedy)
@@ -143,8 +162,10 @@ def _collapse_by_signature(tables: dict[str, Table], jaccard: float) -> dict[str
                     if rep.column(c.name) is None:
                         rep.columns.append(c)
                 out.pop(key, None)
-            rep.name = sig
-            stem = re.sub(r"[*_]+", " ", sig).strip()
+            rep.name = _cluster_name([t.name for _, t in cl])
+            while rep.fqn.lower() in out:  # never overwrite another cluster (or table) with the same name
+                rep.name += "_"
+            stem = re.sub(r"[*_]+", " ", rep.name).strip()
             rep.properties = {"family": "true", "members": ",".join(dict.fromkeys(member_fqns)), "business_name": f"{schema or ''} {stem}".strip()}
             out[rep.fqn.lower()] = rep
     return out
@@ -164,7 +185,7 @@ def _resolver(tables: list[Table]):
 
 def introspect_spider2(cfg: Spider2Config, source: str = "spider2") -> SchemaSnapshot:
     snap = SchemaSnapshot(source=source, source_type="spider2")
-    base = Path(cfg.root) / cfg.dialect / cfg.db
+    base = Path(cfg.path) if cfg.path else Path(cfg.root) / cfg.dialect / cfg.db
     if not base.exists():
         snap.warnings.append(f"missing {base}")
         return snap

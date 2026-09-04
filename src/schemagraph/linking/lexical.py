@@ -177,7 +177,7 @@ def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True) -> LexicalInde
         best: dict[str, float] = {}
         for node, w in posts:
             best[node] = max(best.get(node, 0.0), w)
-        idx.postings[tok] = sorted(best.items(), key=lambda x: -x[1])
+        idx.postings[tok] = sorted(best.items(), key=lambda x: (-x[1], x[0]))
     idx.vocab = sorted(idx.postings)
     n_nodes = max(1, sum(1 for _, d in g.nodes(data=True) if d.get("ntype") in {"table", "column", "term"}))
     norm = math.log(n_nodes + 1)

@@ -55,9 +55,24 @@ def test_bypass_if_fits_keeps_anchors_and_paths(store_graph):
     assert len(r2.tables) <= 5
 
 
-def test_no_match_returns_empty(store_graph):
+def test_no_match_on_small_schema_returns_everything(store_graph):
+    # nothing activated but the schema fits the budget: the bypass still fires ("Death of Schema
+    # Linking"), with every column, because there is no evidence to select columns by
     r = Linker(store_graph).link("zzzz qqqq")
-    assert r.tables == [] and r.anchors == []  # nothing activated: bypass does not fire either
+    assert len(r.tables) == 7 and r.anchors == [] and r.join_paths == []
+    assert all(len(t.columns) == len(store_graph.table(t.fqn).columns) for t in r.tables)
+
+
+def test_no_match_on_large_schema_returns_empty(store_graph):
+    r = Linker(store_graph).link("zzzz qqqq", LinkOptions(max_tables=5))
+    assert r.tables == [] and r.anchors == []
+
+
+def test_debug_ranking_limit(store_graph):
+    r = Linker(store_graph).link("orders shipped by carrier", LinkOptions(debug=True, ranking_limit=2))
+    assert len(r.ranking) == 2
+    r = Linker(store_graph).link("orders shipped by carrier", LinkOptions(debug=True, ranking_limit=0))
+    assert len(r.ranking) > 2
 
 
 def test_llm_anchor_picker_is_used_when_enabled(store_graph):

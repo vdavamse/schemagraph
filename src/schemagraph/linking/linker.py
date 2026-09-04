@@ -50,7 +50,8 @@ class LinkOptions:
     small_schema_bypass: int = 0  # if > 0 and the graph has <= N tables, return everything
     use_llm: bool = False
     render: bool = True
-    debug: bool = False  # include the top-60 table ranking in the result
+    debug: bool = False  # include the table ranking in the result
+    ranking_limit: int = 60  # with debug: keep this many ranked tables (0 = all; the benchmark uses 0 so gold rank is never ambiguous)
     idf: bool = True  # scale single-token evidence by rarity across the schema
     agg: str = "top3"  # column->table aggregation: "top3" | "sum"
     min_numeric_len: int = 4  # ignore digit-only tokens shorter than this
@@ -91,7 +92,7 @@ class Linker:
                 tscores[d["fqn"]] = tscores.get(d["fqn"], 0.0) + 0.10 * scale * min(w, 2.0)
         if opts.schema_routing > 0:
             tscores = self._route_by_schema(tscores, opts.schema_routing)
-        ranked = sorted(tscores.items(), key=lambda x: -x[1])
+        ranked = sorted(tscores.items(), key=lambda x: (-x[1], x[0]))  # name breaks ties so runs are reproducible
         ranked = [(f, s) for f, s in ranked if s > 0]
 
         anchors, sources, destinations = self._pick_anchors(question, ranked, opts)
@@ -101,8 +102,9 @@ class Linker:
         kept_tables = set(anchors)
         for jp in join_paths:
             kept_tables.update(jp.tables)
-        if opts.bypass_if_fits and len(sg.tables) <= opts.max_tables and ranked:
-            # the whole schema fits the budget: never risk missing a table
+        if opts.bypass_if_fits and len(sg.tables) <= opts.max_tables:
+            # the whole schema fits the budget: never risk missing a table, even when the
+            # question activated nothing (a question with no schema vocabulary must not return no tables)
             kept_tables.update(t.fqn for t in sg.tables.values())
         else:
             # fill remaining budget with next-best scored tables (recall-first, but not noise)
@@ -111,7 +113,7 @@ class Linker:
                 if len(kept_tables) >= opts.max_tables or s < floor:
                     break
                 kept_tables.add(f)
-        kept_tables = set(list(sorted(kept_tables, key=lambda f: -tscores.get(f, 0.0)))[: max(opts.max_tables, len(anchors))])
+        kept_tables = set(sorted(kept_tables, key=lambda f: (-tscores.get(f, 0.0), f))[: max(opts.max_tables, len(anchors))])
 
         tables = self._select_columns(kept_tables, anchors, join_paths, node_scores, act, tscores, opts)
         glossary = {term: [sg.g.nodes[m].get("fqn", m) for m in sg.g.neighbors(self.index.phrases[term]) if sg.g[self.index.phrases[term]][m].get("etype") == "glossary"] for term in act.matched_terms if term in self.index.phrases}
@@ -132,7 +134,7 @@ class Linker:
             },
         )
         if opts.debug:
-            result.ranking = [(f, round(s, 6)) for f, s in ranked[:60]]
+            result.ranking = [(f, round(s, 6)) for f, s in (ranked[: opts.ranking_limit] if opts.ranking_limit else ranked)]
         if opts.render:
             result.ddl = render_ddl(sg, result)
         return result
@@ -140,12 +142,12 @@ class Linker:
     def explain(self, question: str) -> dict:
         act = activate(self.sg, self.index, question)
         node_scores = personalized_pagerank(self.sg, act.seeds, specificity=self._spec)
-        top = sorted(node_scores.items(), key=lambda x: -x[1])[:40]
+        top = sorted(node_scores.items(), key=lambda x: (-x[1], x[0]))[:40]
         return {
             "tokens": act.tokens,
-            "seeds": {n: {"weight": round(w, 3), "why": act.reasons.get(n, [])} for n, w in sorted(act.seeds.items(), key=lambda x: -x[1])[:40]},
+            "seeds": {n: {"weight": round(w, 3), "why": act.reasons.get(n, [])} for n, w in sorted(act.seeds.items(), key=lambda x: (-x[1], x[0]))[:40]},
             "ppr_top": [(n, round(s, 5)) for n, s in top],
-            "tables": sorted(table_scores(self.sg, node_scores).items(), key=lambda x: -x[1])[:20],
+            "tables": sorted(table_scores(self.sg, node_scores).items(), key=lambda x: (-x[1], x[0]))[:20],
         }
 
     # ---------------------------------------------------------------- internals
@@ -194,7 +196,7 @@ class Linker:
                     join_cols.setdefault(r.from_table.lower(), set()).update(c.lower() for c in r.from_columns)
                     join_cols.setdefault(r.to_table.lower(), set()).update(c.lower() for c in r.to_columns)
         out: list[LinkedTable] = []
-        for fqn in sorted(kept, key=lambda f: -tscores.get(f, 0.0)):
+        for fqn in sorted(kept, key=lambda f: (-tscores.get(f, 0.0), f)):
             t = sg.table(fqn)
             if t is None:
                 continue
@@ -211,7 +213,8 @@ class Linker:
                     keep, reason = True, "join key"
                 elif n in act.seeds:
                     keep, reason = True, "; ".join(act.reasons.get(n, [])[:2])
-                elif opts.columns == "all" or is_anchor:
+                elif opts.columns == "all" or is_anchor or not act.seeds:
+                    # no lexical evidence at all: there is nothing to select by, keep every column
                     keep = True
                 elif s > 0 and node_scores.get(n, 0.0) > 0:
                     keep = True
