@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 schemagraph is a schema context engine for text-to-SQL: catalog metadata in (pasted DDL, DuckDB, dbt, Unity Catalog, AWS Glue, Collibra), one provenance-tagged NetworkX graph in the middle, and a linked, join-complete sub-schema out as annotated DDL. Served over HTTP, MCP, a CLI and a small React UI. The linking core is deterministic graph search (no embeddings, no LLM by default); a single optional Claude call can pick anchor tables. **By design there is no SQL execution and no governance** — the agent that calls `link_schema` owns that boundary. Don't add either without asking.
 
-`docs/DESIGN.md` explains the research behind each stage (SchemaGraphSQL, HippoRAG, PathRAG, LinearRAG, SignalPilot); `bench_results/README.md` holds the benchmark numbers and the iteration log. Read those before changing the linker.
+`docs/DESIGN.md` explains the research behind each stage (SchemaGraphSQL, HippoRAG, PathRAG, LinearRAG, SignalPilot); `docs/ENTITIES.md` traces how schema objects become lexical entities and query seeds (there is no NER or embedding step); `bench_results/README.md` holds the benchmark numbers and the iteration log. Read those before changing the linker.
 
 ## Commands
 

@@ -55,7 +55,7 @@ render.render_ddl           CREATE TABLE … with descriptions, glossary header,
                             last), sample values footer
 ```
 
-Warm-path latency on a 7-table schema is ~3 ms; the first call pays a one-off SciPy import.
+Warm-path latency on a 7-table schema is ~3 ms; the first call pays a one-off SciPy import. How the entities behind the first two stages are formed, field by field and source by source, is in [`ENTITIES.md`](ENTITIES.md).
 
 ## Graph model (`graph/build.py`)
 
