@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from schemagraph.connectors.ddl import DDLConfig, parse_ddl
+from schemagraph.graph import build_graph
+from schemagraph.model import SchemaSnapshot
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+STORE_DDL = """
+CREATE TABLE customer (id INT PRIMARY KEY, name VARCHAR, email VARCHAR, state VARCHAR, city VARCHAR);
+CREATE TABLE orders (
+  id INT PRIMARY KEY,
+  customer_id INT REFERENCES customer(id),
+  store_id INT,
+  total_amount NUMERIC,
+  order_date TIMESTAMP,
+  status VARCHAR COMMENT 'current order status'
+);
+CREATE TABLE order_items (
+  id INT PRIMARY KEY, order_id INT, product_id INT, quantity INT, line_total NUMERIC,
+  FOREIGN KEY (order_id) REFERENCES orders(id),
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+CREATE TABLE products (id INT PRIMARY KEY, name VARCHAR, category_id INT, price NUMERIC, FOREIGN KEY (category_id) REFERENCES product_category(id));
+CREATE TABLE product_category (id INT PRIMARY KEY, name VARCHAR, segment VARCHAR);
+CREATE TABLE shipment (id INT PRIMARY KEY, order_item_id INT REFERENCES order_items(id), shipped_date DATE, carrier VARCHAR);
+CREATE TABLE audit_log (id INT PRIMARY KEY, actor VARCHAR, action VARCHAR);
+"""
+
+
+@pytest.fixture
+def store_snapshot() -> SchemaSnapshot:
+    snap = parse_ddl(DDLConfig(ddl=STORE_DDL, dialect="postgres", default_schema="public"), "store")
+    snap.table("public.customer").column("state").sample_values = ["California", "Texas", "New York"]
+    snap.table("public.shipment").column("carrier").sample_values = ["UPS", "FedEx", "DHL"]
+    return snap
+
+
+@pytest.fixture
+def store_graph(store_snapshot):
+    return build_graph([store_snapshot])
+
+
+@pytest.fixture
+def dbt_airbnb_dir() -> Path:
+    return FIXTURES / "dbt_airbnb"

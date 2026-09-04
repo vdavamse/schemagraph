@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.duckdb
+*.duckdb.wal
+.schemagraph/
+web/node_modules/
+web/dist/
+.env
