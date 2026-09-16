@@ -101,6 +101,30 @@ activation mass, DBCopilot-style). −6 to −7 strict points everywhere: Spider
 routinely join across datasets (`zip_codes` from one, `gsod` from another), and the boost
 suppresses the second dataset.
 
+Also tried on the large-schema subset (2026-09-16, n = 83, baseline 90.36 strict, 95.10 recall):
+
+| variant | strict_recall | recall | precision | avg_pred_tables | tasks lost |
+|---|---|---|---|---|---|
+| baseline | 90.36 | 95.10 | 34.44 | 13.35 | |
+| fill to the budget (`--opt fill_ratio=0`) | 90.36 | 95.10 | 33.08 | 14.43 | none |
+| description token weight 0.35 → 0.5 (`--desc-weight 0.5`) | 90.36 | 95.40 | 34.60 | 13.19 | none |
+| description token weight 0.7 | 89.16 | 95.10 | 34.80 | 12.95 | sf_bq166 |
+| description token weight 1.0 | 87.95 | 94.40 | 35.06 | 12.81 | bq407, sf_bq166 |
+
+Neither recovers a miss. The fill floor was only binding on bq031, whose missing table ranks
+28th, so filling to 20 cannot reach it. Raising the description weight moves the missed gold
+tables by 1-4 ranks (bq425 41 → 37, sf_bq044 33 → 30) and pushes other tasks' gold out. The
+misses are vocabulary gaps, not weighting gaps: bq031's hook is a value (`Rochester` is a station
+name, not among the sampled values), and the geography tables in bq105 / bq023 / bq064 are joins
+the question implies but never names.
+
+bq094 (recall 0) is partly a scoring artifact. The FEC dataset ships each year twice, under coded
+names (`cm16`, `cn16`, `ccl16`, `indiv16`, the gold) and readable names (`committee_2016`,
+`candidate_2016`, `candidate_committee_2016`, `individuals_2016`) with identical column lists. The
+linker returns the readable copies of all four; the gold list names only the coded ones. The same
+holds for `indiv*` in bq023. Whether the scorer should accept a column-identical table is a
+metric decision and is not made here.
+
 ## What still misses (23 of 530 at defaults)
 
 | class | n | example | direction |

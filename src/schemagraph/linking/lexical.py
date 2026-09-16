@@ -47,6 +47,8 @@ STOPWORDS = {
     "focus", "focusing", "taking", "take", "account", "thus", "so", "but", "else", "while",
 }
 
+DESC_WEIGHT = 0.35  # a token that appears only in a table/column description
+
 ABBREVIATIONS: dict[str, str] = {
     "acct": "account", "addr": "address", "amt": "amount", "avg": "average", "cat": "category", "cnt": "count",
     "cust": "customer", "dept": "department", "desc": "description", "dim": "dimension", "dt": "date",
@@ -119,7 +121,7 @@ def _name_tokens(name: str) -> list[str]:
     return out
 
 
-def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True) -> LexicalIndex:
+def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True, desc_weight: float = DESC_WEIGHT) -> LexicalIndex:
     idx = LexicalIndex()
     g = sg.g
     for n, d in list(g.nodes(data=True)):
@@ -131,7 +133,7 @@ def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True) -> LexicalInde
             for tok in _name_tokens(t.name):
                 idx.add(tok, n, 1.0)
             for tok in tokenize(t.description or ""):
-                idx.add(tok, n, 0.35)
+                idx.add(tok, n, desc_weight)
             for tag in t.tags:
                 for tok in tokenize(tag):
                     idx.add(tok, n, 0.5)
@@ -149,7 +151,7 @@ def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True) -> LexicalInde
             for tok in _name_tokens(c.name):
                 idx.add(tok, n, 1.0)
             for tok in tokenize(c.description or ""):
-                idx.add(tok, n, 0.35)
+                idx.add(tok, n, desc_weight)
             for tag in c.tags:
                 for tok in tokenize(tag):
                     idx.add(tok, n, 0.5)
