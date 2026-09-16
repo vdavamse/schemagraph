@@ -87,3 +87,21 @@ def test_inferred_edges_enable_bridge_paths():
     r = Linker(build_graph([snap])).link("quantity by product category for customers in Texas")
     assert {"customers", "orders", "order_items", "products"} <= {t.fqn for t in r.tables}
     assert any(len(p.tables) == 4 for p in r.join_paths)
+
+
+def test_family_collapse_keeps_clusters_with_the_same_signature(tmp_path):
+    # imaging_level2_metadata_r2..r5 and imaging_level4_metadata_r3..r5 share the digit-run signature
+    # imaging_level*_metadata_r* but have different columns: two families, both must survive
+    root = tmp_path / "databases"
+    ds = root / "snowflake" / "HTAN" / "HTAN.V"
+    for r in ("2", "3", "4", "5"):
+        _write_table(ds, f"HTAN.V.imaging_level2_metadata_r{r}", ["file_id", "channel", "pixel_size"], ["STRING"] * 3)
+    for r in ("3", "4", "5"):
+        _write_table(ds, f"HTAN.V.imaging_level4_metadata_r{r}", ["file_id", "cell_type", "marker", "score"], ["STRING"] * 4)
+    _write_table(ds, "HTAN.V.imaging_level1_metadata_r5", ["file_id", "raw_path", "instrument", "vendor", "lens"], ["STRING"] * 5)
+    snap = introspect_spider2(Spider2Config(root=str(root), dialect="snowflake", db="HTAN"), "t")
+    names = sorted(t.fqn for t in snap.tables)
+    assert names == ["HTAN.V.imaging_level1_metadata_r5", "HTAN.V.imaging_level2_metadata_r*", "HTAN.V.imaging_level4_metadata_r*"]
+    l2 = snap.table("HTAN.V.imaging_level2_metadata_r*")
+    assert l2.properties["members"].count(",") == 3 and "imaging_level2_metadata_r5" in l2.properties["members"]
+    assert snap.table("HTAN.V.imaging_level4_metadata_r*").properties["members"].count(",") == 2

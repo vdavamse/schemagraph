@@ -76,7 +76,7 @@ def table_scores(sg: SchemaGraph, node_scores: dict[str, float], *, agg: str = "
         elif d.get("ntype") == "column":
             per_table.setdefault(d["fqn"], []).append(s)
     out: dict[str, float] = {}
-    for fqn in set(own) | set(per_table):
+    for fqn in sorted(set(own) | set(per_table)):  # stable order: ties must not depend on the hash seed
         cols = sorted(per_table.get(fqn, []), reverse=True)
         best = cols[0] if cols else 0.0
         if agg == "sum":

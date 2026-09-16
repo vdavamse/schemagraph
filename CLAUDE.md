@@ -30,7 +30,8 @@ cd web && npm run dev                      # Vite dev server on :5173 proxying /
 Benchmark (needs a local clone of `xlang-ai/Spider2`; no credentials, no LLM):
 
 ```bash
-uv run schemagraph bench-spider2-lite /path/to/Spider2                   # all 547 Lite tasks, ~80 s
+uv run schemagraph bench-spider2-lite /path/to/Spider2                   # all 547 Lite tasks, ~9 min, ~3.4 GB peak; run configs one at a time
+uv run schemagraph bench-spider2-lite /path/to/Spider2 --suite snow      # the 547 Snow tasks (same databases on Snowflake; output spider2_snow_*)
 uv run schemagraph bench-spider2-lite /path/to/Spider2 --min-db-tables 100 --tag large   # large-schema subset
 uv run schemagraph bench-spider2-lite /path/to/Spider2 --opt idf=false   # any LinkOptions field via --opt key=value
 bench_results/run_sweep.sh /path/to/Spider2   # full sweep + ablations; resumable (skips tags with existing results)

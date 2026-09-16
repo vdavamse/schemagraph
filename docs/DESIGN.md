@@ -101,7 +101,7 @@ Optional and small: one call per question (`llm/anchors.py`) that returns source
 
 ## Benchmark
 
-`schemagraph bench-spider2-lite <Spider2 clone>` scores gold-table recall of `link_schema` on the 547 Spider 2.0-Lite tasks with no execution, credentials, or LLM. Results, ablations, the iteration log and error analysis: [`bench_results/README.md`](../bench_results/README.md). Headline (2026-09-03): **95.3% strict table recall, 97.8% recall, 11.8 tables returned, ~17 ms per question**; 88.0% strict on schemas with ≥ 100 tables (was 18.9% before the large-schema loop).
+`schemagraph bench-spider2-lite <Spider2 clone>` scores gold-table recall of `link_schema` on the 547 Spider 2.0-Lite tasks with no execution, credentials, or LLM. Results, ablations, the iteration log and error analysis: [`bench_results/README.md`](../bench_results/README.md). Headline (2026-09-04): **95.7% strict table recall, 98.1% recall, 11.8 tables returned, ~20 ms per question** on Lite and **96.5% strict on Spider 2.0-Snow** (`--suite snow`); 90.4% strict on schemas with ≥ 100 tables (was 18.9% before the large-schema loop).
 
 What the benchmark forced into the core, each ablated:
 
