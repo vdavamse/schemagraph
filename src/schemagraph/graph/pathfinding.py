@@ -6,8 +6,10 @@ between every (source, destination) pair and return the union. Bridge tables tha
 semantically irrelevant but structurally mandatory are included by construction.
 
 Deviation from the paper: paths are shortest by *weighted* length, where declared
-foreign keys cost 1.0 and weaker evidence (lineage, inferred) costs more, so a path
-through real join keys beats an equally-short path through lineage edges.
+foreign keys cost 1.0 and weaker evidence (catalog relations, inferred keys) costs more,
+so a path through real join keys beats an equally-short path through weaker evidence.
+Lineage edges are not join paths at all (``SchemaGraph.table_graph`` drops them by
+default); they are rendered as context on the tables they connect.
 
 Paths come from Yen's k-shortest-paths (``nx.shortest_simple_paths``), which yields
 simple paths in non-decreasing weighted length, so enumeration stops at the first path

@@ -109,7 +109,7 @@ def _steps(sg: SchemaGraph, path: list[str]) -> list[JoinStep]:
         rels = sg.relations(fu, fv)
         if not rels:
             continue
-        best = sorted(rels, key=lambda r: ({"foreign_key": 0, "relationship_test": 0, "join_hint": 0, "catalog_relation": 1, "lineage": 2, "inferred": 3}.get(r.kind, 4)))[0]
+        best = sorted(rels, key=lambda r: ({"foreign_key": 0, "relationship_test": 0, "join_hint": 0, "catalog_relation": 1, "inferred": 2, "lineage": 3}.get(r.kind, 4)))[0]
         if best.from_columns and best.to_columns:
             on = " AND ".join(f"{best.from_table}.{a} = {best.to_table}.{b}" for a, b in zip(best.from_columns, best.to_columns, strict=False))
         elif best.kind == "lineage":

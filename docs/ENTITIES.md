@@ -63,21 +63,24 @@ Things to know about this stage:
 `SchemaGraph.add_snapshot` turns snapshot objects into nodes:
 
 * **Identity of a table** is the lowercase fully-qualified name
-  `catalog.schema.table` with empty parts dropped (`Table.fqn`). A second
-  snapshot with the same key merges into the existing node: scalar fields keep the
-  first non-empty value, columns are unioned by name, tags, sample values (max 20)
-  and primary keys are unioned, properties are merged with the existing side
-  winning. This is gap 1 in the project notes: FQN shapes differ per connector, so
-  the same physical table from Unity and Collibra becomes two entities.
+  `catalog.schema.table` with empty parts dropped (`Table.fqn`). Snapshots merge in
+  priority order (`SOURCE_PRIORITY`: user, collibra, dbt, unity_catalog, duckdb, ddl,
+  aws_glue, or the connection's own `priority`); a second snapshot with the same key
+  merges into the existing node: scalar fields keep the highest-priority non-empty
+  value, columns are unioned by name, tags, sample values (max 20) and primary keys
+  are unioned, properties are merged with the higher-priority side winning. A stub
+  created for a referenced-only table is replaced when the real table arrives. This
+  is gap 1 in the project notes: FQN shapes differ per connector, so the same
+  physical table from Unity and Collibra becomes two entities.
 * **Identity of a column** is `fqn.column` lowercased. Column nodes get a
   `contains` edge (weight 0.5) to their table.
 * **Tables referenced by an edge but never introspected** become stub entities
   (`properties.stub = "true"`) with no columns, so join paths through them exist.
 * **Business terms** become `k:` nodes keyed by lowercase name. Their `targets`
-  are resolved right away with `_resolve_target` (exact FQN, `table.column`, or a
-  unique bare table name) and each hit gets a `glossary` edge (weight 0.7).
-  Targets that do not resolve are silently dropped (gap 4: resolution depends on
-  snapshot order).
+  are resolved with `_resolve_target` (exact FQN, `table.column`, or a unique bare
+  table name) after every snapshot has loaded its tables, and each hit gets a
+  `glossary` edge (weight 0.7). Targets that never resolve are dropped; since
+  2026-09-17 resolution no longer depends on snapshot order (the former gap 4).
 * Relation edges (`foreign_key`, `lineage`, `relationship_test`,
   `catalog_relation`, `join_hint`, `inferred`) do not create entities; they connect
   table entities and, when they carry columns, add `fk_col` edges between column
@@ -247,11 +250,15 @@ because seeds add up:
    glossary. Collibra terms already flow in; the missing piece is gap 4 (targets
    must resolve after all tables are loaded) and gap 1 (targets must resolve to
    the merged entity, not a Collibra twin).
-2. **Embedding activation**: embed each object's surface forms (name, description,
-   business name) once at index time, embed the question at query time, and seed
-   the top-k objects above a cosine threshold at a weight comparable to a
-   description hit (0.35 to 0.8). Handles paraphrase; adds a model dependency and
-   an index rebuild cost. Local sentence-transformers or Ollama keep it offline.
+2. **Embedding activation** (implemented 2026-09-17, `linking/embed.py`, extra
+   `embed`): each table, column and term's surface forms (name words, business
+   name, description) are embedded once with a static model (model2vec
+   `potion-base-8M`, numpy only, 5,000 objects in 0.14 s); at query time the
+   question's word n-grams are embedded and, per phrase, the closest objects above
+   cosine 0.5 are seeded at `0.8 x cosine`. Spider 2.0-Lite: strict 95.85 -> 96.23,
+   anchor hit 70.4 -> 72.6, strict@7 on the precise sample 70.6 -> 73.7, p50 latency
+   12 -> 51 ms. Off in `LinkOptions` (benchmarks stay dependency-free); the Engine
+   turns it on when the extra is installed.
 3. **LLM entity pass**: one call that returns question entities as JSON
    (`{measures, dimensions, filters, values, time}`), each then matched by the
    existing matchers, with values routed straight to the value index. Fixes

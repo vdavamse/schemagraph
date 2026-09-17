@@ -109,7 +109,9 @@ outside the top 20. Dissecting activations gave four mechanisms, each fixed and 
 | 5 | default budget 12 → 20 (same ranking; cut moves to where the ranking already is) | 95.28 | 87.95 |
 | 6 | 2026-09-04 fixes: whole-schema bypass also fires when the question activates nothing; family collapse no longer drops a second cluster with the same digit-run signature (`imaging_level2_metadata_r*` vs `imaging_level4_metadata_r*`); score ties broken by name so results no longer depend on `PYTHONHASHSEED` (one large-schema task flipped between runs) | 95.66 | 90.36 |
 | 7 | 2026-09-17 mechanics: PPR as a cached sparse power iteration converged to 1e-12 (`nx.pagerank` on the subgraph view stopped at `N × 1e-6`, an L1 error near 1e-2 on 7,000-node schemas that reordered near-tied tables); Yen's k-shortest paths instead of enumerating all simple paths; sample values matched by word n-gram lookup instead of one regex per value. Same strict recall, p50 24 → 12 ms, p99 607 → 233 ms, a full run 9 → 2.6 min on a local copy of the schema files | 95.66 | 90.36 |
-| 8 | ranking = reciprocal-rank fusion of the PPR table ranking with BM25F over one document per table (`ranker=rrf`), anchor and fill gates on per-ranker relative evidence; stopword-tolerant name n-grams (`ngram_stop`) | **95.85** | **91.57** |
+| 8 | ranking = reciprocal-rank fusion of the PPR table ranking with BM25F over one document per table (`ranker=rrf`), anchor and fill gates on per-ranker relative evidence; stopword-tolerant name n-grams (`ngram_stop`) | 95.85 | 91.57 |
+| 9 | rank-tiered column cap (`columns_top_uncapped=1`, `max_columns_per_table=40`): col_strict 81.17 → 91.21 at −0.5 % tokens; table metrics unchanged. Same day, benchmark-neutral by construction: snapshots merge in explicit source-priority order with edges and glossary targets resolved after all tables load (`fixA_merge`, identical), and lineage edges leave path-finding (`fixB_lineage`, identical) | **95.85** | **91.57** |
+| 10 | optional seed-side embedding activator (`embed=true`, extra `embed`, `spider2_lite_embed.*`): question phrases seed the closest objects by static-embedding cosine. Strict 96.23, anchor_hit 72.64, precise strict@7 73.7 (from 70.6), gold_in_top20 96.23, p50 51 ms. Off in the benchmark defaults; the Engine turns it on when the extra is installed | (96.23) | |
 
 Tried and rejected: **schema routing** (blend each table's score with its dataset's
 activation mass, DBCopilot-style). −6 to −7 strict points everywhere: Spider 2 gold sets
@@ -207,10 +209,13 @@ the database.
 
 | suite | config | n scored | col_strict | col_recall | col_precision | avg pred cols | p50 tokens |
 |---|---|---|---|---|---|---|---|
-| Snow | default (2026-09-17, rrf) | 120 | 96.67 | 99.36 | 8.66 | 304 | 3 571 |
+| Snow | **default (2026-09-17, rrf, top-1 table uncapped, others 40)** | 120 | **98.33** | 99.58 | 8.62 | 251 | 3 585 |
+| Snow | rrf, cap 60 everywhere (2026-09-17, before the column change) | 120 | 96.67 | 99.36 | 8.66 | 304 | 3 571 |
 | Snow | default (2026-09-10, ppr) | 120 | 95.00 | 98.55 | 8.62 | 307 | 3 571 |
 | Snow | columns uncapped | 120 | **98.33** | 99.19 | 8.49 | 362 | 3 590 |
-| Lite | default (2026-09-17  rrf) | 239 | 81.17 | 92.28 | 6.55 | 310 | 3 251 |
+| Lite | **default (2026-09-17, rrf, top-1 table uncapped, others 40)** | 239 | **91.21** | 96.43 | 6.46 | 306 | 3 692 |
+| Lite | rrf, top-3 uncapped, others 40 (`colcap_top3_40`) | 239 | 94.56 | 97.42 | 6.22 | 412 | 3 692 |
+| Lite | rrf, cap 60 everywhere (2026-09-17, before the column change) | 239 | 81.17 | 92.28 | 6.55 | 310 | 3 251 |
 | Lite | default (2026-09-16, ppr) | 239 | 79.50 | 91.48 | 6.55 | 311 | 3 168 |
 | Lite | columns uncapped | 239 | **94.56** | 97.46 | 6.22 | 646 | 3 808 |
 
@@ -226,9 +231,53 @@ enough public gold SQL in the wide buckets to be worth reading):
 | cols>=10k | 18 | 33.33 → 83.33 | 56 685 → 160 985 |
 
 Uncapping is not the fix it looks like. The narrow bucket buys +5.7 col_strict for +2 % tokens; the
-widest buys +50 for +184 %, and a 161k-token context is past most usable budgets. The shape argues
-for an adaptive per-table column budget — the move `adaptive_budget` already makes for tables —
-rather than a bigger constant. Not implemented: it is a linker change and needs its own before/after.
+widest buys +50 for +184 %, and a 161k-token context is past most usable budgets.
+
+The 2026-09-17 answer is a **rank-tiered cap** (`columns_top_uncapped=1`, `max_columns_per_table=40`): the
+best-ranked table keeps every column, the others keep keys, activated columns and the best-scored rest up
+to 40. A simulation on the current ranking first showed that column-level evidence does not predict gold
+columns (keeping only keys and activated columns in lower tables scores 70 col_strict, below the flat cap's
+77) while table rank does, and that with columns uncapped all 1,702 gold columns of returned tables are kept.
+Measured on the same ranking as the headline:
+
+| bucket | n scored | col_strict: cap 60 → top-1/40 → top-3/40 | p50 tokens: cap 60 → top-1/40 → top-3/40 |
+|---|---|---|---|
+| cols<1k | 157 | 92.36 → **94.90** → 97.45 | 2 900 → 2 936 → 2 966 |
+| cols1k-10k | 64 | 65.62 → **89.06** → 92.19 | 14 597 → 17 011 → 23 817 |
+| cols>=10k | 18 | 38.89 → **66.67** → 77.78 | 58 075 → 49 412 → 68 186 |
+
+Top-1/40 is the default: +10 col_strict for the same total column count (306 vs 310), 0.5 % fewer tokens on
+average, 16 % fewer at the maximum (75k → 63k), and the widest bucket gets cheaper. Top-3/40 buys another
++3.4 for +19 % tokens and is one option away.
+
+## Spider-dev FK graphs (`bench-spider1`)
+
+Spider 2.0 databases declare almost no foreign keys, so anchors, path union and pruning never change a Lite or Snow
+result. `schemagraph bench-spider1 <tables.json> <questions.json>` scores any Spider-format dataset (declared FKs and PKs,
+readable names as `business_name`, gold tables parsed from the gold SQL). The numbers below use the LinkAlign copy of
+Spider dev (`LinkAlign/generate_data/dataset/{tables,raw_data}.json`): 517 questions over 40 databases of 10 tables
+with 563 declared FKs, **every question joining 2 to 6 tables** (3.6 gold tables on average, no single-table
+questions), run with `bypass_if_fits=false` so the budget bites. `bridge_recall` counts gold tables that were not
+anchors and were still returned; `strict_on_bridge` is strict recall over the tasks that had such tables.
+
+| config | file tag | strict | recall | anchor_hit | bridge_recall | strict_on_bridge | avg tables |
+|---|---|---|---|---|---|---|---|
+| max 4 / anchors 2 | `mt4_k2` | 32.3 | 61.11 | 11.61 | 31.25 | 23.41 | 3.53 |
+| same, `paths=false` | `mt4_k2_nopaths` | 28.82 | 59.73 | 11.61 | 28.79 | 19.47 | 3.53 |
+| max 6 / anchors 3 | `mt6_k3` | 46.81 | 74.34 | 23.02 | 45.11 | 30.9 | 5.21 |
+| same, `paths=false` | `mt6_k3_nopaths` | 46.23 | 74.08 | 23.02 | 44.59 | 30.15 | 5.21 |
+| same, `prune_top_k=1` | `mt6_k3_prune1` | 47.0 | 74.24 | 23.02 | 44.9 | 31.16 | 5.21 |
+| same, `ranker=ppr` | `mt6_k3_ppr` | 46.62 | 74.36 | 22.63 | 41.1 | 31.0 | 5.21 |
+| same, `--infer` | `mt6_k3_infer` | 46.62 | 74.46 | 22.05 | 46.53 | 31.51 | 5.22 |
+| max 8 / anchors 4 | `mt8_k4` | 76.79 | 84.65 | 27.66 | 61.46 | 67.91 | 6.61 |
+| same, `paths=false` | `mt8_k4_nopaths` | 76.6 | 84.53 | 27.66 | 61.1 | 67.65 | 6.61 |
+| same, `prune_top_k=1` | `mt8_k4_prune1` | 76.6 | 84.53 | 27.66 | 61.1 | 67.65 | 6.61 |
+
+Path union is worth +3.5 strict at the tightest budget and +0.2 to +0.6 at gold-sized budgets; PathRAG pruning is
+inert here too (≤ 0.2 at any budget or anchor count), so it stays only as the ordering of the DDL's path list. The
+absolute level is the real finding: with FKs in the graph, bridge tables with no lexical hook still rank 6th to 8th
+of 10, so 47 % of these multi-join questions get all their tables within 6. Join-implied tables are the next
+ranking problem on every suite.
 
 ## Reading the numbers against the literature
 
@@ -237,13 +286,13 @@ generates no SQL and executes nothing, so it has no cell there; the comparable p
 the field-level SRRs above (ReFoRCE 42.3, LinkAlign 64.7, AutoLink 73.4, APEX-SQL 81.9, RSL-SQL 83.2,
 EviLink 90.2 — all LLM-driven at 79k–574k tokens per question).
 
-Snow field-level 96.67 (98.33 uncapped, measured on the 2026-09-16 ranking) at ~3.6k tokens and no model call therefore sits above the
+Snow field-level 98.33 (98.33 uncapped, measured on the 2026-09-16 ranking) at ~3.6k tokens and no model call therefore sits above the
 best of them on paper. Four reasons not to claim it:
 
 * **Denominator.** Only 120 of the 547 Snow tasks ship public gold SQL; the published SRRs are over
   the full set.
 * **That subset is easy.** 99 of its 120 databases are `cols<1k` and exactly one is `cols>=10k`. The
-  same pipeline scores 81.17 on Lite, whose scored subset holds 18 `cols>=10k` tasks. The Lite number
+  same pipeline scores 91.21 on Lite, whose scored subset holds 18 `cols>=10k` tasks. The Lite number
   is the representative one, and it is below EviLink.
 * **SRR is recall-only.** Column precision is 8.6 % — ~307 columns returned to cover ~8.3 gold ones.
   Strict recall with no precision constraint is gameable by returning more columns, which is exactly

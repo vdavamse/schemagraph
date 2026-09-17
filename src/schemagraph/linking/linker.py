@@ -46,13 +46,15 @@ class LinkOptions:
     fill_ratio: float = 0.06  # non-path tables need >= ratio * best to be included
     bypass_if_fits: bool = True  # if the whole schema fits max_tables, return all of it ("Death of Schema Linking")
     ppr_alpha: float = 0.85
+    paths: bool = True  # union of shortest paths between anchors (off = anchors + budget fill only; the ablation for bridge tables)
     path_extra: float = 0.0  # allow paths this much longer than the shortest
     path_cutoff: int = 6
     prune_alpha: float = 0.8
     prune_theta: float = 0.05
     prune_top_k: int = 8
     columns: str = "relevant"  # "relevant" | "all"
-    max_columns_per_table: int = 60
+    max_columns_per_table: int = 40  # column cap for tables ranked below columns_top_uncapped (60 -> 40 on 2026-09-17: same col_strict, fewer tokens)
+    columns_top_uncapped: int = 1  # tables at rank <= this keep every column: Lite col_strict 81.2 -> 91.2 at -0.5 % tokens (the cap was the whole column-level miss; table rank, not column evidence, predicts gold columns; top-3 gives 94.6 at +19 % tokens)
     small_schema_bypass: int = 0  # if > 0 and the graph has <= N tables, return everything
     use_llm: bool = False
     render: bool = True
@@ -70,6 +72,11 @@ class LinkOptions:
     ppr_edge_attr: str = "weight"  # edge attribute PPR reads as transition mass: "weight" (join cost, historical) | "affinity" (PPR_AFFINITY by kind)
     ranker: str = "rrf"  # "rrf" (reciprocal-rank fusion of the PPR ranking with BM25F over one document per table; Lite 96.04 strict, +3.7 strict@7) | "ppr" (activation + PPR alone, 95.66) | "bm25" (BM25F alone, 94.91)
     rrf_k: int = 60  # reciprocal-rank fusion constant: score = sum 1/(k + rank); smaller k weights the head of each ranking more
+    embed: bool = False  # add paraphrase seeds from a small static embedding model (linking/embed.py; needs the `embed` extra)
+    embed_model: str = "minishlab/potion-base-8M"
+    embed_threshold: float = 0.5  # cosine floor for an embedding seed
+    embed_top_k: int = 5  # objects considered per question phrase
+    embed_weight: float = 0.8  # seed weight = embed_weight * cosine (a description hit is 0.35, a name hit 1.0)
 
 
 class Linker:
@@ -80,6 +87,7 @@ class Linker:
         self._spec = specificity_weights(sg)
         self._matrices: dict[str, PPRMatrix] = {}  # per edge attribute; the graph must not change after the index is built
         self._bm25: BM25Index | None = None
+        self._embedder = None  # EmbeddingActivator, built on first use with embed=True
 
     def _matrix(self, edge_attr: str) -> PPRMatrix:
         m = self._matrices.get(edge_attr)
@@ -96,6 +104,14 @@ class Linker:
         """
         sg = self.sg
         act = activate(sg, self.index, question, idf=opts.idf, min_numeric_len=opts.min_numeric_len, ngram_stop=opts.ngram_stop)
+        if opts.embed:
+            if self._embedder is None or self._embedder.model_name != opts.embed_model:
+                from schemagraph.linking.embed import EmbeddingActivator
+
+                self._embedder = EmbeddingActivator(sg, opts.embed_model)
+                self._embedder.model_name = opts.embed_model
+            for node, w, why in self._embedder.activate(question, threshold=opts.embed_threshold, top_k=opts.embed_top_k, weight=opts.embed_weight):
+                act.bump(node, w, why)
         node_scores = personalized_pagerank(sg, act.seeds, alpha=opts.ppr_alpha, specificity=self._spec, matrix=self._matrix(opts.ppr_edge_attr))
         tscores = table_scores(sg, node_scores, agg=opts.agg)
         # direct lexical evidence on the table itself counts extra (PPR dilutes it)
@@ -141,7 +157,7 @@ class Linker:
         act, node_scores, tscores, ranked, evidence = self._rank(question, opts)
 
         anchors, sources, destinations = self._pick_anchors(question, ranked, evidence, opts)
-        paths, union = union_of_shortest_paths(sg, sources, destinations, max_extra=opts.path_extra, cutoff=opts.path_cutoff)
+        paths, union = union_of_shortest_paths(sg, sources, destinations, max_extra=opts.path_extra, cutoff=opts.path_cutoff) if opts.paths else ([], set())
         prior = {tnode(f): s / (ranked[0][1] if ranked else 1.0) for f, s in ranked[:50]}
         join_paths = prune_paths(sg, paths, [tnode(a) for a in anchors], alpha=opts.prune_alpha, theta=opts.prune_theta, top_k=opts.prune_top_k, node_prior=prior)
         kept_tables = set(anchors)
@@ -160,7 +176,7 @@ class Linker:
                     kept_tables.add(f)
         kept_tables = set(sorted(kept_tables, key=lambda f: (-tscores.get(f, 0.0), f))[: max(opts.max_tables, len(anchors))])
 
-        tables = self._select_columns(kept_tables, anchors, join_paths, node_scores, act, tscores, opts)
+        tables = self._select_columns(kept_tables, anchors, join_paths, node_scores, act, tscores, opts, rank={f: i + 1 for i, (f, _) in enumerate(ranked)})
         glossary = {term: [sg.g.nodes[m].get("fqn", m) for m in sg.g.neighbors(self.index.phrases[term]) if sg.g[self.index.phrases[term]][m].get("etype") == "glossary"] for term in act.matched_terms if term in self.index.phrases}
         result = LinkResult(
             question=question,
@@ -233,8 +249,9 @@ class Linker:
         anchors = cands[: opts.anchor_k]
         return anchors, anchors, None
 
-    def _select_columns(self, kept: set[str], anchors: list[str], join_paths: list[JoinPath], node_scores: dict[str, float], act: Activation, tscores: dict[str, float], opts: LinkOptions) -> list[LinkedTable]:
+    def _select_columns(self, kept: set[str], anchors: list[str], join_paths: list[JoinPath], node_scores: dict[str, float], act: Activation, tscores: dict[str, float], opts: LinkOptions, rank: dict[str, int] | None = None) -> list[LinkedTable]:
         sg = self.sg
+        rank = rank or {}
         join_cols: dict[str, set[str]] = {}
         for jp in join_paths:
             for step in jp.steps:
@@ -267,11 +284,12 @@ class Linker:
                     keep = True
                 if keep:
                     cols.append(LinkedColumn(name=c.name, data_type=c.data_type, description=c.description, score=round(s, 4), reason=reason))
-            # cap width: keep keys + top scored
-            if len(cols) > opts.max_columns_per_table:
+            # cap width: keep keys + top scored; the best-ranked tables keep everything
+            cap = 10**9 if rank.get(fqn, 10**9) <= opts.columns_top_uncapped else opts.max_columns_per_table
+            if len(cols) > cap:
                 keys = [c for c in cols if c.reason in {"primary key", "join key"}]
                 rest = sorted([c for c in cols if c.reason not in {"primary key", "join key"}], key=lambda c: -c.score)
-                cols = keys + rest[: opts.max_columns_per_table - len(keys)]
+                cols = keys + rest[: max(0, cap - len(keys))]
             # preserve declaration order
             order = {c.name: i for i, c in enumerate(t.columns)}
             cols.sort(key=lambda c: order.get(c.name, 0))

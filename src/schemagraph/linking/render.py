@@ -40,6 +40,12 @@ def render_ddl(sg: SchemaGraph, result: LinkResult, *, samples: bool = True) -> 
             notes.append(f"{t.row_count:,} rows")
         if t and t.kind not in {"table"}:
             notes.append(f"dbt {t.kind}" if t.kind in {"model", "source", "seed", "snapshot"} else t.kind)
+        if t:
+            up, down = sg.lineage(t.fqn)
+            if up:
+                notes.append(f"built from {', '.join(up[:6])}{', ...' if len(up) > 6 else ''}")
+            if down:
+                notes.append(f"feeds {', '.join(down[:6])}{', ...' if len(down) > 6 else ''}")
         if t and t.source:
             notes.append(f"from {t.source}")
         lines.append(tail + (f"  -- {'; '.join(notes)}" if notes else ""))

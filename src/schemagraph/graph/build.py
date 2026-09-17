@@ -16,6 +16,14 @@ Edges (undirected ``nx.Graph`` with attribute lists) carry ``etype``:
 * ``mention``     token <-> table/column/term  (added by the lexical indexer)
 
 The table-level projection used for path-finding is derived with :func:`table_graph`.
+
+Merge order is explicit: :func:`build_graph` sorts snapshots by :func:`snapshot_priority`
+(a per-connection ``priority`` if set, else :data:`SOURCE_PRIORITY` by source type, with the
+user's glossary and join hints first), and the first source to fill a field wins. Relation
+edges and glossary targets are resolved after *every* snapshot has contributed its tables, so
+a foreign key or term that points at a table another source introspects never depends on
+which source loaded first; a stub created for a referenced-only table is replaced when the
+real table arrives.
 """
 
 from __future__ import annotations
@@ -48,6 +56,29 @@ PPR_AFFINITY: dict[str, float] = {
 }
 
 
+# Merge precedence by source type: lower merges first and wins conflicting scalar fields.
+# Curated sources beat introspected ones; the user's own glossary and hints beat everything.
+SOURCE_PRIORITY: dict[str, int] = {
+    "user": 0,
+    "collibra": 10,
+    "dbt": 20,
+    "unity_catalog": 30,
+    "duckdb": 40,
+    "ddl": 50,
+    "aws_glue": 60,
+}
+DEFAULT_PRIORITY = 70
+
+# Relation kinds that describe a *join*. Lineage (dbt ref()/source(), Unity table lineage) is
+# provenance: two models fed by the same source are related but cannot be joined through it,
+# so it stays out of the path-finding projection and is rendered as context instead.
+JOIN_KINDS: frozenset[str] = frozenset({"foreign_key", "relationship_test", "join_hint", "catalog_relation", "inferred"})
+
+
+def snapshot_priority(snap: SchemaSnapshot) -> int:
+    return snap.priority if snap.priority is not None else SOURCE_PRIORITY.get(snap.source_type, DEFAULT_PRIORITY)
+
+
 def tnode(fqn: str) -> str:
     return f"t:{fqn.lower()}"
 
@@ -68,26 +99,44 @@ class SchemaGraph:
         self.tables: dict[str, Table] = {}  # lower fqn -> Table (merged)
         self.terms: dict[str, BusinessTerm] = {}  # lower name -> term
         self.sources: dict[str, str] = {}  # source name -> source_type
+        self._edges: list[Edge] = []  # every relation seen so far; re-applied after each snapshot (idempotent)
+        self._terms: list[BusinessTerm] = []  # every glossary term seen so far; likewise
 
     # ---------------------------------------------------------------- building
     def add_snapshot(self, snap: SchemaSnapshot) -> None:
+        """Merge one snapshot. Tables merge now; edges and terms (this snapshot's and every
+        earlier one's) are applied afterwards so targets resolve against all tables loaded so far."""
         snap.stamp()
         if snap.tables or snap.edges or snap.terms:
             self.sources[snap.source] = snap.source_type
         for t in snap.tables:
             self._merge_table(t)
-        for e in snap.edges:
+        self._edges.extend(snap.edges)
+        self._terms.extend(snap.terms)
+        for e in self._edges:
             self.add_edge(e)
-        for b in snap.terms:
+        for b in self._terms:
             self.add_term(b)
+
+    @staticmethod
+    def _is_stub(t: Table) -> bool:
+        return t.properties.get("stub") == "true"
 
     def _merge_table(self, t: Table) -> None:
         key = t.fqn.lower()
         existing = self.tables.get(key)
-        if existing is None:
+        if existing is not None and self._is_stub(existing) and not self._is_stub(t):
+            # a referenced-only placeholder: the real table replaces it; the node keeps the edges
+            # already attached to it and remembers who referenced it in ``source``
+            real = t.model_copy(deep=True)
+            real.source = ",".join(dict.fromkeys(filter(None, real.source.split(",") + existing.source.split(","))))
+            self.tables[key] = real
+            self.g.add_node(tnode(t.fqn), ntype="table", fqn=real.fqn, name=real.name.lower())
+            existing = None
+        elif existing is None:
             self.tables[key] = t.model_copy(deep=True)
             self.g.add_node(tnode(t.fqn), ntype="table", fqn=t.fqn, name=t.name.lower())
-        else:
+        if existing is not None:
             # merge: fill blanks, union columns, union tags/properties
             existing.description = existing.description or t.description
             existing.owner = existing.owner or t.owner
@@ -219,16 +268,43 @@ class SchemaGraph:
                 out.extend(d["relations"])
         return out
 
-    def table_graph(self) -> nx.Graph:
-        """Projection with only table nodes and ``relation`` edges (for path-finding)."""
+    def table_graph(self, kinds: frozenset[str] | set[str] | None = JOIN_KINDS) -> nx.Graph:
+        """Projection with only table nodes and ``relation`` edges of the given kinds (for path-finding).
+
+        The default keeps join-capable kinds only (:data:`JOIN_KINDS`); ``kinds=None`` keeps every
+        relation, lineage included. Edge ``weight`` is the best join cost among the kept kinds.
+        """
         tg = nx.Graph()
         for n, d in self.g.nodes(data=True):
             if d.get("ntype") == "table":
                 tg.add_node(n, **d)
         for a, b, d in self.g.edges(data=True):
-            if d.get("etype") == "relation":
-                tg.add_edge(a, b, weight=d["weight"], relations=d["relations"])
+            if d.get("etype") != "relation":
+                continue
+            rels = d["relations"] if kinds is None else [r for r in d["relations"] if r.kind in kinds]
+            if rels:
+                tg.add_edge(a, b, weight=min(RELATION_WEIGHT.get(r.kind, 2.0) for r in rels), relations=rels)
         return tg
+
+    def lineage(self, fqn: str) -> tuple[list[str], list[str]]:
+        """(upstream, downstream) table fqns connected to ``fqn`` by ``lineage`` relations."""
+        n = tnode(fqn)
+        up: set[str] = set()
+        down: set[str] = set()
+        if n not in self.g:
+            return [], []
+        for m in self.g.neighbors(n):
+            d = self.g[n][m]
+            if d.get("etype") != "relation":
+                continue
+            for r in d["relations"]:
+                if r.kind != "lineage":
+                    continue
+                if r.from_table.lower() == fqn.lower():
+                    down.add(r.to_table)
+                else:
+                    up.add(r.from_table)
+        return sorted(up), sorted(down)
 
     def stats(self) -> dict[str, int]:
         ntypes: dict[str, int] = {}
@@ -249,7 +325,8 @@ class SchemaGraph:
 
 
 def build_graph(snapshots: list[SchemaSnapshot]) -> SchemaGraph:
+    """Merge snapshots in priority order (see :func:`snapshot_priority`), then resolve edges and terms."""
     sg = SchemaGraph()
-    for s in snapshots:
+    for s in sorted(snapshots, key=lambda s: (snapshot_priority(s), s.source)):
         sg.add_snapshot(s)
     return sg

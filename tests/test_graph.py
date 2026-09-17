@@ -21,7 +21,8 @@ def test_merge_two_sources_fill_blanks_and_union_edges(store_snapshot):
     sg = build_graph([store_snapshot, other])
     t = sg.table("public.orders")
     assert t.description == "Customer orders (curated)"
-    assert t.column("status").description == "current order status"  # first source wins on filled fields
+    assert t.column("status").description == "Order lifecycle state"  # collibra (curated) outranks ddl, whatever the list order
+    assert build_graph([other, store_snapshot]).table("public.orders").column("status").description == "Order lifecycle state"
     assert "PII=no" in t.column("status").tags
     assert "collibra" in t.source and "store" in t.source
     assert sg.relations("public.orders", "public.shipment")[0].kind == "catalog_relation"
@@ -131,3 +132,39 @@ def test_relation_edges_carry_join_cost_and_ppr_affinity(store_snapshot):
     by_cost = PPRMatrix(sg, "weight").run({tnode("public.orders"): 1.0})
     by_affinity = PPRMatrix(sg, "affinity").run({tnode("public.orders"): 1.0})
     assert by_cost[tnode("public.audit_log")] > by_affinity[tnode("public.audit_log")]  # reading cost as affinity over-feeds inferred edges
+
+
+def test_user_snapshot_outranks_catalog_terms(store_snapshot):
+    catalog = SchemaSnapshot(source="collibra", source_type="collibra", terms=[BusinessTerm(name="revenue", description="from the catalog", targets=["public.orders.total_amount"])])
+    user = SchemaSnapshot(source="user", source_type="user", terms=[BusinessTerm(name="revenue", description="curated by hand", synonyms=["turnover"], targets=["public.orders.line_total"])])
+    for order in ([store_snapshot, catalog, user], [user, catalog, store_snapshot]):
+        sg = build_graph(order)
+        term = sg.terms["revenue"]
+        assert term.description == "curated by hand"
+        assert set(term.targets) == {"public.orders.total_amount", "public.orders.line_total"} and "turnover" in term.synonyms
+
+
+def test_edges_and_terms_resolve_regardless_of_snapshot_order():
+    a = SchemaSnapshot(
+        source="a", source_type="ddl",
+        tables=[Table(name="orders", columns=[Column(name="id", is_primary_key=True), Column(name="customer_id")])],
+        edges=[Edge(kind="foreign_key", from_table="orders", to_table="customer", from_columns=["customer_id"], to_columns=["id"])],
+        terms=[BusinessTerm(name="buyer", targets=["customer.name"])],
+    )
+    b = SchemaSnapshot(source="b", source_type="ddl", tables=[Table(name="customer", columns=[Column(name="id", is_primary_key=True), Column(name="name")])])
+    for order in ([a, b], [b, a]):
+        sg = build_graph(order)
+        assert sg.table("customer").properties.get("stub") is None
+        assert sg.g.has_edge("c:orders.customer_id", "c:customer.id")  # column-level FK resolved after both tables loaded
+        assert sg.g.has_edge("k:buyer", "c:customer.name")  # glossary target resolved likewise
+        assert sg.relations("orders", "customer")[0].kind == "foreign_key"
+
+
+def test_stub_replaced_when_real_table_arrives_incrementally():
+    sg = build_graph([SchemaSnapshot(source="a", source_type="ddl", tables=[Table(name="orders", columns=[Column(name="customer_id")])], edges=[Edge(kind="foreign_key", from_table="orders", to_table="customer", from_columns=["customer_id"], to_columns=["id"])])])
+    assert sg.table("customer").properties.get("stub") == "true"
+    sg.add_snapshot(SchemaSnapshot(source="b", source_type="duckdb", tables=[Table(name="customer", description="real", columns=[Column(name="id"), Column(name="name")])]))
+    c = sg.table("customer")
+    assert c.properties.get("stub") is None and c.description == "real" and len(c.columns) == 2
+    assert "a" in c.source and "b" in c.source
+    assert sg.g.has_edge("t:orders", "t:customer") and sg.g.has_edge("c:orders.customer_id", "c:customer.id")

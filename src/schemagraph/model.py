@@ -120,6 +120,7 @@ class SchemaSnapshot(BaseModel):
     terms: list[BusinessTerm] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utcnow)
     warnings: list[str] = Field(default_factory=list)
+    priority: int | None = None  # merge order: lower merges first and wins conflicting fields; None = by source_type (graph.build.SOURCE_PRIORITY)
 
     def stamp(self) -> SchemaSnapshot:
         """Fill ``source`` on every child object that does not carry one."""

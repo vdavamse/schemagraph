@@ -55,7 +55,9 @@ pathfinding.union_of_shortest_paths
 pruning.prune_paths         PathRAG flow propagation (α = 0.8, θ = 0.05), reliability = mean resource,
   │                         drop sub-paths of kept paths, keep top-k
   ▼
-column selection            anchors: all columns; bridge tables: PK + join keys + activated columns
+column selection            top-ranked table: every column; other tables: PK + join keys + activated
+  │                         columns + best-scored rest up to 40 (table rank, not column evidence,
+  │                         predicts gold columns: bench_results/README.md, column level)
   ▼
 render.render_ddl           CREATE TABLE … with descriptions, glossary header, join paths (most reliable
                             last), sample values footer
@@ -65,9 +67,9 @@ Warm-path latency on a 7-table schema is ~3 ms; the first call pays a one-off Sc
 
 ## Graph model (`graph/build.py`)
 
-Undirected NetworkX graph. Node ids are prefixed: `t:` table, `c:` column, `k:` glossary term, `w:` token. Edge attribute `etype` ∈ {`contains`, `relation`, `fk_col`, `glossary`, `mention`}. A `relation` edge between two tables carries `relations: list[Edge]` — every piece of evidence from every source, deduplicated by (kind, tables, columns) — and `weight = min` over the kinds. `table_graph()` projects to tables + `relation` edges for path-finding.
+Undirected NetworkX graph. Node ids are prefixed: `t:` table, `c:` column, `k:` glossary term, `w:` token. Edge attribute `etype` ∈ {`contains`, `relation`, `fk_col`, `glossary`, `mention`}. A `relation` edge between two tables carries `relations: list[Edge]` — every piece of evidence from every source, deduplicated by (kind, tables, columns) — and `weight = min` over the kinds. `table_graph()` projects to tables + `relation` edges of join-capable kinds (`JOIN_KINDS`: FK, relationship test, join hint, catalog relation, inferred) for path-finding; `lineage` edges stay in the full graph for PPR and are rendered as context (`built from`, `feeds`), because two models fed by the same source are related but not joinable through it.
 
-Merging is field-level: the first source to fill a field wins, later sources fill blanks and union columns/tags/samples, and the **user snapshot** (glossary + join hints from the UI) is merged last so human curation overrides catalogs where it conflicts.
+Merging is field-level and in an explicit order: snapshots are sorted by priority (`SOURCE_PRIORITY` by source type: user, collibra, dbt, unity_catalog, duckdb, ddl, aws_glue; or a per-connection `priority`), the first source to fill a field wins, later sources fill blanks and union columns/tags/samples. The **user snapshot** (glossary + join hints from the UI) has priority 0, so human curation wins where it conflicts. Relation edges and glossary targets are applied after every snapshot has contributed its tables, so a foreign key or term pointing at a table another source introspects resolves whatever the load order (until 2026-09-17 snapshots loaded alphabetically by connection name and unresolved targets were dropped).
 
 Referenced-but-unknown tables become stub nodes (`properties.stub = "true"`) so paths through them still exist.
 
@@ -77,7 +79,7 @@ Referenced-but-unknown tables become stub nodes (`properties.stub = "true"`) so 
 |---|---|---|
 | `ddl` | `foreign_key` | sqlglot; inline `REFERENCES`, table-level FK, `ALTER TABLE ADD FOREIGN KEY`, `COMMENT` / `COMMENT ON` |
 | `duckdb` | `foreign_key` | `duckdb_tables/columns/constraints`, row counts, sample values |
-| `dbt` | `lineage`, `relationship_test`, `foreign_key` (model constraints) | manifest.json, or project dir parsed without dbt (regex over `ref()`/`source()`); `unique`+`not_null` → PK, `accepted_values` → samples, semantic models → glossary |
+| `dbt` | `lineage`, `relationship_test`, `foreign_key` (model constraints) | manifest.json, or project dir parsed without dbt (regex over `ref()`/`source()`); `unique`+`not_null` → PK, `accepted_values` → samples, semantic models → glossary. Lineage feeds PPR and the DDL notes (`built from` / `feeds`) but is not a join path; joins come from `relationships` tests, constraints and hints |
 | `unity_catalog` | `foreign_key`, `lineage` | REST 2.1 catalogs/schemas/tables + `table_constraints`; optional lineage-tracking API |
 | `aws_glue` | none | boto3; columns, partition keys, parameters, optional LF-tags. Relations come from other sources or hints |
 | `collibra` | `foreign_key`, `catalog_relation`, glossary | REST 2.0 assets/relations/attributes; asset types, relation roles and attribute names are all configurable |
@@ -102,7 +104,7 @@ Optional and small: one call per question (`llm/anchors.py`) that returns source
 ## Non-goals (v1)
 
 * No SQL execution, no governance (validation, LIMIT injection, PII redaction, budgets). The calling agent owns that boundary.
-* No embeddings. The lexical + PPR path is the LinearRAG bet; an embedding-based activation stage can be added behind the same `Activation` interface if recall on undocumented schemas proves insufficient.
+* No embeddings in the core. The lexical + PPR path is the LinearRAG bet; the optional `embed` extra (`linking/embed.py`, a 30 MB static model, numpy only) adds paraphrase seeds behind the same `Activation` interface and is measured at +0.4 strict / +3 strict@7 on Spider 2.0-Lite.
 * No BI metrics layer. Glossary terms map words to columns; they are not governed calculations.
 
 ## Benchmark
@@ -113,6 +115,8 @@ What the benchmark forced into the core, each ablated:
 
 * `linking/lexical.py` — **IDF weighting** of token evidence (a token shared by half the columns is nearly worthless as a seed), a stopword list of question scaffolding that also appears in descriptions, and no seeds from digit tokens shorter than 4 characters.
 * `graph/ppr.py` — **top-3 column aggregation** into table scores instead of a sum, so a wide table with forty weak matches no longer swamps a table with one strong name match. Since 2026-09-17 the walk is a cached sparse power iteration converged to 1e-12; `nx.pagerank` on a subgraph view stopped at `N × 1e-6`, which on 7,000-node schemas left an L1 error near 1e-2 and reordered near-tied tables.
+* `linking/linker.py` — **rank-tiered column cap**: the best-ranked table keeps every column, the rest 40. Column strict recall 81 → 91 on Lite at the same column count; a simulation showed column-level evidence (seeds, PPR score) does not predict gold columns while table rank does.
+* `bench/spider1.py` — **FK-graph benchmark** (Spider-format `tables.json` + questions with gold SQL; the LinkAlign copy of Spider dev, 517 multi-join questions). Path union recovers bridge tables (+0.2 to +3.5 strict by budget); PathRAG pruning is inert there as on Lite, so it is kept only to order the DDL's path list.
 * `linking/bm25.py` — **BM25F per table fused with PPR by reciprocal rank** (`ranker="rrf"`): +3.7 strict@7 on the precise sample and +3.6 anchor hit over PPR alone, with BM25F alone 0.75 strict below PPR because three gold tables share no token with their question. Anchor and fill gates read per-ranker relative evidence, because fused scores are flat.
 * `graph/infer.py` — name-based `inferred` edges (`x_id` ↔ `x.id`, shared key columns) for catalogs with no declared FKs.
 * `connectors/spider2.py` — **partition-family collapse**: tables in one schema whose names differ only in digit runs and share ≥ 80% of columns become one logical table with a member list. The same treatment belongs in the Unity/Glue connectors for partitioned datasets.
@@ -121,7 +125,7 @@ What the benchmark forced into the core, each ablated:
 
 ## Next steps
 
-1. The last 4%: gold tables at rank 21–80 in mid-size schemas, all vocabulary gaps (the hook is a value or a join the question implies). HippoRAG spends its LLM *before* PPR (recognition memory filters the seeds); an anchor pick after ranking cannot recover a table activation never reached, so the candidate is a seed-side pass (LLM entities or embeddings behind the `Activation` seam), measured on strict@7 of the precise sample; needs an API key or a local model.
+1. The last 4%: gold tables at rank 21–80 in mid-size schemas, vocabulary gaps and join-implied tables. The seed-side embedding pass (`embed` extra) recovers two of them and lifts strict@7 by 3; an LLM entity pass before PPR (HippoRAG's placement) is the next step for the rest, and the Spider-dev FK benchmark shows join-implied bridge tables still rank 6th–8th of 10 even with declared keys.
 3. Shard-family collapse in the Unity Catalog and Glue connectors; value grounding on `_TABLE_SUFFIX`-style shard keys.
 4. Optional embedding activation (Ollama / sentence-transformers) as a second seed source.
 5. GATE-style grounding memory: persist resolved value/format groundings per column so the agent stops re-discovering them.
