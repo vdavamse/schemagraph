@@ -1,7 +1,7 @@
 from schemagraph.graph import build_graph
 from schemagraph.linking import Linker, LinkOptions
 from schemagraph.linking.lexical import activate, build_index, tokenize
-from schemagraph.model import BusinessTerm, SchemaSnapshot, Table
+from schemagraph.model import BusinessTerm, Column, SchemaSnapshot, Table
 
 
 def test_tokenize_splits_snake_and_camel():
@@ -92,3 +92,53 @@ def test_disconnected_anchors_still_returned():
     r = Linker(sg).link("alpha metrics and beta events")
     assert {t.fqn for t in r.tables} == {"alpha_metrics", "beta_events"}
     assert r.join_paths == []
+
+
+def test_value_matching_is_whole_word_and_punctuation_tolerant(store_snapshot):
+    store_snapshot.table("public.customer").column("city").sample_values = ["St. Louis", "New York", "iPhone City", "Bo"]
+    sg = build_graph([store_snapshot])
+    idx = build_index(sg)
+    act = activate(sg, idx, "orders shipped to st louis or new york")
+    assert {"st. louis", "new york"} <= set(act.matched_values)
+    assert act.seeds.get("c:public.customer.city", 0) >= 3.0  # two values at 1.5 each
+    assert "texas" not in activate(sg, idx, "texasvalues in the list").matched_values  # whole words only
+    assert "california" in activate(sg, idx, "customers in California!").matched_values
+    assert "iphone city" in activate(sg, idx, "iPhone City stores").matched_values
+    assert "bo" not in idx.values  # too short to be evidence
+
+
+def test_ngram_matches_names_containing_stopwords():
+    snap = SchemaSnapshot(source="x", source_type="ddl", tables=[Table(name="person", columns=[Column(name="date_of_birth"), Column(name="first_name"), Column(name="number_of_employees"), Column(name="birth_date")])])
+    sg = build_graph([snap])
+    idx = build_index(sg)
+    act = activate(sg, idx, "first name and date of birth by number of employees")
+    for col in ("date_of_birth", "first_name", "number_of_employees"):
+        reasons = act.reasons.get(f"c:person.{col}", [])
+        assert sum(r.startswith("n-gram") for r in reasons) == 1, (col, reasons)  # one piece of evidence per name
+    assert not any(r.startswith("n-gram") for r in act.reasons.get("c:person.birth_date", []))
+    off = activate(sg, idx, "first name and date of birth", ngram_stop=False)
+    assert not any(r.startswith("n-gram") for r in off.reasons.get("c:person.date_of_birth", []))
+
+
+def test_explain_ranking_matches_link(store_graph):
+    lk = Linker(store_graph)
+    q = "total revenue by product category for customers in california"
+    r = lk.link(q, LinkOptions(debug=True, ranking_limit=0))
+    ex = lk.explain(q)
+    assert [f for f, _ in ex["tables"]] == [f for f, _ in r.ranking][:20]
+
+
+def test_bm25_and_rrf_rankers(store_graph):
+    from schemagraph.linking.bm25 import bm25_scores, build_bm25, query_terms
+
+    idx = build_bm25(store_graph)
+    assert idx.n_docs == 7
+    q = "shipped date and carrier for each customer"
+    assert {"shipped", "carrier", "customer"} <= set(query_terms(q))
+    scores = bm25_scores(idx, q)
+    assert max(scores, key=scores.get) == "public.shipment"
+    lk = Linker(store_graph)
+    for ranker in ("bm25", "rrf"):
+        r = lk.link(q, LinkOptions(ranker=ranker, debug=True, ranking_limit=0, bypass_if_fits=False))
+        assert r.ranking[0][0] == "public.shipment", ranker
+        assert "public.shipment" in r.anchors and any(t.fqn == "public.customer" for t in r.tables)

@@ -34,6 +34,19 @@ RELATION_WEIGHT: dict[str, float] = {
     "inferred": 2.5,
 }
 
+# How much PPR activation flows across a relation edge of each kind (``affinity`` attribute).
+# Kept separate from RELATION_WEIGHT: that one is a *cost* for path-finding, and reading it as
+# transition mass made an inferred edge carry 2.5x the flow of a declared foreign key. Uniform
+# by default; only ``LinkOptions.ppr_edge_attr="affinity"`` reads it (the benchmark decides).
+PPR_AFFINITY: dict[str, float] = {
+    "foreign_key": 1.0,
+    "relationship_test": 1.0,
+    "join_hint": 1.0,
+    "catalog_relation": 1.0,
+    "lineage": 1.0,
+    "inferred": 1.0,
+}
+
 
 def tnode(fqn: str) -> str:
     return f"t:{fqn.lower()}"
@@ -111,7 +124,7 @@ class SchemaGraph:
             cn = cnode(table.fqn, c.name)
             if cn not in self.g:
                 self.g.add_node(cn, ntype="column", fqn=table.fqn, name=c.name.lower(), table=tn)
-                self.g.add_edge(tn, cn, etype="contains", weight=0.5)
+                self.g.add_edge(tn, cn, etype="contains", weight=0.5, affinity=0.5)
 
     def add_edge(self, e: Edge) -> None:
         a, b = tnode(e.from_table), tnode(e.to_table)
@@ -125,17 +138,18 @@ class SchemaGraph:
             return
         data = self.g.get_edge_data(a, b)
         if data is None or data.get("etype") != "relation":
-            self.g.add_edge(a, b, etype="relation", relations=[], weight=RELATION_WEIGHT.get(e.kind, 2.0))
+            self.g.add_edge(a, b, etype="relation", relations=[], weight=RELATION_WEIGHT.get(e.kind, 2.0), affinity=PPR_AFFINITY.get(e.kind, 1.0))
             data = self.g.get_edge_data(a, b)
         rels: list[Edge] = data["relations"]
         if all(r.key != e.key for r in rels):
             rels.append(e)
-        data["weight"] = min(RELATION_WEIGHT.get(r.kind, 2.0) for r in rels)
+        data["weight"] = min(RELATION_WEIGHT.get(r.kind, 2.0) for r in rels)  # cost: best evidence wins
+        data["affinity"] = max(PPR_AFFINITY.get(r.kind, 1.0) for r in rels)
         # column-level FK edges
         for fc, tc in zip(e.from_columns, e.to_columns, strict=False):
             ca, cb = cnode(e.from_table, fc), cnode(e.to_table, tc)
             if ca in self.g and cb in self.g:
-                self.g.add_edge(ca, cb, etype="fk_col", weight=0.8)
+                self.g.add_edge(ca, cb, etype="fk_col", weight=0.8, affinity=0.8)
 
     def add_term(self, b: BusinessTerm) -> None:
         key = b.name.strip().lower()
@@ -159,7 +173,7 @@ class SchemaGraph:
         for target in term.targets:
             n = self._resolve_target(target)
             if n is not None:
-                self.g.add_edge(kn, n, etype="glossary", weight=0.7)
+                self.g.add_edge(kn, n, etype="glossary", weight=0.7, affinity=0.7)
 
     def _resolve_target(self, target: str) -> str | None:
         lt = target.lower()

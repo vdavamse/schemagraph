@@ -68,3 +68,66 @@ def test_prune_paths_dedupes_subpaths(store_graph):
     assert ["public.orders", "public.order_items", "public.products"] in tables or ["public.products", "public.order_items", "public.orders"] in tables
     assert len(jps) == 1  # the two 2-hop sub-paths are contained in the 3-table path
     assert jps[0].steps[0].kind == "foreign_key" and "order_id" in jps[0].steps[0].on
+
+
+def test_ppr_matrix_matches_networkx(store_graph):
+    import networkx as nx
+
+    from schemagraph.graph.ppr import PPRMatrix
+    from schemagraph.linking.lexical import build_index
+
+    build_index(store_graph)  # adds the w: token nodes exactly as the linker does
+    seeds = {tnode("public.shipment"): 1.0, "c:public.customer.state": 0.5}
+    mine = PPRMatrix(store_graph).run(seeds, alpha=0.85)
+    ref = nx.pagerank(store_graph.g, alpha=0.85, personalization=seeds, weight="weight", tol=1e-12, max_iter=2000)
+    assert abs(sum(mine.values()) - 1.0) < 1e-9
+    for n, s in ref.items():
+        assert abs(mine.get(n, 0.0) - s) < 1e-7, n
+
+
+def test_ppr_untouched_component_scores_exactly_zero():
+    snap = SchemaSnapshot(source="x", source_type="ddl", tables=[Table(name="alpha", columns=[Column(name="x1")]), Table(name="beta", columns=[Column(name="y1")])])
+    sg = build_graph([snap])
+    scores = personalized_pagerank(sg, {tnode("alpha"): 1.0})
+    assert tnode("alpha") in scores and tnode("beta") not in scores
+
+
+def test_shortest_paths_match_exhaustive_enumeration():
+    import random
+
+    import networkx as nx
+
+    from schemagraph.graph.pathfinding import shortest_paths_between
+
+    rng = random.Random(7)
+    checked = 0
+    for _ in range(40):
+        n = rng.randint(5, 11)
+        g = nx.gnp_random_graph(n, 0.35, seed=rng.randint(0, 10**6))
+        for u, v in g.edges():
+            g[u][v]["weight"] = rng.choice([1.0, 1.3, 1.6, 2.5])
+        for a, b in [(0, n - 1), (1, n - 2)]:
+            for extra in (0.0, 0.7):
+                got = {tuple(p) for p in shortest_paths_between(g, a, b, max_extra=extra, cutoff=n)}
+                if not nx.has_path(g, a, b):
+                    assert got == set()
+                    continue
+                best = nx.shortest_path_length(g, a, b, weight="weight")
+                exp = {tuple(p) for p in nx.all_simple_paths(g, a, b) if sum(g[u][v]["weight"] for u, v in zip(p, p[1:], strict=False)) <= best + extra + 1e-9}
+                assert got == exp, (a, b, extra)
+                checked += 1
+    assert checked > 40
+
+
+def test_relation_edges_carry_join_cost_and_ppr_affinity(store_snapshot):
+    from schemagraph.graph.ppr import PPRMatrix
+
+    store_snapshot.edges.append(Edge(kind="inferred", from_table="public.orders", to_table="public.audit_log", from_columns=["id"], to_columns=["id"]))
+    sg = build_graph([store_snapshot])
+    inf = sg.g.get_edge_data(tnode("public.orders"), tnode("public.audit_log"))
+    fk = sg.g.get_edge_data(tnode("public.orders"), tnode("public.customer"))
+    assert (inf["weight"], inf["affinity"]) == (2.5, 1.0)  # cost for path-finding, uniform flow for PPR
+    assert (fk["weight"], fk["affinity"]) == (1.0, 1.0)
+    by_cost = PPRMatrix(sg, "weight").run({tnode("public.orders"): 1.0})
+    by_affinity = PPRMatrix(sg, "affinity").run({tnode("public.orders"): 1.0})
+    assert by_cost[tnode("public.audit_log")] > by_affinity[tnode("public.audit_log")]  # reading cost as affinity over-feeds inferred edges

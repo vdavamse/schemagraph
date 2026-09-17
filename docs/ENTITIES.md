@@ -116,10 +116,19 @@ node, keeping the maximum weight when a token appears in several fields:
 
 **Full-name index** (`idx.names`): the normalised whole name
 (`"_".join(tokenize(name, keep_stop=True))`) maps to its nodes, so a question
-bigram or trigram can hit `product_category` as one unit.
+bigram or trigram can hit `product_category` as one unit. Names whose stopword-free
+form differs and still has two or more tokens are also indexed under that form
+(`idx.names_nostop`: `date_of_birth` -> `date_birth`); in the large Spider 2.0-Lite
+schemas one object name in five contains a stopword token (`to`, `in`, `over`, `or`,
+`other`, `first`, `last`, `account`, `report`).
 
 **Value index** (`idx.values`): every column sample value, lowercased and stripped,
 at least 3 characters and not purely numeric, maps to the column nodes holding it.
+For matching, each value is also keyed by its words (`idx.value_grams`, split on
+anything non-alphanumeric, up to six words; longer values stay in `idx.long_values`
+and are scanned with a regex). A question is matched by looking up its own word
+n-grams, so the cost is linear in the question, not in the number of values (one
+regex per value was 95 % of activation time on a 2,500-value schema).
 
 **Phrase index** (`idx.phrases`): every glossary term name and synonym, lowercased,
 maps to the term node.
@@ -147,8 +156,8 @@ reason strings are what `schemagraph explain` and the rendered column comments s
 | # | matcher | matches | weight | IDF-scaled |
 |---|---|---|---|---|
 | 1 | glossary phrase | a term name or synonym appears in the question as a whole word, longest phrase first | 1.5 on the term, plus 1.2 on every table or column the term targets | no |
-| 2 | sample value | an indexed value appears in the question as a whole word | 1.5 on each column holding it | no |
-| 3 | n-gram | a question bigram or trigram equals a normalised object name | 1.6 | no |
+| 2 | sample value | an indexed value appears in the question as a whole-word sequence (word n-gram lookup; punctuation inside the value is a word boundary, so `St. Louis` matches "st louis") | 1.5 on each column holding it, once per value | no |
+| 3 | n-gram | a question bigram or trigram, formed both with and without stopwords, equals an object name in either its full or its stopword-free form ("date of birth" -> `date_of_birth`, "first name" -> `first_name`); one hit per name however many forms match (`ngram_stop`, default on) | 1.6 | no |
 | 4 | single token | token, its lemma (0.8), its abbreviation expansion (0.8), and the reverse expansion (0.8, so `customer` also hits `cust`) against postings | `token weight x posting weight` | yes |
 | 5 | fuzzy | only for tokens of 5+ characters with no posting at all: the three closest vocabulary entries by `difflib` at ratio >= 0.86 | `0.6 x posting weight` | yes |
 
@@ -164,10 +173,19 @@ That dictionary is the complete entity layer. Everything downstream consumes onl
 1. **Specificity**: each seed weight is multiplied by
    `1 / log(1 + n)` where n is the number of table or column nodes sharing the
    same bare name. A column called `id` on forty tables contributes almost nothing.
-2. **Personalized PageRank** (`alpha=0.85`) over the whole heterogeneous graph,
-   restricted to the components the seeds touch. Activation flows over `contains`,
-   `relation`, `fk_col`, `glossary` and `mention` edges, so a table connected to
-   several activated columns, or one hop from an activated table, rises.
+2. **Personalized PageRank** (`alpha=0.85`) over the whole heterogeneous graph, as
+   a power iteration on a row-stochastic sparse matrix built once per graph
+   (`graph/ppr.PPRMatrix`) and iterated to an L1 tolerance of 1e-12 per node. The
+   walk starts from the teleport vector, so components the seeds do not touch stay
+   exactly zero. (Until 2026-09-17 this was `nx.pagerank` on a subgraph view with
+   the default tolerance of `N x 1e-6`; on a 7,000-node schema that stopped with an
+   L1 error near 1e-2 and reordered near-tied tables as early as rank 1.) Activation
+   flows over `contains`, `relation`, `fk_col`, `glossary` and `mention` edges, so a
+   table connected to several activated columns, or one hop from an activated table,
+   rises. Relation edges carry their join cost as transition mass by default
+   (`weight`: inferred 2.5 > FK 1.0), which is backwards as semantics but measured
+   better than uniform per-kind affinity on Lite, where inferred edges are the only
+   structure (`ppr_edge_attr="affinity"` selects the uniform `PPR_AFFINITY` values).
 3. **Table aggregation** (`agg="top3"`): table score = own PPR score + best column
    + 0.5 second + 0.25 third + 0.02 the rest.
 4. **Direct lexical bonus**: tables that were seeded directly get

@@ -56,19 +56,22 @@ connectors/*  ──SchemaSnapshot──►  store.py (DuckDB)  ──►  graph
 * **`store.py`** persists connections, raw snapshot JSON, a user glossary and join hints in one DuckDB file. DuckDB is the durable form only; `Engine.reload()` rebuilds the in-memory graph from all snapshots plus a synthetic `user` snapshot merged **last**, so human curation overrides catalogs. `${ENV_VAR}` references in configs are substituted at connector instantiation and never returned by the API.
 * **`graph/build.py`** merges snapshots field-by-field (first source to fill a field wins; columns/tags/samples union). Node ids are prefixed: `t:` table, `c:` column, `k:` glossary term, `w:` lexical token. Two tables share one `relation` edge carrying *all* evidence (`relations: list[Edge]`) with `weight = min` over kinds (`RELATION_WEIGHT`: FK 1.0 < catalog relation 1.3 < lineage 1.6 < inferred 2.5). `table_graph()` projects to tables only for path-finding. Tables referenced by an edge but never introspected become stub nodes.
 * **`linking/linker.py`** is the pipeline; every stage is a `LinkOptions` field so it can be ablated from the benchmark CLI:
-  1. `lexical.activate` — tokens, n-grams, abbreviations, lemmas, glossary phrases, sample values → seed weights with reason strings. Single-token evidence is IDF-scaled; n-gram/value/glossary hits are not.
-  2. `graph/ppr.personalized_pagerank` — HippoRAG-style PPR with node specificity; `table_scores(agg="top3")` folds columns into tables.
-  3. anchors — top-k tables, or `llm/anchors.py` (one Claude call) when `use_llm` and a key is set.
-  4. `graph/pathfinding.union_of_shortest_paths` — all weighted-shortest simple paths between anchors; this is what pulls in bridge tables.
-  5. `graph/pruning.prune_paths` — PathRAG flow pruning, sub-path dedup.
-  6. budget: `adaptive_budget` widens to 20 tables / 6 anchors above `large_threshold`; `bypass_if_fits` returns the whole schema when it fits `max_tables` (anchors and paths are still computed for the DDL).
-  7. column selection (anchors: all columns; bridge tables: keys + activated) and `render.render_ddl`.
+  1. `lexical.activate` — tokens, n-grams (with and without stopwords, `ngram_stop`), abbreviations, lemmas, glossary phrases, sample values (word n-gram lookup, not a regex per value) → seed weights with reason strings. Single-token evidence is IDF-scaled; n-gram/value/glossary hits are not.
+  2. `graph/ppr.personalized_pagerank` — HippoRAG-style PPR with node specificity, run as a power iteration on a cached sparse matrix (`PPRMatrix`, tol 1e-12); `table_scores(agg="top3")` folds columns into tables. `ppr_edge_attr` picks the edge attribute read as transition mass (`weight` = join cost, the measured default; `affinity` = uniform per kind).
+  3. ranking — `ranker="rrf"` fuses the PPR table ranking with BM25F over one document per table (`linking/bm25.py`) by reciprocal rank; `ppr` and `bm25` alone are the ablations. Anchor and fill gates read per-ranker relative *evidence*, not the fused score.
+  4. anchors — top-k tables, or `llm/anchors.py` (one Claude call) when `use_llm` and a key is set.
+  5. `graph/pathfinding.union_of_shortest_paths` — all weighted-shortest simple paths between anchors via Yen's `shortest_simple_paths` (capped at 64 per pair); this is what pulls in bridge tables.
+  6. `graph/pruning.prune_paths` — PathRAG flow pruning, sub-path dedup (inert on Spider2-Lite, which has almost no relation edges).
+  7. budget: `adaptive_budget` widens to 20 tables / 6 anchors above `large_threshold`; `bypass_if_fits` returns the whole schema when it fits `max_tables` (anchors and paths are still computed for the DDL).
+  8. column selection (anchors: all columns; bridge tables: keys + activated) and `render.render_ddl`.
 * **`graph/infer.py`** adds `inferred` edges from naming conventions for catalogs with no FKs. Opt-in per snapshot (`with_inferred_edges`); the benchmark turns it on, the engine does not yet.
 * **Surfaces**: `api/app.py` (FastAPI, serves `web/dist` at `/`), `mcp/server.py` (FastMCP, read-only tools), `cli.py` (Typer). All construct an `Engine` and nothing else.
 
 ### Things that are easy to get wrong
 
-* `Linker(sg)` builds the lexical index and adds `w:` token nodes to the graph in place; build the graph, then the linker, never reuse a graph across differently-configured indexes.
+* `Linker(sg)` builds the lexical index and adds `w:` token nodes to the graph in place, then caches the PPR matrix on first use; build the graph, then the linker, never reuse a graph across differently-configured indexes and never mutate the graph after the linker exists.
+* Edge attribute `weight` is a *join cost* on `relation` edges (FK 1.0 < inferred 2.5) and a transition affinity everywhere else; PPR reads it as affinity on purpose (measured), the separate `affinity` attribute is the semantically clean alternative.
+* Fused (`rrf`) table scores are rank-based and flat; anything that needs a magnitude (anchor ratio, fill floor) must use the `evidence` dict `_rank` returns, not the score.
 * `Engine` holds an `RLock`; `link()` runs under it because `reload()` swaps the graph. Long-running work inside connectors should not hold it.
 * `LinkResult.ranking` is populated only with `LinkOptions(debug=True)`; the benchmark relies on it for gold-rank metrics.
 * Partition families: `connectors/spider2.py` collapses tables whose names differ only in digit runs and share ≥ 80 % of columns into one table with `properties["members"]`. The benchmark canonicalises gold names through that member map (`bench/spider2_lite.canon`). The same treatment is *not* yet in the Unity/Glue connectors.
@@ -77,4 +80,4 @@ connectors/*  ──SchemaSnapshot──►  store.py (DuckDB)  ──►  graph
 
 ### Benchmark defaults are evidence, not taste
 
-`LinkOptions` defaults (`max_tables=20`, `anchor_k=6`, `idf=True`, `agg="top3"`, `adaptive_budget`, `bypass_if_fits`, `schema_routing=0.0`) were each set by an ablation on Spider 2.0-Lite (see `bench_results/README.md`). Schema routing was measured and rejected (−6 strict points); don't re-enable it without new evidence. When you change anything in `linking/` or `graph/`, rerun `bench-spider2-lite` before and after and quote strict recall in the change description.
+`LinkOptions` defaults (`max_tables=20`, `anchor_k=6`, `idf=True`, `agg="top3"`, `adaptive_budget`, `bypass_if_fits`, `schema_routing=0.0`, `ranker="rrf"`, `rrf_k=60`, `ngram_stop=True`, `ppr_edge_attr="weight"`) were each set by an ablation on Spider 2.0-Lite (see `bench_results/README.md`). Schema routing was measured and rejected (−6 strict points); uniform PPR affinity and BM25-only ranking were measured and rejected too; don't re-enable them without new evidence. When you change anything in `linking/` or `graph/`, rerun `bench-spider2-lite` before and after and quote strict recall **and** strict@7 on the precise sample (ranking quality; strict at 20 tables saturates) in the change description. A full Lite run takes ~2.6 min from a copy of the Spider2 clone on the Linux filesystem and ~9 min from the Windows mount.
