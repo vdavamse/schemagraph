@@ -32,6 +32,7 @@ from schemagraph.connectors.spider2 import (
 )
 from schemagraph.graph.build import build_graph
 from schemagraph.graph.infer import with_inferred_edges
+from schemagraph.linking.lexical import DESC_WEIGHT, build_index
 from schemagraph.linking.linker import Linker, LinkOptions
 
 
@@ -156,12 +157,13 @@ def load_instances(spider2_root: Path, *, limit: int | None = None, dialects: se
 
 
 class _GraphCache:
-    def __init__(self, spider2_root: Path, suite: Suite, *, infer: bool, sample_values: int, collapse_families: bool = True):
+    def __init__(self, spider2_root: Path, suite: Suite, *, infer: bool, sample_values: int, collapse_families: bool = True, desc_weight: float = DESC_WEIGHT):
         self.root = spider2_root
         self.suite = suite
         self.infer = infer
         self.sample_values = sample_values
         self.collapse_families = collapse_families
+        self.desc_weight = desc_weight
         self.cache: dict[tuple[str, str], tuple[Linker, int, list[str], dict[str, str]]] = {}
         self.raw_cols: dict[tuple[str, str], int] = {}
         self.schema: dict[tuple[str, str], dict[str, set[str]]] = {}
@@ -182,7 +184,7 @@ class _GraphCache:
                 for m in t.properties.get("members", "").split(","):
                     if m:
                         member_map[m.strip().lower()] = t.fqn.lower()
-            self.cache[key] = (Linker(sg), len(sg.tables), snap.warnings, member_map)
+            self.cache[key] = (Linker(sg, build_index(sg, desc_weight=self.desc_weight)), len(sg.tables), snap.warnings, member_map)
             self.schema[key] = {canon(t.fqn, member_map): {c.name.lower() for c in t.columns} for t in sg.tables.values()}
             n = 0
             for jf in folder.rglob("*.json"):
@@ -230,12 +232,13 @@ def run(
     tag: str | None = None,
     suite: str = "lite",
     render: bool = True,
+    desc_weight: float = DESC_WEIGHT,
     **link_kwargs,
 ) -> dict:
     root = Path(spider2_root)
     st = SUITES[suite]
     instances = load_instances(root, limit=limit, dialects=dialects, only=only, min_db_tables=min_db_tables, suite=suite)
-    cache = _GraphCache(root, st, infer=infer, sample_values=sample_values, collapse_families=collapse_families)
+    cache = _GraphCache(root, st, infer=infer, sample_values=sample_values, collapse_families=collapse_families, desc_weight=desc_weight)
     opts = LinkOptions(max_tables=max_tables, anchor_k=anchor_k, render=render, use_llm=use_llm, debug=True, **{"ranking_limit": 0, **link_kwargs})
     enc = _tokenizer() if render else None
     rows: list[Row] = []
