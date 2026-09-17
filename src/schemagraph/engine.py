@@ -25,14 +25,32 @@ DEFAULT_HOME = Path(os.environ.get("SCHEMAGRAPH_HOME", ".schemagraph"))
 
 
 class Engine:
-    def __init__(self, home: str | Path | None = None, *, llm: Any | None = "auto"):
+    def __init__(self, home: str | Path | None = None, *, llm: Any | None = "auto", embed: bool | str = "auto"):
+        """``embed``: seed paraphrases with the optional static embedding model (``LinkOptions.embed``);
+        ``"auto"`` turns it on when the ``embed`` extra is installed (Spider2-Lite: +0.4 strict, +3 strict@7)."""
         self.home = Path(home) if home else DEFAULT_HOME
         self.store = Store(self.home / "schemagraph.duckdb")
         self._lock = threading.RLock()
         self.graph: SchemaGraph = SchemaGraph()
         self.linker: Linker | None = None
         self._llm = llm
+        self._embed = self._resolve_embed(embed)
         self.reload()
+
+    @staticmethod
+    def _resolve_embed(embed: bool | str) -> bool:
+        if embed != "auto":
+            return bool(embed)
+        try:
+            import model2vec  # noqa: F401
+
+            return True
+        except ImportError:
+            return False
+
+    @property
+    def has_embed(self) -> bool:
+        return self._embed
 
     # ----------------------------------------------------------- lifecycle
     def close(self) -> None:
@@ -41,7 +59,7 @@ class Engine:
     def reload(self) -> None:
         with self._lock:
             snaps = self.store.snapshots()
-            snaps.append(self.store.user_snapshot())
+            snaps.append(self.store.user_snapshot())  # priority 0: merged first, so curation wins conflicts
             self.graph = build_graph(snaps)
             llm = self._resolve_llm()
             self.linker = Linker(self.graph, llm=llm)
@@ -70,9 +88,10 @@ class Engine:
     def connector_schema(self, type_name: str) -> dict[str, Any]:
         return config_schema(type_name)
 
-    def add_connection(self, name: str, type_name: str, config: dict[str, Any], *, build: bool = True) -> SchemaSnapshot | None:
+    def add_connection(self, name: str, type_name: str, config: dict[str, Any], *, build: bool = True, priority: int | None = None) -> SchemaSnapshot | None:
+        """``priority``: merge order (lower merges first and wins conflicting fields); None = by source type."""
         make_connector(type_name, name, substitute_env(config))  # validate config shape
-        self.store.upsert_connection(name, type_name, config)
+        self.store.upsert_connection(name, type_name, config, priority=priority)
         if build:
             return self.build(name)
         return None
@@ -132,7 +151,7 @@ class Engine:
     # ----------------------------------------------------------- queries
     def link(self, question: str, **kw: Any) -> LinkResult:
         assert self.linker is not None
-        opts = LinkOptions(**kw)
+        opts = LinkOptions(**{"embed": self._embed, **kw})
         if opts.use_llm and not self.has_llm:
             opts.use_llm = False
         with self._lock:
@@ -163,5 +182,6 @@ class Engine:
     def stats(self) -> dict[str, Any]:
         s = self.graph.stats()
         s["llm"] = self.has_llm
+        s["embed"] = self.has_embed
         s["home"] = str(self.home)
         return s

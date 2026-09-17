@@ -62,3 +62,17 @@ def test_mcp_tools_registered(tmp_path):
     assert {"link_schema", "link_schema_json", "get_table", "find_join_path", "search_tables"} <= names
     out = anyio.run(server.call_tool, "find_join_path", {"from_table": "customer", "to_table": "shipment"})
     assert "public.order_items" in str(out)
+
+
+def test_engine_embed_auto_and_explicit(tmp_path):
+    from schemagraph.engine import Engine
+
+    eng = Engine(tmp_path / "h", llm=None, embed=False)
+    assert eng.has_embed is False and eng.stats()["embed"] is False
+    eng2 = Engine(tmp_path / "h2", llm=None, embed="auto")
+    try:
+        import model2vec  # noqa: F401
+
+        assert eng2.has_embed is True
+    except ImportError:
+        assert eng2.has_embed is False

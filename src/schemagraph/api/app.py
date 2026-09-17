@@ -26,6 +26,7 @@ class ConnectionIn(BaseModel):
     type: str
     config: dict[str, Any] = Field(default_factory=dict)
     build: bool = True
+    priority: int | None = None  # merge order: lower merges first and wins conflicting fields; default by source type
 
 
 class DDLIn(BaseModel):
@@ -83,7 +84,7 @@ def create_app(engine: Engine | None = None, *, web_dist: str | Path | None = No
     @app.post("/api/connections")
     def add_connection(body: ConnectionIn) -> dict[str, Any]:
         try:
-            snap = eng.add_connection(body.name, body.type, body.config, build=body.build)
+            snap = eng.add_connection(body.name, body.type, body.config, build=body.build, priority=body.priority)
         except KeyError as e:
             raise HTTPException(400, str(e)) from e
         except Exception as e:  # connector/config failure
