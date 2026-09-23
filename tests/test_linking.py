@@ -174,6 +174,7 @@ def test_embedding_activator_seeds_paraphrases(store_graph, embed_model):
     assert question_part("q\n\n" + "d" * 500) == "q" and question_part("short\n\nquestion") == "short\n\nquestion"
     assert "shipped date" in phrases("shipped date by carrier")
     emb = EmbeddingActivator(store_graph)
+    assert EmbeddingActivator(store_graph).model is emb.model  # loaded once, shared across rebuilds
     seeds = dict((n, (w, why)) for n, w, why in emb.activate("which delivery company shipped each order"))
     assert "c:public.shipment.carrier" in seeds or "t:public.shipment" in seeds
     assert all(w <= 0.8 for w, _ in seeds.values())

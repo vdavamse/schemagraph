@@ -12,6 +12,8 @@ the ``embed`` extra (``uv sync --extra embed``).
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 import numpy as np
 
 from schemagraph.graph.build import SchemaGraph
@@ -37,14 +39,22 @@ def phrases(text: str) -> list[str]:
     return out[:MAX_PHRASES]
 
 
+@lru_cache(maxsize=4)
+def load_model(model_name: str):
+    """The static model, loaded once per process and shared across Linker rebuilds (a failed load
+    is not cached). ``force_download=False``: the local cache first, the Hub only when missing
+    (model2vec defaults to ``True``, which contacts the Hub, and waits out its timeout, on every load)."""
+    try:
+        from model2vec import StaticModel
+    except ImportError as e:  # pragma: no cover - depends on the optional extra
+        raise ImportError("LinkOptions(embed=True) needs the 'embed' extra: uv sync --extra embed") from e
+    return StaticModel.from_pretrained(model_name, force_download=False)
+
+
 class EmbeddingActivator:
     def __init__(self, sg: SchemaGraph, model_name: str = DEFAULT_MODEL) -> None:
-        try:
-            from model2vec import StaticModel
-        except ImportError as e:  # pragma: no cover - depends on the optional extra
-            raise ImportError("LinkOptions(embed=True) needs the 'embed' extra: uv sync --extra embed") from e
         self.model_name = model_name
-        self.model = StaticModel.from_pretrained(model_name)  # from the HF cache; HF_HUB_OFFLINE=1 skips the Hub check
+        self.model = load_model(model_name)
         self.nodes: list[str] = []
         texts: list[str] = []
         for n, d in sg.g.nodes(data=True):

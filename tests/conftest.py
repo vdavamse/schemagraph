@@ -18,12 +18,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def embed_model():
     """The default embedding model name, if the ``embed`` extra is installed and the model is cached."""
     pytest.importorskip("model2vec")
-    from model2vec import StaticModel
-
-    from schemagraph.linking.embed import DEFAULT_MODEL
+    from schemagraph.linking.embed import DEFAULT_MODEL, load_model
 
     try:
-        StaticModel.from_pretrained(DEFAULT_MODEL)
+        load_model(DEFAULT_MODEL)
     except Exception as e:  # not in the HF cache and HF_HUB_OFFLINE is set
         pytest.skip(f"embedding model not cached: {e}")
     return DEFAULT_MODEL
