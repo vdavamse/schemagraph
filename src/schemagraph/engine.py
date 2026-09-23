@@ -40,6 +40,7 @@ class Engine:
         self._llm = llm
         self._embed_requested = self._resolve_embed(embed)
         self._embed = False  # effective: requested and the model loaded at the last reload
+        self._embed_failed = False  # a load failed: later reloads retry only from the local cache, never the Hub
         self.reload()
 
     @staticmethod
@@ -72,18 +73,33 @@ class Engine:
             self.graph = build_graph(snaps)
             llm = self._resolve_llm()
             self.linker = Linker(self.graph, llm=llm)
-            self._embed = self._embed_requested and self._warm_embedder()
+            self._embed = self._embed_requested and (not self._embed_failed or self._model_cached()) and self._warm_embedder()
+
+    @staticmethod
+    def _model_cached() -> bool:
+        """The embedding model can load without the network (a local directory or the HF cache)."""
+        model = LinkOptions().embed_model
+        if Path(model).is_dir():
+            return True
+        try:
+            from huggingface_hub import try_to_load_from_cache
+
+            return isinstance(try_to_load_from_cache(model, "model.safetensors"), str)
+        except Exception:
+            return False
 
     def _warm_embedder(self) -> bool:
         """Load the model and encode the catalog now, so the cost and any failure land at startup,
-        not in a request. Retried on every reload, so a model cached later turns embeddings back on."""
+        not in a request. After a failure, reloads retry only once the model is in the local cache
+        (a Hub timeout would otherwise be paid on every reload, under the lock)."""
         assert self.linker is not None
         model = LinkOptions().embed_model
         t0 = time.perf_counter()
         try:
             self.linker.embedder(model)
         except Exception as e:
-            log.warning("embedding model %s unavailable, embeddings off until the next reload: %s", model, e)
+            log.warning("embedding model %s unavailable, embeddings off until it is cached locally: %s", model, e)
+            self._embed_failed = True
             return False
         log.info("embeddings on: %s, %d objects encoded in %.2fs", model, len(self.linker.embedder(model).nodes), time.perf_counter() - t0)
         return True
@@ -176,19 +192,19 @@ class Engine:
     # ----------------------------------------------------------- queries
     def link(self, question: str, **kw: Any) -> LinkResult:
         assert self.linker is not None
-        opts = LinkOptions(**{"embed": self._embed, **kw})
-        if opts.use_llm and not self.has_llm:
-            opts.use_llm = False
-        with self._lock:
+        with self._lock:  # read the embed flag under the lock: a reload can turn it off
+            opts = LinkOptions(**{"embed": self._embed, **kw})
+            if opts.use_llm and not self.has_llm:
+                opts.use_llm = False
             return self.linker.link(question, opts)
 
     def explain(self, question: str, **kw: Any) -> dict[str, Any]:
         """Same options as :meth:`link` (the engine's ``embed`` setting included), so it shows the seeds that ranked."""
         assert self.linker is not None
-        opts = LinkOptions(**{"embed": self._embed, **kw})
-        if opts.use_llm and not self.has_llm:
-            opts.use_llm = False
         with self._lock:
+            opts = LinkOptions(**{"embed": self._embed, **kw})
+            if opts.use_llm and not self.has_llm:
+                opts.use_llm = False
             return self.linker.explain(question, opts)
 
     def tables(self) -> list[Table]:

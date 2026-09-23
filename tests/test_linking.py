@@ -105,10 +105,10 @@ def test_value_matching_is_whole_word_and_punctuation_tolerant(store_snapshot):
     assert "california" in activate(sg, idx, "customers in California!").matched_values
     assert "iphone city" in activate(sg, idx, "iPhone City stores").matched_values
     assert "bo" not in idx.values  # too short to be evidence
-    store_snapshot.table("public.customer").column("state").sample_values = ["A++", "10%", "$50", "U.S.", "E.U."]
+    store_snapshot.table("public.customer").column("state").sample_values = ["A++", "10%", "$50", "1,000", "10:30", "2023/01/15", "U.S.", "E.U."]
     sg = build_graph([store_snapshot])
     idx = build_index(sg)
-    for q in ("a list of deals", "top 10 customers", "more than 50 orders"):  # punctuation residue is not a value
+    for q in ("a list of deals", "top 10 customers", "more than 50 orders", "top 1,000 customers", "at 10:30 on 2023/01/15"):  # punctuation residue is not a value
         assert activate(sg, idx, q).matched_values == [], q
     assert set(activate(sg, idx, "total sales in the U.S. and the E.U.").matched_values) == {"u.s.", "e.u."}  # dotted abbreviations are evidence
 

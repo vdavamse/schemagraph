@@ -115,10 +115,15 @@ def test_embedding_load_is_retried_on_reload(tmp_path, monkeypatch):
         return SimpleNamespace(nodes=[])
 
     monkeypatch.setattr(Linker, "embedder", flaky)
+    cached = {"v": False}
+    monkeypatch.setattr(Engine, "_model_cached", staticmethod(lambda: cached["v"]))
     eng = Engine(tmp_path, llm=None, embed=True)
     assert eng.has_embed is False  # first load failed: off, with a warning
     eng.reload()
-    assert eng.has_embed is True  # retried on the next reload
+    assert eng.has_embed is False and calls["n"] == 1  # not cached: no Hub retry on reload
+    cached["v"] = True
+    eng.reload()
+    assert eng.has_embed is True  # cached now: the next reload turns embeddings on
 
 
 def test_cli_opt_values_parse_as_json_or_string():

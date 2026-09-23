@@ -192,6 +192,17 @@ def test_connection_priority_cannot_outrank_user_curation():
     assert build_graph([a, z]).table("t").description == "from z"  # priorities <= 1 between connections are honoured
 
 
+def test_every_connector_source_type_has_a_merge_priority():
+    import re
+    from pathlib import Path
+
+    from schemagraph.graph.build import SOURCE_PRIORITY
+
+    src = Path(__file__).parent.parent / "src" / "schemagraph" / "connectors"
+    emitted = {m for f in src.glob("*.py") if f.name != "spider2.py" for m in re.findall(r'source_type="(\w+)"', f.read_text(encoding="utf-8"))}
+    assert emitted and emitted <= set(SOURCE_PRIORITY), emitted - set(SOURCE_PRIORITY)
+
+
 def test_stub_flag_in_a_snapshot_is_not_trusted():
     real = SchemaSnapshot(source="a", source_type="ddl", tables=[Table(name="t", description="real", columns=[Column(name="x")])])
     echoed = SchemaSnapshot(source="b", source_type="duckdb", tables=[Table(name="t", properties={"stub": "true"})])

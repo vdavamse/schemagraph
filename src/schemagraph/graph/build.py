@@ -57,16 +57,18 @@ PPR_AFFINITY: dict[str, float] = {
 }
 
 
-# Merge precedence by source type: lower merges first and wins conflicting scalar fields.
-# Curated sources beat introspected ones; the user's own glossary and hints beat everything.
+# Merge precedence by the ``source_type`` a connector emits (not its registry name: the
+# unity_catalog connector emits "unity", aws_glue emits "glue"); lower merges first and wins
+# conflicting scalar fields. Curated sources beat introspected ones; the user's own glossary
+# and hints beat everything.
 SOURCE_PRIORITY: dict[str, int] = {
     "user": 0,
     "collibra": 10,
     "dbt": 20,
-    "unity_catalog": 30,
+    "unity": 30,
     "duckdb": 40,
     "ddl": 50,
-    "aws_glue": 60,
+    "glue": 60,
 }
 DEFAULT_PRIORITY = 70
 
