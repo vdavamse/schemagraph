@@ -52,6 +52,10 @@ def load_model(model_name: str):
     try:
         return StaticModel.from_pretrained(model_name, force_download=False)
     except Exception:
+        from model2vec.persistence.hf import maybe_get_cached_model_path
+
+        if maybe_get_cached_model_path(model_name) is None:
+            raise  # nothing cached: the first attempt already asked the Hub, don't wait out its timeout twice
         return StaticModel.from_pretrained(model_name, force_download=True)
 
 

@@ -215,7 +215,10 @@ def test_load_model_uses_cache_first_and_heals_a_broken_cache(monkeypatch):
             raise FileNotFoundError("Could not find expected model files")
         return object()
 
+    from model2vec.persistence import hf
+
     monkeypatch.setattr(StaticModel, "from_pretrained", staticmethod(fake))
+    monkeypatch.setattr(hf, "maybe_get_cached_model_path", lambda name: None if name == "missing/model" else "snapshot")
     embed.load_model.cache_clear()
     try:
         embed.load_model("good/model")
@@ -223,5 +226,15 @@ def test_load_model_uses_cache_first_and_heals_a_broken_cache(monkeypatch):
         calls.clear()
         embed.load_model("broken/model")
         assert calls == [False, True]  # partial snapshot: falls back to a real download
+        calls.clear()
+
+        def offline(name, force_download=True):
+            calls.append(force_download)
+            raise OSError("hub unreachable")
+
+        monkeypatch.setattr(StaticModel, "from_pretrained", staticmethod(offline))
+        with pytest.raises(OSError):
+            embed.load_model("missing/model")
+        assert calls == [False]  # nothing cached: the Hub is not asked a second time
     finally:
         embed.load_model.cache_clear()
