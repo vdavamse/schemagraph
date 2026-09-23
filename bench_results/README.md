@@ -113,6 +113,17 @@ outside the top 20. Dissecting activations gave four mechanisms, each fixed and 
 | 9 | rank-tiered column cap (`columns_top_uncapped=1`, `max_columns_per_table=40`): col_strict 81.17 → 91.21 at −0.5 % tokens; table metrics unchanged. Same day, benchmark-neutral by construction: snapshots merge in explicit source-priority order with edges and glossary targets resolved after all tables load (`fixA_merge`, identical), and lineage edges leave path-finding (`fixB_lineage`, identical) | **95.85** | **91.57** |
 | 10 | optional seed-side embedding activator (`embed=true`, extra `embed`, `spider2_lite_embed.*`): question phrases seed the closest objects by static-embedding cosine. Strict 96.23, anchor_hit 72.64, precise strict@7 73.7 (from 70.6), gold_in_top20 96.23, p50 51 ms. Off in the benchmark defaults; the Engine turns it on when the extra is installed | (96.23) | |
 
+Tried and rejected: **SPRIG seed-side fusion** (2026-09-23, `seed_bm25=true`; `docs/SPRIG_RECOMMENDATIONS.md`).
+The top `seed_k` BM25F tables join the PPR personalization with weight `seed_w / (rank + 1)`
+(not the direct lexical bonus). Seeding PPR alone lifts precise strict@7 66.9 → 69.0 (k 5, w 2),
+still below score-side `rrf` (70.6), the reverse of SPRIG's text-corpus result because PPR here is
+not a weak ranker. On top of `rrf` the best cell is 71.5 @7 (k 5, w 2) and heavier weights reach
+96.04 strict, but every gain is a task with a gold table that has no direct seed: 3 tasks on one
+9-table database. With `embed=true` it is +0.19 / +0.38 strict and −0.3 / −0.6 @7 (w 2 / w 4),
+so the embeddings already recover what BM25 seeds would. The option stays for ablation, off.
+Headroom: of the 95 precise-sample misses at @7 under `rrf`, 18 have an unseeded gold table,
+and 77 have every gold table directly seeded, so those misses come from ranking, not seeding.
+
 Tried and rejected: **schema routing** (blend each table's score with its dataset's
 activation mass, DBCopilot-style). −6 to −7 strict points everywhere: Spider 2 gold sets
 routinely join across datasets (`zip_codes` from one, `gsod` from another), and the boost

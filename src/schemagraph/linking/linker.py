@@ -70,8 +70,11 @@ class LinkOptions:
     schema_routing: float = 0.0  # 0 = off (hurt on Spider2-Lite: -6 strict on large schemas); blend table score with its dataset's activation mass (DBCopilot-style)
     ngram_stop: bool = True  # n-gram name matches survive stopwords inside names ("date of birth" -> date_of_birth)
     ppr_edge_attr: str = "weight"  # edge attribute PPR reads as transition mass: "weight" (join cost, historical) | "affinity" (PPR_AFFINITY by kind)
-    ranker: str = "rrf"  # "rrf" (reciprocal-rank fusion of the PPR ranking with BM25F over one document per table; Lite 96.04 strict, +3.7 strict@7) | "ppr" (activation + PPR alone, 95.66) | "bm25" (BM25F alone, 94.91)
+    ranker: str = "rrf"  # "rrf" (reciprocal-rank fusion of the PPR ranking with BM25F over one document per table; Lite 95.85 strict, +3.7 strict@7) | "ppr" (activation + PPR alone, 95.66) | "bm25" (BM25F alone, 94.91)
     rrf_k: int = 60  # reciprocal-rank fusion constant: score = sum 1/(k + rank); smaller k weights the head of each ranking more
+    seed_bm25: bool = False  # SPRIG seed-side fusion: top seed_k BM25F tables also seed PPR (personalization only). Rejected 2026-09-23: +1-2 strict, -0.3 strict@7 with embed
+    seed_k: int = 5  # BM25F tables used as PPR seeds (SPRIG: 5-10)
+    seed_w: float = 1.0  # BM25F seed weight at rank r (0-based) = seed_w / (r + 1); a name hit is 1.0
     embed: bool = False  # add paraphrase seeds from a small static embedding model (linking/embed.py; needs the `embed` extra)
     embed_model: str = "minishlab/potion-base-8M"
     embed_threshold: float = 0.5  # cosine floor for an embedding seed
@@ -112,7 +115,15 @@ class Linker:
                 self._embedder.model_name = opts.embed_model
             for node, w, why in self._embedder.activate(question, threshold=opts.embed_threshold, top_k=opts.embed_top_k, weight=opts.embed_weight):
                 act.bump(node, w, why)
-        node_scores = personalized_pagerank(sg, act.seeds, alpha=opts.ppr_alpha, specificity=self._spec, matrix=self._matrix(opts.ppr_edge_attr))
+        seeds = act.seeds
+        if opts.seed_bm25:
+            if self._bm25 is None:
+                self._bm25 = build_bm25(sg)
+            top = sorted(bm25_scores(self._bm25, question).items(), key=lambda x: (-x[1], x[0]))[: opts.seed_k]
+            seeds = dict(act.seeds)
+            for r, (fqn, _) in enumerate(top):
+                seeds[tnode(fqn)] = seeds.get(tnode(fqn), 0.0) + opts.seed_w / (r + 1)
+        node_scores = personalized_pagerank(sg, seeds, alpha=opts.ppr_alpha, specificity=self._spec, matrix=self._matrix(opts.ppr_edge_attr))
         tscores = table_scores(sg, node_scores, agg=opts.agg)
         # direct lexical evidence on the table itself counts extra (PPR dilutes it)
         scale = max(tscores.values(), default=1.0) or 1.0
