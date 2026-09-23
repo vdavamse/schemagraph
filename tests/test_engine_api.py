@@ -97,6 +97,28 @@ def test_join_path_falls_back_to_lineage_and_priority_survives_reregister(tmp_pa
     assert eng.join_path("stg", "fct") == [["stg", "fct"]]  # no join route: the lineage route is reported
     eng.add_connection("dbt", "ddl", {"ddl": "CREATE TABLE stg (id INT); CREATE TABLE fct (id INT);"})  # e.g. edited in the UI
     assert next(c for c in eng.connections() if c["name"] == "dbt")["priority"] == 5
+    eng.add_connection("dbt", "ddl", {"ddl": "CREATE TABLE stg (id INT);"}, clear_priority=True)
+    assert next(c for c in eng.connections() if c["name"] == "dbt")["priority"] is None
+
+
+def test_embedding_load_is_retried_on_reload(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from schemagraph.linking.linker import Linker
+
+    calls = {"n": 0}
+
+    def flaky(self, model_name):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("offline")
+        return SimpleNamespace(nodes=[])
+
+    monkeypatch.setattr(Linker, "embedder", flaky)
+    eng = Engine(tmp_path, llm=None, embed=True)
+    assert eng.has_embed is False  # first load failed: off, with a warning
+    eng.reload()
+    assert eng.has_embed is True  # retried on the next reload
 
 
 def test_cli_opt_values_parse_as_json_or_string():

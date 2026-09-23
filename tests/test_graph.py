@@ -187,6 +187,9 @@ def test_connection_priority_cannot_outrank_user_curation():
     user = SchemaSnapshot(source="user", source_type="user", priority=0, tables=[Table(name="t", description="curated")])
     cat = SchemaSnapshot(source="aaa", source_type="ddl", priority=-5, tables=[Table(name="t", description="catalog")])
     assert build_graph([cat, user]).table("t").description == "curated"
+    a = SchemaSnapshot(source="a", source_type="ddl", priority=1, tables=[Table(name="t", description="from a")])
+    z = SchemaSnapshot(source="z", source_type="ddl", priority=0, tables=[Table(name="t", description="from z")])
+    assert build_graph([a, z]).table("t").description == "from z"  # priorities <= 1 between connections are honoured
 
 
 def test_stub_flag_in_a_snapshot_is_not_trusted():

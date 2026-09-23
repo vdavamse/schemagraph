@@ -96,17 +96,19 @@ class Store:
         self.con.close()
 
     # ------------------------------------------------------------ connections
-    def upsert_connection(self, name: str, type_name: str, config: dict[str, Any], priority: int | None = None) -> None:
+    def upsert_connection(self, name: str, type_name: str, config: dict[str, Any], priority: int | None = None, *, clear_priority: bool = False) -> None:
         """``priority``: merge order (lower merges first and wins conflicting fields). None keeps the stored
-        value on re-register (the UI form has no priority field); a new connection with None merges by source type."""
+        value on re-register (the UI form has no priority field); a new connection with None merges by source
+        type. ``clear_priority`` resets a stored priority to that default."""
         now = datetime.now(UTC)
+        keep = "NULL" if clear_priority else "COALESCE(excluded.priority, connections.priority)"
         self.con.execute(
-            """
+            f"""
             INSERT INTO connections (name, type, config, created_at, updated_at, priority) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (name) DO UPDATE SET type = excluded.type, config = excluded.config, updated_at = excluded.updated_at,
-              priority = COALESCE(excluded.priority, connections.priority)
+              priority = {keep}
             """,
-            [name, type_name, json.dumps(config), now, now, priority],
+            [name, type_name, json.dumps(config), now, now, None if clear_priority else priority],
         )
 
     def delete_connection(self, name: str) -> None:

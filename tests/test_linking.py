@@ -105,11 +105,12 @@ def test_value_matching_is_whole_word_and_punctuation_tolerant(store_snapshot):
     assert "california" in activate(sg, idx, "customers in California!").matched_values
     assert "iphone city" in activate(sg, idx, "iPhone City stores").matched_values
     assert "bo" not in idx.values  # too short to be evidence
-    store_snapshot.table("public.customer").column("state").sample_values = ["A++", "10%", "$50"]
+    store_snapshot.table("public.customer").column("state").sample_values = ["A++", "10%", "$50", "U.S.", "E.U."]
     sg = build_graph([store_snapshot])
     idx = build_index(sg)
     for q in ("a list of deals", "top 10 customers", "more than 50 orders"):  # punctuation residue is not a value
         assert activate(sg, idx, q).matched_values == [], q
+    assert set(activate(sg, idx, "total sales in the U.S. and the E.U.").matched_values) == {"u.s.", "e.u."}  # dotted abbreviations are evidence
 
 
 def test_ngram_matches_names_containing_stopwords():

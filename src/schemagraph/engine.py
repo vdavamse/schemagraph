@@ -38,7 +38,8 @@ class Engine:
         self.graph: SchemaGraph = SchemaGraph()
         self.linker: Linker | None = None
         self._llm = llm
-        self._embed = self._resolve_embed(embed)
+        self._embed_requested = self._resolve_embed(embed)
+        self._embed = False  # effective: requested and the model loaded at the last reload
         self.reload()
 
     @staticmethod
@@ -71,21 +72,21 @@ class Engine:
             self.graph = build_graph(snaps)
             llm = self._resolve_llm()
             self.linker = Linker(self.graph, llm=llm)
-            if self._embed:
-                self._warm_embedder()
+            self._embed = self._embed_requested and self._warm_embedder()
 
-    def _warm_embedder(self) -> None:
-        """Load the model and encode the catalog now, so the cost and any failure land at startup."""
+    def _warm_embedder(self) -> bool:
+        """Load the model and encode the catalog now, so the cost and any failure land at startup,
+        not in a request. Retried on every reload, so a model cached later turns embeddings back on."""
         assert self.linker is not None
         model = LinkOptions().embed_model
         t0 = time.perf_counter()
         try:
             self.linker.embedder(model)
         except Exception as e:
-            log.warning("embedding model %s unavailable, embeddings off: %s", model, e)
-            self._embed = False
-            return
+            log.warning("embedding model %s unavailable, embeddings off until the next reload: %s", model, e)
+            return False
         log.info("embeddings on: %s, %d objects encoded in %.2fs", model, len(self.linker.embedder(model).nodes), time.perf_counter() - t0)
+        return True
 
     def _resolve_llm(self):
         if self._llm != "auto":
@@ -111,10 +112,11 @@ class Engine:
     def connector_schema(self, type_name: str) -> dict[str, Any]:
         return config_schema(type_name)
 
-    def add_connection(self, name: str, type_name: str, config: dict[str, Any], *, build: bool = True, priority: int | None = None) -> SchemaSnapshot | None:
-        """``priority``: merge order (lower merges first and wins conflicting fields); None = by source type."""
+    def add_connection(self, name: str, type_name: str, config: dict[str, Any], *, build: bool = True, priority: int | None = None, clear_priority: bool = False) -> SchemaSnapshot | None:
+        """``priority``: merge order (lower merges first and wins conflicting fields); None keeps a stored
+        priority, else merges by source type. ``clear_priority`` goes back to the source-type order."""
         make_connector(type_name, name, substitute_env(config))  # validate config shape
-        self.store.upsert_connection(name, type_name, config, priority=priority)
+        self.store.upsert_connection(name, type_name, config, priority=priority, clear_priority=clear_priority)
         if build:
             return self.build(name)
         return None

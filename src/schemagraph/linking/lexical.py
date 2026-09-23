@@ -124,9 +124,8 @@ class LexicalIndex:
         if len(lv) < 3 or lv.replace(".", "").replace("-", "").isdigit():
             return
         words = _words(lv)
-        joined = "".join(words)
-        if len(joined) < 3 or joined.isdigit():
-            return  # "A++", "10%", "$50": the residue is a letter or a number, which is not evidence
+        if not words or (len(words) == 1 and (len(words[0]) < 3 or words[0].isdigit())):
+            return  # "A++", "10%", "$50": a lone letter or number residue is not evidence ("U.S." -> u_s is)
         self.values.setdefault(lv, []).append(node)
         if len(words) > MAX_VALUE_TOKENS:
             self.long_values.setdefault(lv, []).append(node)

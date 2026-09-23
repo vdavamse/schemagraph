@@ -77,10 +77,13 @@ JOIN_KINDS: frozenset[str] = frozenset({"foreign_key", "relationship_test", "joi
 
 
 def snapshot_priority(snap: SchemaSnapshot) -> int:
-    """Merge rank; only the synthetic user snapshot may take 0, so curation always merges first."""
-    if snap.priority is None:
-        return SOURCE_PRIORITY.get(snap.source_type, DEFAULT_PRIORITY)
-    return snap.priority if snap.source_type == "user" else max(1, snap.priority)
+    return snap.priority if snap.priority is not None else SOURCE_PRIORITY.get(snap.source_type, DEFAULT_PRIORITY)
+
+
+def merge_key(snap: SchemaSnapshot) -> tuple[bool, int, str]:
+    """Sort key for merging: the user's curation first whatever a connection's priority, then
+    :func:`snapshot_priority` (any int, as set), then source name for a stable tie-break."""
+    return (snap.source_type != "user", snapshot_priority(snap), snap.source)
 
 
 def tnode(fqn: str) -> str:
@@ -347,10 +350,10 @@ class SchemaGraph:
 
 
 def build_graph(snapshots: list[SchemaSnapshot]) -> SchemaGraph:
-    """Merge snapshots in priority order (see :func:`snapshot_priority`): all tables first, then
+    """Merge snapshots in priority order (see :func:`merge_key`): all tables first, then
     all relation edges, then all glossary terms, so resolution never depends on merge order."""
     sg = SchemaGraph()
-    ordered = sorted(snapshots, key=lambda s: (snapshot_priority(s), s.source))
+    ordered = sorted(snapshots, key=merge_key)
     for s in ordered:
         sg.add_tables(s)
     for s in ordered:

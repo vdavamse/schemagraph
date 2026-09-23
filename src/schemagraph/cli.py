@@ -71,13 +71,14 @@ def add(
     name: Annotated[str, typer.Argument()],
     config: Annotated[str, typer.Option("--config", "-c", help="JSON config or @file.json; ${ENV} references allowed")],
     no_build: bool = False,
-    priority: Annotated[int | None, typer.Option(help="merge order: lower merges first and wins conflicting fields (default: by source type, user > collibra > dbt > unity_catalog > duckdb > ddl > aws_glue)")] = None,
+    priority: Annotated[int | None, typer.Option(help="merge order: lower merges first and wins conflicting fields (default: by source type, user > collibra > dbt > unity_catalog > duckdb > ddl > aws_glue); omitted on re-register keeps the stored one")] = None,
+    clear_priority: Annotated[bool, typer.Option(help="reset a stored priority to the source-type order")] = False,
     home: HomeOpt = None,
 ):
     """Register any connector from a JSON config."""
     eng = _engine(home)
     cfg = json.loads(Path(config[1:]).read_text(encoding="utf-8")) if config.startswith("@") else json.loads(config)
-    snap = eng.add_connection(name, type_name, cfg, build=not no_build, priority=priority)
+    snap = eng.add_connection(name, type_name, cfg, build=not no_build, priority=priority, clear_priority=clear_priority)
     if snap:
         typer.echo(f"{name}: {len(snap.tables)} tables, {len(snap.edges)} edges, {len(snap.terms)} terms")
     else:
