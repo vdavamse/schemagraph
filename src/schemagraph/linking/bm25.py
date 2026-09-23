@@ -32,6 +32,7 @@ class BM25Index:
     length: dict[str, dict[str, int]] = field(default_factory=dict)  # table fqn -> field -> tokens in field
     avglen: dict[str, float] = field(default_factory=dict)
     df: Counter = field(default_factory=Counter)
+    postings: dict[str, list[str]] = field(default_factory=dict)  # token -> tables containing it (any field)
     n_docs: int = 0
 
     def idf(self, tok: str) -> float:
@@ -59,8 +60,9 @@ def build_bm25(sg: SchemaGraph) -> BM25Index:
                 fields["business"] += _name_tokens(c.properties["business_name"])
         idx.tf[t.fqn] = {f: Counter(toks) for f, toks in fields.items()}
         idx.length[t.fqn] = {f: len(toks) for f, toks in fields.items()}
-        for tok in {tok for toks in fields.values() for tok in toks}:
+        for tok in dict.fromkeys(tok for toks in fields.values() for tok in toks):
             idx.df[tok] += 1
+            idx.postings.setdefault(tok, []).append(t.fqn)
     idx.n_docs = len(idx.tf)
     for f in FIELD_WEIGHT:
         lens = [ln.get(f, 0) for ln in idx.length.values()]
@@ -84,11 +86,15 @@ def query_terms(question: str) -> dict[str, float]:
 
 
 def bm25_scores(idx: BM25Index, question: str, *, k1: float = 1.2, b: float = 0.75) -> dict[str, float]:
-    terms = query_terms(question)
+    """Scores only the tables in some query token's postings; the rest would score 0 and be dropped."""
     scores: dict[str, float] = {}
-    for fqn, tfs in idx.tf.items():
-        s = 0.0
-        for tok, qw in terms.items():
+    for tok, qw in query_terms(question).items():
+        tables = idx.postings.get(tok)
+        if not tables:
+            continue
+        idf = idx.idf(tok)
+        for fqn in tables:
+            tfs = idx.tf[fqn]
             tf_norm = 0.0
             for f, wf in FIELD_WEIGHT.items():
                 c = tfs.get(f, {}).get(tok, 0)
@@ -96,10 +102,8 @@ def bm25_scores(idx: BM25Index, question: str, *, k1: float = 1.2, b: float = 0.
                     avg = idx.avglen.get(f) or 1.0
                     tf_norm += wf * c / (1.0 - b + b * idx.length[fqn].get(f, 0) / avg)
             if tf_norm:
-                s += qw * idx.idf(tok) * tf_norm * (k1 + 1.0) / (k1 + tf_norm)
-        if s > 0:
-            scores[fqn] = s
-    return scores
+                scores[fqn] = scores.get(fqn, 0.0) + qw * idf * tf_norm * (k1 + 1.0) / (k1 + tf_norm)
+    return {f: s for f, s in scores.items() if s > 0}
 
 
 def reciprocal_rank_fusion(*rankings: list[str], k: int = 60) -> dict[str, float]:

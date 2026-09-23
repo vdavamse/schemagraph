@@ -17,6 +17,7 @@ schema that conversion cost 300-400 ms per link, the iteration itself a few ms.
 
 from __future__ import annotations
 
+import logging
 import math
 from collections import Counter
 
@@ -24,6 +25,8 @@ import numpy as np
 import scipy.sparse as sp
 
 from schemagraph.graph.build import SchemaGraph
+
+log = logging.getLogger("schemagraph")
 
 
 def specificity_weights(sg: SchemaGraph) -> dict[str, float]:
@@ -87,12 +90,20 @@ class PPRMatrix:
         # so those nodes stay exactly zero (what restricting to the touched components achieved)
         # tolerance is per node (L1 change < n * tol), as in networkx, but 1e-12 instead of 1e-6: at 1e-6 a
         # 7,000-node schema stopped with an L1 error near 1e-2, enough to reorder near-tied tables at rank 1
+        # the L1 error contracts by alpha per step from at most 2, so derive the budget from alpha:
+        # a public ppr_alpha of 0.95 needs ~540 steps where 0.85 needs ~170
+        if 0.0 < alpha < 1.0:
+            max_iter = max(max_iter, math.ceil(math.log(n * tol / 2.0) / math.log(alpha)) + 1)
         x = p.copy()
+        err = float("inf")
         for _ in range(max_iter):
             xlast = x
             x = alpha * (x @ self.transition + x[self.dangling].sum() * p) + (1.0 - alpha) * p
-            if np.abs(x - xlast).sum() < n * tol:
+            err = float(np.abs(x - xlast).sum())
+            if err < n * tol:
                 break
+        else:
+            log.warning("PPR did not converge in %d iterations (L1 change %.2e, alpha %.2f)", max_iter, err, alpha)
         return {self.nodes[i]: float(x[i]) for i in np.flatnonzero(x > 0)}
 
 

@@ -105,6 +105,11 @@ def test_value_matching_is_whole_word_and_punctuation_tolerant(store_snapshot):
     assert "california" in activate(sg, idx, "customers in California!").matched_values
     assert "iphone city" in activate(sg, idx, "iPhone City stores").matched_values
     assert "bo" not in idx.values  # too short to be evidence
+    store_snapshot.table("public.customer").column("state").sample_values = ["A++", "10%", "$50"]
+    sg = build_graph([store_snapshot])
+    idx = build_index(sg)
+    for q in ("a list of deals", "top 10 customers", "more than 50 orders"):  # punctuation residue is not a value
+        assert activate(sg, idx, q).matched_values == [], q
 
 
 def test_ngram_matches_names_containing_stopwords():
@@ -162,10 +167,7 @@ def test_lineage_is_context_not_a_join_path(store_snapshot):
     assert paths and [sg.g.nodes[n]["fqn"] for n in paths[0]] == ["public.customer", "public.orders", "public.order_items", "public.shipment"]
 
 
-def test_embedding_activator_seeds_paraphrases(store_graph):
-    import pytest
-
-    pytest.importorskip("model2vec")
+def test_embedding_activator_seeds_paraphrases(store_graph, embed_model):
     from schemagraph.linking.embed import EmbeddingActivator, phrases, question_part
 
     assert question_part("q\n\n" + "d" * 500) == "q" and question_part("short\n\nquestion") == "short\n\nquestion"

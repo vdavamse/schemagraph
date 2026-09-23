@@ -123,10 +123,11 @@ class LexicalIndex:
         lv = str(value).strip().lower()
         if len(lv) < 3 or lv.replace(".", "").replace("-", "").isdigit():
             return
-        self.values.setdefault(lv, []).append(node)
         words = _words(lv)
-        if not words:
-            return
+        joined = "".join(words)
+        if len(joined) < 3 or joined.isdigit():
+            return  # "A++", "10%", "$50": the residue is a letter or a number, which is not evidence
+        self.values.setdefault(lv, []).append(node)
         if len(words) > MAX_VALUE_TOKENS:
             self.long_values.setdefault(lv, []).append(node)
         else:

@@ -98,6 +98,14 @@ class Linker:
             m = self._matrices[edge_attr] = PPRMatrix(self.sg, edge_attr)
         return m
 
+    def embedder(self, model_name: str):
+        """The embedding activator for ``model_name``, built (model load + encoding every object) on first use."""
+        if self._embedder is None or self._embedder.model_name != model_name:
+            from schemagraph.linking.embed import EmbeddingActivator
+
+            self._embedder = EmbeddingActivator(self.sg, model_name)
+        return self._embedder
+
     def _rank(self, question: str, opts: LinkOptions) -> tuple[Activation, dict[str, float], dict[str, float], list[tuple[str, float]], dict[str, float]]:
         """Activate, run PPR, aggregate to tables, add the direct lexical bonus, fuse with BM25F if asked.
 
@@ -108,12 +116,7 @@ class Linker:
         sg = self.sg
         act = activate(sg, self.index, question, idf=opts.idf, min_numeric_len=opts.min_numeric_len, ngram_stop=opts.ngram_stop)
         if opts.embed:
-            if self._embedder is None or self._embedder.model_name != opts.embed_model:
-                from schemagraph.linking.embed import EmbeddingActivator
-
-                self._embedder = EmbeddingActivator(sg, opts.embed_model)
-                self._embedder.model_name = opts.embed_model
-            for node, w, why in self._embedder.activate(question, threshold=opts.embed_threshold, top_k=opts.embed_top_k, weight=opts.embed_weight):
+            for node, w, why in self.embedder(opts.embed_model).activate(question, threshold=opts.embed_threshold, top_k=opts.embed_top_k, weight=opts.embed_weight):
                 act.bump(node, w, why)
         seeds = act.seeds
         if opts.seed_bm25:
@@ -169,7 +172,7 @@ class Linker:
 
         anchors, sources, destinations = self._pick_anchors(question, ranked, evidence, opts)
         paths, union = union_of_shortest_paths(sg, sources, destinations, max_extra=opts.path_extra, cutoff=opts.path_cutoff) if opts.paths else ([], set())
-        prior = {tnode(f): s / (ranked[0][1] if ranked else 1.0) for f, s in ranked[:50]}
+        prior = {tnode(f): evidence.get(f, 0.0) for f, _ in ranked[:50]}  # a magnitude: evidence, not the flat fused score
         join_paths = prune_paths(sg, paths, [tnode(a) for a in anchors], alpha=opts.prune_alpha, theta=opts.prune_theta, top_k=opts.prune_top_k, node_prior=prior)
         kept_tables = set(anchors)
         for jp in join_paths:

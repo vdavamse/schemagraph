@@ -15,6 +15,14 @@ app = typer.Typer(help="schemagraph: graph-native schema context engine for text
 HomeOpt = Annotated[Path | None, typer.Option("--home", "-H", help="Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)")]
 
 
+def _parse_opt(v: str):
+    """``--opt`` value: JSON when it parses (numbers, booleans, lists), else the raw string (``agg=top3``)."""
+    try:
+        return json.loads(v)
+    except ValueError:
+        return v
+
+
 def _engine(home: Path | None) -> Engine:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     return Engine(home)
@@ -164,7 +172,7 @@ def bench_spider1(
     extra: dict = {}
     for kv in opt or []:
         k, v = kv.split("=", 1)
-        extra[k] = json.loads(v) if v[:1] in "[{0123456789-tf" or v in {"true", "false"} else v
+        extra[k] = _parse_opt(v)
     res = run(tables_json, questions_json, max_tables=max_tables, anchor_k=anchor_k, infer=infer, limit=limit, dialect=dialect, out_dir=out, tag=tag, **extra)
     typer.echo(format_table(res["summary"]))
     typer.echo(f"skipped (unknown db or no gold table): {res['summary']['config']['skipped']}")
@@ -206,7 +214,7 @@ def bench_spider2_lite(
     extra: dict = {}
     for kv in opt or []:
         k, v = kv.split("=", 1)
-        extra[k] = json.loads(v) if v[:1] in "[{0123456789-tf" or v in {"true", "false"} else v
+        extra[k] = _parse_opt(v)
     res = run(spider2_root, max_tables=max_tables, anchor_k=anchor_k, use_docs=docs, doc_chars=doc_chars, infer=infer, dialects=set(dialect) if dialect else None, limit=limit, min_db_tables=min_db_tables, collapse_families=families, use_llm=llm, llm=picker, out_dir=out, progress=progress, tag=tag, suite=suite, desc_weight=desc_weight, only=set(only) if only else None, **extra)
     typer.echo(format_table(res["summary"]))
     typer.echo(f"\nresults written to {out}/")

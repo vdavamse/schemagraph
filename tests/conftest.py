@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+os.environ.setdefault("HF_HUB_OFFLINE", "1")  # the suite never touches the network; an uncached model skips its tests
 
 import pytest
 
@@ -9,6 +12,21 @@ from schemagraph.graph import build_graph
 from schemagraph.model import SchemaSnapshot
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(scope="session")
+def embed_model():
+    """The default embedding model name, if the ``embed`` extra is installed and the model is cached."""
+    pytest.importorskip("model2vec")
+    from model2vec import StaticModel
+
+    from schemagraph.linking.embed import DEFAULT_MODEL
+
+    try:
+        StaticModel.from_pretrained(DEFAULT_MODEL)
+    except Exception as e:  # not in the HF cache and HF_HUB_OFFLINE is set
+        pytest.skip(f"embedding model not cached: {e}")
+    return DEFAULT_MODEL
 
 STORE_DDL = """
 CREATE TABLE customer (id INT PRIMARY KEY, name VARCHAR, email VARCHAR, state VARCHAR, city VARCHAR);

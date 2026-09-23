@@ -19,11 +19,12 @@ The table-level projection used for path-finding is derived with :func:`table_gr
 
 Merge order is explicit: :func:`build_graph` sorts snapshots by :func:`snapshot_priority`
 (a per-connection ``priority`` if set, else :data:`SOURCE_PRIORITY` by source type, with the
-user's glossary and join hints first), and the first source to fill a field wins. Relation
-edges and glossary targets are resolved after *every* snapshot has contributed its tables, so
-a foreign key or term that points at a table another source introspects never depends on
-which source loaded first; a stub created for a referenced-only table is replaced when the
-real table arrives.
+user's glossary and join hints first), and the first source to fill a field wins. The build
+runs in three passes: every snapshot's tables, then every relation edge, then every glossary
+term, so a foreign key or term that points at a table another source introspects never
+depends on which source loaded first. :meth:`SchemaGraph.add_snapshot` is the incremental
+path: it resolves one snapshot's edges and terms against the tables loaded so far, and a
+stub created for a referenced-only table is replaced when the real table arrives.
 """
 
 from __future__ import annotations
@@ -76,7 +77,10 @@ JOIN_KINDS: frozenset[str] = frozenset({"foreign_key", "relationship_test", "joi
 
 
 def snapshot_priority(snap: SchemaSnapshot) -> int:
-    return snap.priority if snap.priority is not None else SOURCE_PRIORITY.get(snap.source_type, DEFAULT_PRIORITY)
+    """Merge rank; only the synthetic user snapshot may take 0, so curation always merges first."""
+    if snap.priority is None:
+        return SOURCE_PRIORITY.get(snap.source_type, DEFAULT_PRIORITY)
+    return snap.priority if snap.source_type == "user" else max(1, snap.priority)
 
 
 def tnode(fqn: str) -> str:
@@ -99,40 +103,41 @@ class SchemaGraph:
         self.tables: dict[str, Table] = {}  # lower fqn -> Table (merged)
         self.terms: dict[str, BusinessTerm] = {}  # lower name -> term
         self.sources: dict[str, str] = {}  # source name -> source_type
-        self._edges: list[Edge] = []  # every relation seen so far; re-applied after each snapshot (idempotent)
-        self._terms: list[BusinessTerm] = []  # every glossary term seen so far; likewise
+        self._stubs: set[str] = set()  # lower fqns of referenced-only placeholder tables
 
     # ---------------------------------------------------------------- building
     def add_snapshot(self, snap: SchemaSnapshot) -> None:
-        """Merge one snapshot. Tables merge now; edges and terms (this snapshot's and every
-        earlier one's) are applied afterwards so targets resolve against all tables loaded so far."""
+        """Merge one snapshot incrementally: its tables, then its edges and terms, resolved
+        against every table loaded so far. :func:`build_graph` is the order-independent path."""
+        self.add_tables(snap)
+        for e in snap.edges:
+            self.add_edge(e)
+        for b in snap.terms:
+            self.add_term(b)
+
+    def add_tables(self, snap: SchemaSnapshot) -> None:
         snap.stamp()
         if snap.tables or snap.edges or snap.terms:
             self.sources[snap.source] = snap.source_type
         for t in snap.tables:
             self._merge_table(t)
-        self._edges.extend(snap.edges)
-        self._terms.extend(snap.terms)
-        for e in self._edges:
-            self.add_edge(e)
-        for b in self._terms:
-            self.add_term(b)
-
-    @staticmethod
-    def _is_stub(t: Table) -> bool:
-        return t.properties.get("stub") == "true"
 
     def _merge_table(self, t: Table) -> None:
         key = t.fqn.lower()
         existing = self.tables.get(key)
-        if existing is not None and self._is_stub(existing) and not self._is_stub(t):
+        replaced = False
+        if "stub" in t.properties:  # only the graph marks stubs; a round-tripped snapshot cannot
+            t = t.model_copy(update={"properties": {k: v for k, v in t.properties.items() if k != "stub"}})
+        if existing is not None and key in self._stubs:
             # a referenced-only placeholder: the real table replaces it; the node keeps the edges
             # already attached to it and remembers who referenced it in ``source``
             real = t.model_copy(deep=True)
             real.source = ",".join(dict.fromkeys(filter(None, real.source.split(",") + existing.source.split(","))))
             self.tables[key] = real
+            self._stubs.discard(key)
             self.g.add_node(tnode(t.fqn), ntype="table", fqn=real.fqn, name=real.name.lower())
             existing = None
+            replaced = True
         elif existing is None:
             self.tables[key] = t.model_copy(deep=True)
             self.g.add_node(tnode(t.fqn), ntype="table", fqn=t.fqn, name=t.name.lower())
@@ -174,6 +179,16 @@ class SchemaGraph:
             if cn not in self.g:
                 self.g.add_node(cn, ntype="column", fqn=table.fqn, name=c.name.lower(), table=tn)
                 self.g.add_edge(tn, cn, etype="contains", weight=0.5, affinity=0.5)
+        if replaced:
+            # the stub had no columns: attach the column-level FKs and glossary targets that
+            # could only resolve to the table while it was a placeholder
+            for m in list(self.g.neighbors(tn)):
+                if self.g[tn][m].get("etype") == "relation":
+                    for r in self.g[tn][m]["relations"]:
+                        self._add_fk_cols(r)
+            for term in list(self.terms.values()):
+                if any(tg.lower().startswith(key + ".") for tg in term.targets):
+                    self.add_term(term)
 
     def add_edge(self, e: Edge) -> None:
         a, b = tnode(e.from_table), tnode(e.to_table)
@@ -181,7 +196,9 @@ class SchemaGraph:
             if n not in self.g:
                 # referenced table not introspected: create a stub so the path exists
                 stub = Table(name=fqn.split(".")[-1], schema=".".join(fqn.split(".")[1:-1]) or None, catalog=fqn.split(".")[0] if fqn.count(".") >= 2 else None, source=e.source, properties={"stub": "true"})
-                self.tables.setdefault(fqn.lower(), stub)
+                if fqn.lower() not in self.tables:
+                    self.tables[fqn.lower()] = stub
+                    self._stubs.add(fqn.lower())
                 self.g.add_node(n, ntype="table", fqn=fqn, name=stub.name.lower())
         if a == b:
             return
@@ -194,7 +211,9 @@ class SchemaGraph:
             rels.append(e)
         data["weight"] = min(RELATION_WEIGHT.get(r.kind, 2.0) for r in rels)  # cost: best evidence wins
         data["affinity"] = max(PPR_AFFINITY.get(r.kind, 1.0) for r in rels)
-        # column-level FK edges
+        self._add_fk_cols(e)
+
+    def _add_fk_cols(self, e: Edge) -> None:
         for fc, tc in zip(e.from_columns, e.to_columns, strict=False):
             ca, cb = cnode(e.from_table, fc), cnode(e.to_table, tc)
             if ca in self.g and cb in self.g:
@@ -219,6 +238,9 @@ class SchemaGraph:
         kn = knode(term.name)
         if kn not in self.g:
             self.g.add_node(kn, ntype="term", name=key)
+        # re-resolve from scratch: a target that fell back to its table while the table was a
+        # stub (no columns yet) must not keep that edge once the column exists
+        self.g.remove_edges_from([(kn, m) for m in list(self.g.neighbors(kn)) if self.g[kn][m].get("etype") == "glossary"])
         for target in term.targets:
             n = self._resolve_target(target)
             if n is not None:
@@ -325,8 +347,16 @@ class SchemaGraph:
 
 
 def build_graph(snapshots: list[SchemaSnapshot]) -> SchemaGraph:
-    """Merge snapshots in priority order (see :func:`snapshot_priority`), then resolve edges and terms."""
+    """Merge snapshots in priority order (see :func:`snapshot_priority`): all tables first, then
+    all relation edges, then all glossary terms, so resolution never depends on merge order."""
     sg = SchemaGraph()
-    for s in sorted(snapshots, key=lambda s: (snapshot_priority(s), s.source)):
-        sg.add_snapshot(s)
+    ordered = sorted(snapshots, key=lambda s: (snapshot_priority(s), s.source))
+    for s in ordered:
+        sg.add_tables(s)
+    for s in ordered:
+        for e in s.edges:
+            sg.add_edge(e)
+    for s in ordered:
+        for b in s.terms:
+            sg.add_term(b)
     return sg

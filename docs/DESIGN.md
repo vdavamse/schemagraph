@@ -50,7 +50,7 @@ anchors                     top-k by fused rank (k = 6; evidence ≥ 15% of the 
   ▼
 pathfinding.union_of_shortest_paths
   │                         all weighted-shortest simple paths between anchor pairs (Yen's k-shortest paths);
-  │                         FK = 1.0, catalog relation = 1.3, lineage = 1.6, inferred = 2.5
+  │                         FK = 1.0, catalog relation = 1.3, inferred = 2.5 (lineage is context, not a join path)
   ▼
 pruning.prune_paths         PathRAG flow propagation (α = 0.8, θ = 0.05), reliability = mean resource,
   │                         drop sub-paths of kept paths, keep top-k
@@ -104,7 +104,7 @@ Optional and small: one call per question (`llm/anchors.py`) that returns source
 ## Non-goals (v1)
 
 * No SQL execution, no governance (validation, LIMIT injection, PII redaction, budgets). The calling agent owns that boundary.
-* No embeddings in the core. The lexical + PPR path is the LinearRAG bet; the optional `embed` extra (`linking/embed.py`, a 30 MB static model, numpy only) adds paraphrase seeds behind the same `Activation` interface and is measured at +0.4 strict / +3 strict@7 on Spider 2.0-Lite.
+* No embeddings in the core. The lexical + PPR path is the LinearRAG bet; the optional `embed` extra (`linking/embed.py`, a 30 MB static model from the Hugging Face Hub, no torch; set `HF_HUB_OFFLINE=1` on air-gapped hosts once it is cached) adds paraphrase seeds behind the same `Activation` interface and is measured at +0.4 strict / +3 strict@7 on Spider 2.0-Lite.
 * No BI metrics layer. Glossary terms map words to columns; they are not governed calculations.
 
 ## Benchmark
@@ -126,6 +126,6 @@ What the benchmark forced into the core, each ablated:
 ## Next steps
 
 1. The last 4%: gold tables at rank 21–80 in mid-size schemas, vocabulary gaps and join-implied tables. The seed-side embedding pass (`embed` extra) recovers two of them and lifts strict@7 by 3; an LLM entity pass before PPR (HippoRAG's placement) is the next step for the rest, and the Spider-dev FK benchmark shows join-implied bridge tables still rank 6th–8th of 10 even with declared keys.
-3. Shard-family collapse in the Unity Catalog and Glue connectors; value grounding on `_TABLE_SUFFIX`-style shard keys.
-4. Optional embedding activation (Ollama / sentence-transformers) as a second seed source.
-5. GATE-style grounding memory: persist resolved value/format groundings per column so the agent stops re-discovering them.
+2. Shard-family collapse in the Unity Catalog and Glue connectors; value grounding on `_TABLE_SUFFIX`-style shard keys.
+3. A larger embedding model (Ollama / sentence-transformers) behind the same activator as `linking/embed.py`.
+4. GATE-style grounding memory: persist resolved value/format groundings per column so the agent stops re-discovering them.

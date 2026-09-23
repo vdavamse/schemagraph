@@ -3,7 +3,7 @@
 The lexical activator only reaches objects that share a surface form with the question, so a
 paraphrase ("turnover", "how many staff") seeds nothing. This activator embeds every table,
 column and glossary term once (name words plus description) with a small static model
-(model2vec, numpy only, no torch) and, at query time, embeds the question's word n-grams and
+(model2vec: no torch; the model comes from the Hugging Face Hub on first use) and, at query time, embeds the question's word n-grams and
 seeds the closest objects above a cosine threshold. It adds ``(node, weight, reason)`` entries
 to the same :class:`~schemagraph.linking.lexical.Activation`, so PPR, ranking, column
 selection and the DDL reasons are unchanged. Opt in with ``LinkOptions(embed=True)``; needs
@@ -43,7 +43,8 @@ class EmbeddingActivator:
             from model2vec import StaticModel
         except ImportError as e:  # pragma: no cover - depends on the optional extra
             raise ImportError("LinkOptions(embed=True) needs the 'embed' extra: uv sync --extra embed") from e
-        self.model = StaticModel.from_pretrained(model_name)
+        self.model_name = model_name
+        self.model = StaticModel.from_pretrained(model_name)  # from the HF cache; HF_HUB_OFFLINE=1 skips the Hub check
         self.nodes: list[str] = []
         texts: list[str] = []
         for n, d in sg.g.nodes(data=True):

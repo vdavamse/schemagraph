@@ -31,10 +31,12 @@ def test_run_scores_bridge_tables(tmp_path):
     tables.write_text(json.dumps([DB]))
     qs = tmp_path / "q.json"
     qs.write_text(json.dumps([{"db_id": "shop", "instance_id": "q1", "question": "names of customers and the products they bought", "query": "SELECT c.name, p.name FROM customer c JOIN orders o ON c.id = o.customer_id JOIN order_items oi ON oi.order_id = o.id JOIN products p ON p.id = oi.product_id"}]))
-    res = run(tables, qs, max_tables=4, anchor_k=2, out_dir=tmp_path, tag="t")
+    # fill_ratio > 1: nothing fills the budget, so only anchors and path tables survive and the
+    # outcome depends on the path union alone (with fill on, the budget decides both cases)
+    res = run(tables, qs, max_tables=4, anchor_k=2, out_dir=tmp_path, tag="t", fill_ratio=1.1)
     row = res["rows"][0]
     assert row.n_gold == 4 and row.strict == 1 and row.n_bridge >= 1 and row.bridge_recovered == row.n_bridge
     assert res["summary"]["bridge_recall"] == 100.0
-    off = run(tables, qs, max_tables=2, anchor_k=2, paths=False)
-    assert off["rows"][0].strict == 0  # two anchors, no path union: the bridge tables are gone
+    off = run(tables, qs, max_tables=4, anchor_k=2, paths=False, fill_ratio=1.1)
+    assert off["rows"][0].strict == 0 and off["rows"][0].n_pred == 2  # two anchors, no path union: the bridges are gone
     assert (tmp_path / "spider1_t.json").exists()

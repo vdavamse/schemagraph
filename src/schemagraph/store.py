@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS connections (
     type TEXT NOT NULL,
     config JSON NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    updated_at TIMESTAMP NOT NULL,
+    priority INTEGER
 );
 CREATE TABLE IF NOT EXISTS snapshots (
     source TEXT PRIMARY KEY,
@@ -88,7 +89,7 @@ class Store:
             if stmt.strip():
                 self.con.execute(stmt)
         cols = {r[0] for r in self.con.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'connections'").fetchall()}
-        if "priority" not in cols:  # added 2026-09-17: explicit merge order per connection
+        if "priority" not in cols:  # stores created before 2026-09-17 (explicit merge order per connection)
             self.con.execute("ALTER TABLE connections ADD COLUMN priority INTEGER")
 
     def close(self) -> None:
@@ -96,13 +97,14 @@ class Store:
 
     # ------------------------------------------------------------ connections
     def upsert_connection(self, name: str, type_name: str, config: dict[str, Any], priority: int | None = None) -> None:
-        """``priority``: merge order (lower merges first and wins conflicting fields); None = by source type."""
+        """``priority``: merge order (lower merges first and wins conflicting fields). None keeps the stored
+        value on re-register (the UI form has no priority field); a new connection with None merges by source type."""
         now = datetime.now(UTC)
         self.con.execute(
             """
             INSERT INTO connections (name, type, config, created_at, updated_at, priority) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (name) DO UPDATE SET type = excluded.type, config = excluded.config, updated_at = excluded.updated_at,
-              priority = excluded.priority
+              priority = COALESCE(excluded.priority, connections.priority)
             """,
             [name, type_name, json.dumps(config), now, now, priority],
         )
@@ -214,5 +216,5 @@ class Store:
         ]
 
     def user_snapshot(self) -> SchemaSnapshot:
-        """Glossary + join hints as a synthetic snapshot merged last (human curation wins)."""
-        return SchemaSnapshot(source="user", source_type="user", terms=self.terms(), edges=[e for _, e in self.join_hints()]).stamp()
+        """Glossary + join hints as a synthetic snapshot at priority 0, merged first (human curation wins)."""
+        return SchemaSnapshot(source="user", source_type="user", priority=0, terms=self.terms(), edges=[e for _, e in self.join_hints()]).stamp()

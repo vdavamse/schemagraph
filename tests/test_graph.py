@@ -120,6 +120,27 @@ def test_shortest_paths_match_exhaustive_enumeration():
     assert checked > 40
 
 
+def test_path_enumeration_is_capped_when_ties_exceed_the_hop_cutoff():
+    import time
+
+    import networkx as nx
+
+    from schemagraph.graph.pathfinding import MAX_PATHS_PER_PAIR, shortest_paths_between
+
+    # 8 hops, 3 nodes per inner layer: 3**7 tied shortest paths, all longer than cutoff=6
+    g = nx.Graph()
+    layers = [["s"]] + [[f"{i}_{j}" for j in range(3)] for i in range(7)] + [["t"]]
+    for left, right in zip(layers, layers[1:], strict=False):
+        for u in left:
+            for v in right:
+                g.add_edge(u, v, weight=1.0)
+    t0 = time.perf_counter()
+    got = shortest_paths_between(g, "s", "t", cutoff=6)
+    assert len(got) == 1 and len(got[0]) == 9  # the shortest path is always returned
+    assert time.perf_counter() - t0 < 1.0  # stops after MAX_PATHS_PER_PAIR enumerated paths
+    assert len(shortest_paths_between(g, "s", "t", cutoff=8)) == MAX_PATHS_PER_PAIR
+
+
 def test_relation_edges_carry_join_cost_and_ppr_affinity(store_snapshot):
     from schemagraph.graph.ppr import PPRMatrix
 
@@ -152,12 +173,28 @@ def test_edges_and_terms_resolve_regardless_of_snapshot_order():
         terms=[BusinessTerm(name="buyer", targets=["customer.name"])],
     )
     b = SchemaSnapshot(source="b", source_type="ddl", tables=[Table(name="customer", columns=[Column(name="id", is_primary_key=True), Column(name="name")])])
-    for order in ([a, b], [b, a]):
-        sg = build_graph(order)
+    for a_prio, b_prio in ((1, 2), (2, 1)):  # force both merge orders (same source_type ties on name)
+        a.priority, b.priority = a_prio, b_prio
+        sg = build_graph([a, b])
         assert sg.table("customer").properties.get("stub") is None
         assert sg.g.has_edge("c:orders.customer_id", "c:customer.id")  # column-level FK resolved after both tables loaded
-        assert sg.g.has_edge("k:buyer", "c:customer.name")  # glossary target resolved likewise
+        glossary = {m for m in sg.g.neighbors("k:buyer") if sg.g["k:buyer"][m]["etype"] == "glossary"}
+        assert glossary == {"c:customer.name"}  # no table-level fallback edge left from the stub
         assert sg.relations("orders", "customer")[0].kind == "foreign_key"
+
+
+def test_connection_priority_cannot_outrank_user_curation():
+    user = SchemaSnapshot(source="user", source_type="user", priority=0, tables=[Table(name="t", description="curated")])
+    cat = SchemaSnapshot(source="aaa", source_type="ddl", priority=-5, tables=[Table(name="t", description="catalog")])
+    assert build_graph([cat, user]).table("t").description == "curated"
+
+
+def test_stub_flag_in_a_snapshot_is_not_trusted():
+    real = SchemaSnapshot(source="a", source_type="ddl", tables=[Table(name="t", description="real", columns=[Column(name="x")])])
+    echoed = SchemaSnapshot(source="b", source_type="duckdb", tables=[Table(name="t", properties={"stub": "true"})])
+    sg = build_graph([real, echoed])
+    t = sg.table("t")
+    assert t.description == "real" and [c.name for c in t.columns] == ["x"] and "stub" not in t.properties
 
 
 def test_stub_replaced_when_real_table_arrives_incrementally():

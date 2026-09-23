@@ -24,9 +24,9 @@ from itertools import combinations, product
 
 import networkx as nx
 
-from schemagraph.graph.build import SchemaGraph, tnode
+from schemagraph.graph.build import JOIN_KINDS, SchemaGraph, tnode
 
-MAX_PATHS_PER_PAIR = 64  # safety cap on tied-shortest paths between one anchor pair
+MAX_PATHS_PER_PAIR = 64  # safety cap on paths enumerated (kept or not) between one anchor pair
 
 
 def shortest_paths_between(tg: nx.Graph, a: str, b: str, max_extra: float = 0.0, cutoff: int = 6) -> list[list[str]]:
@@ -42,13 +42,15 @@ def shortest_paths_between(tg: nx.Graph, a: str, b: str, max_extra: float = 0.0,
     out: list[list[str]] = []
     best: float | None = None
     try:
-        for path in nx.shortest_simple_paths(tg, a, b, weight="weight"):
+        for i, path in enumerate(nx.shortest_simple_paths(tg, a, b, weight="weight")):
+            if i >= MAX_PATHS_PER_PAIR:  # counts enumerated paths: ties over the hop cutoff are not free
+                break
             length = sum(tg[u][v]["weight"] for u, v in zip(path, path[1:], strict=False))
             if best is None:
                 best = length
                 out.append(path)
                 continue
-            if length > best + max_extra + 1e-9 or len(out) >= MAX_PATHS_PER_PAIR:
+            if length > best + max_extra + 1e-9:
                 break
             if len(path) - 1 <= cutoff:
                 out.append(path)
@@ -64,13 +66,16 @@ def union_of_shortest_paths(
     *,
     max_extra: float = 0.0,
     cutoff: int = 6,
+    kinds: frozenset[str] | set[str] | None = JOIN_KINDS,
 ) -> tuple[list[list[str]], set[str]]:
     """Return (candidate paths, union of table fqns on those paths).
+
+    ``kinds`` selects the relation kinds walked (default: join-capable ones; ``None`` adds lineage).
 
     If ``destinations`` is None, pairs are formed among the sources themselves
     (the common case: "connect all anchor tables").
     """
-    tg = sg.table_graph()
+    tg = sg.table_graph(kinds=kinds)
     src = [tnode(s) for s in sources if tnode(s) in tg]
     dst = [tnode(d) for d in destinations if tnode(d) in tg] if destinations else None
     pairs = list(product(src, dst)) if dst else list(combinations(src, 2))

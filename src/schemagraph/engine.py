@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -25,9 +26,12 @@ DEFAULT_HOME = Path(os.environ.get("SCHEMAGRAPH_HOME", ".schemagraph"))
 
 
 class Engine:
-    def __init__(self, home: str | Path | None = None, *, llm: Any | None = "auto", embed: bool | str = "auto"):
-        """``embed``: seed paraphrases with the optional static embedding model (``LinkOptions.embed``);
-        ``"auto"`` turns it on when the ``embed`` extra is installed (Spider2-Lite: +0.4 strict, +3 strict@7)."""
+    def __init__(self, home: str | Path | None = None, *, llm: Any | None = "auto", embed: bool | str | None = None):
+        """``embed``: seed paraphrases with the optional static embedding model (``LinkOptions.embed``;
+        Spider2-Lite: +0.4 strict, +3 strict@7). ``None`` reads ``SCHEMAGRAPH_EMBED`` (``1`` / ``0`` /
+        ``auto``, default ``auto``); ``"auto"`` turns it on when the ``embed`` extra is installed. The
+        model loads in :meth:`reload`, never inside a request; if it cannot load (not cached and
+        offline), embeddings stay off with a warning. Set ``HF_HUB_OFFLINE=1`` on air-gapped hosts."""
         self.home = Path(home) if home else DEFAULT_HOME
         self.store = Store(self.home / "schemagraph.duckdb")
         self._lock = threading.RLock()
@@ -38,7 +42,11 @@ class Engine:
         self.reload()
 
     @staticmethod
-    def _resolve_embed(embed: bool | str) -> bool:
+    def _resolve_embed(embed: bool | str | None) -> bool:
+        if embed is None:
+            embed = os.environ.get("SCHEMAGRAPH_EMBED", "auto").strip().lower()
+            if embed != "auto":
+                embed = embed in {"1", "true", "yes", "on"}
         if embed != "auto":
             return bool(embed)
         try:
@@ -63,6 +71,21 @@ class Engine:
             self.graph = build_graph(snaps)
             llm = self._resolve_llm()
             self.linker = Linker(self.graph, llm=llm)
+            if self._embed:
+                self._warm_embedder()
+
+    def _warm_embedder(self) -> None:
+        """Load the model and encode the catalog now, so the cost and any failure land at startup."""
+        assert self.linker is not None
+        model = LinkOptions().embed_model
+        t0 = time.perf_counter()
+        try:
+            self.linker.embedder(model)
+        except Exception as e:
+            log.warning("embedding model %s unavailable, embeddings off: %s", model, e)
+            self._embed = False
+            return
+        log.info("embeddings on: %s, %d objects encoded in %.2fs", model, len(self.linker.embedder(model).nodes), time.perf_counter() - t0)
 
     def _resolve_llm(self):
         if self._llm != "auto":
@@ -157,9 +180,14 @@ class Engine:
         with self._lock:
             return self.linker.link(question, opts)
 
-    def explain(self, question: str) -> dict[str, Any]:
+    def explain(self, question: str, **kw: Any) -> dict[str, Any]:
+        """Same options as :meth:`link` (the engine's ``embed`` setting included), so it shows the seeds that ranked."""
         assert self.linker is not None
-        return self.linker.explain(question)
+        opts = LinkOptions(**{"embed": self._embed, **kw})
+        if opts.use_llm and not self.has_llm:
+            opts.use_llm = False
+        with self._lock:
+            return self.linker.explain(question, opts)
 
     def tables(self) -> list[Table]:
         return sorted(self.graph.tables.values(), key=lambda t: t.fqn)
@@ -177,6 +205,8 @@ class Engine:
         if not ta or not tb:
             raise KeyError(a if not ta else b)
         paths, _ = union_of_shortest_paths(self.graph, [ta.fqn], [tb.fqn])
+        if not paths:  # no join route: fall back to lineage so "how do these connect" still answers
+            paths, _ = union_of_shortest_paths(self.graph, [ta.fqn], [tb.fqn], kinds=None)
         return [[self.graph.g.nodes[n]["fqn"] for n in p] for p in paths]
 
     def stats(self) -> dict[str, Any]:
