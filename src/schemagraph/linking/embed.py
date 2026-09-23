@@ -42,13 +42,17 @@ def phrases(text: str) -> list[str]:
 @lru_cache(maxsize=4)
 def load_model(model_name: str):
     """The static model, loaded once per process and shared across Linker rebuilds (a failed load
-    is not cached). ``force_download=False``: the local cache first, the Hub only when missing
-    (model2vec defaults to ``True``, which contacts the Hub, and waits out its timeout, on every load)."""
+    is not cached). The local cache first (model2vec defaults to ``force_download=True``, which
+    contacts the Hub, and waits out its timeout, on every load); the Hub only when the cache is
+    missing or broken, e.g. a snapshot left without its weights by an interrupted download."""
     try:
         from model2vec import StaticModel
     except ImportError as e:  # pragma: no cover - depends on the optional extra
         raise ImportError("LinkOptions(embed=True) needs the 'embed' extra: uv sync --extra embed") from e
-    return StaticModel.from_pretrained(model_name, force_download=False)
+    try:
+        return StaticModel.from_pretrained(model_name, force_download=False)
+    except Exception:
+        return StaticModel.from_pretrained(model_name, force_download=True)
 
 
 class EmbeddingActivator:

@@ -197,3 +197,31 @@ def test_rank_tiered_column_cap():
     assert all(len(t.columns) == 5 for t in r0.tables)  # columns_top_uncapped=0: the cap applies to every table
     r1 = lk.link("wide metric", LinkOptions(max_columns_per_table=5))
     assert len(next(t for t in r1.tables if t.fqn == "wide").columns) == 31  # default keeps the top-ranked table whole
+
+
+def test_load_model_uses_cache_first_and_heals_a_broken_cache(monkeypatch):
+    import pytest
+
+    pytest.importorskip("model2vec")
+    from model2vec import StaticModel
+
+    from schemagraph.linking import embed
+
+    calls = []
+
+    def fake(name, force_download=True):
+        calls.append(force_download)
+        if not force_download and name == "broken/model":
+            raise FileNotFoundError("Could not find expected model files")
+        return object()
+
+    monkeypatch.setattr(StaticModel, "from_pretrained", staticmethod(fake))
+    embed.load_model.cache_clear()
+    try:
+        embed.load_model("good/model")
+        assert calls == [False]  # cached model: the Hub is never asked
+        calls.clear()
+        embed.load_model("broken/model")
+        assert calls == [False, True]  # partial snapshot: falls back to a real download
+    finally:
+        embed.load_model.cache_clear()
