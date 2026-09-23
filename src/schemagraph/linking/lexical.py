@@ -63,6 +63,7 @@ for _k, _v in ABBREVIATIONS.items():
 
 _SPLIT_RE = re.compile(r"[^a-z0-9]+")
 _CAMEL_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+MAX_VALUE_TOKENS = 6  # sample values longer than this fall back to a regex scan
 
 
 def lemma(tok: str) -> str:
@@ -101,12 +102,40 @@ class LexicalIndex:
     postings: dict[str, list[tuple[str, float]]] = field(default_factory=dict)
     idf: dict[str, float] = field(default_factory=dict)  # 0..1, ~1 for tokens unique to one object
     names: dict[str, list[str]] = field(default_factory=dict)  # full normalized name -> nodes
+    names_nostop: dict[str, list[str]] = field(default_factory=dict)  # same with stopwords dropped, when that differs (date_of_birth -> date_birth)
     values: dict[str, list[str]] = field(default_factory=dict)  # sample value (lower) -> column nodes
+    value_grams: dict[str, list[tuple[str, str]]] = field(default_factory=dict)  # "_"-joined value words -> [(value, column node)]
+    long_values: dict[str, list[str]] = field(default_factory=dict)  # values with more than MAX_VALUE_TOKENS words (regex scan)
     phrases: dict[str, str] = field(default_factory=dict)  # glossary phrase (lower) -> term node
     vocab: list[str] = field(default_factory=list)
 
     def add(self, token: str, node: str, weight: float) -> None:
         self.postings.setdefault(token, []).append((node, weight))
+
+    def add_name(self, name: str, node: str) -> None:
+        norm = "_".join(tokenize(name, keep_stop=True))
+        self.names.setdefault(norm, []).append(node)
+        nostop = tokenize(name)
+        if len(nostop) >= 2 and (alt := "_".join(nostop)) != norm:
+            self.names_nostop.setdefault(alt, []).append(node)
+
+    def add_value(self, value: str, node: str) -> None:
+        lv = str(value).strip().lower()
+        if len(lv) < 3 or lv.replace(".", "").replace("-", "").isdigit():
+            return
+        words = _words(lv)
+        if not words or all(w.isdigit() for w in words) or (len(words) == 1 and len(words[0]) < 3):
+            return  # "A++", "10%", "$50", "1,000", "2023/01/15": letter or number residues are not evidence ("U.S." -> u_s is)
+        self.values.setdefault(lv, []).append(node)
+        if len(words) > MAX_VALUE_TOKENS:
+            self.long_values.setdefault(lv, []).append(node)
+        else:
+            self.value_grams.setdefault("_".join(words), []).append((lv, node))
+
+
+def _words(text: str) -> list[str]:
+    """Whole-word units for value matching: lowercase, split on anything non-alphanumeric."""
+    return [w for w in _SPLIT_RE.split(text.lower()) if w]
 
 
 def _name_tokens(name: str) -> list[str]:
@@ -128,8 +157,7 @@ def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True, desc_weight: f
         nt = d.get("ntype")
         if nt == "table":
             t = sg.tables[d["fqn"].lower()]
-            name_norm = "_".join(tokenize(t.name, keep_stop=True))
-            idx.names.setdefault(name_norm, []).append(n)
+            idx.add_name(t.name, n)
             for tok in _name_tokens(t.name):
                 idx.add(tok, n, 1.0)
             for tok in tokenize(t.description or ""):
@@ -146,8 +174,7 @@ def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True, desc_weight: f
             c = t.column(d["name"])
             if c is None:
                 continue
-            name_norm = "_".join(tokenize(c.name, keep_stop=True))
-            idx.names.setdefault(name_norm, []).append(n)
+            idx.add_name(c.name, n)
             for tok in _name_tokens(c.name):
                 idx.add(tok, n, 1.0)
             for tok in tokenize(c.description or ""):
@@ -160,9 +187,7 @@ def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True, desc_weight: f
                     for tok in _name_tokens(bn):
                         idx.add(tok, n, 0.9)
             for v in c.sample_values:
-                lv = str(v).strip().lower()
-                if len(lv) >= 3 and not lv.replace(".", "").replace("-", "").isdigit():
-                    idx.values.setdefault(lv, []).append(n)
+                idx.add_value(v, n)
         elif nt == "term":
             term = sg.terms[d["name"]]
             phrases = [term.name, *term.synonyms]
@@ -194,7 +219,7 @@ def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True, desc_weight: f
                 continue
             g.add_node(wn, ntype="token", name=tok)
             for node, w in posts:
-                g.add_edge(wn, node, etype="mention", weight=0.3 * w)
+                g.add_edge(wn, node, etype="mention", weight=0.3 * w, affinity=0.3 * w)
     return idx
 
 
@@ -214,13 +239,16 @@ class Activation:
         self.reasons.setdefault(node, []).append(why)
 
 
-def activate(sg: SchemaGraph, idx: LexicalIndex, question: str, *, idf: bool = True, min_numeric_len: int = 4) -> Activation:
+def activate(sg: SchemaGraph, idx: LexicalIndex, question: str, *, idf: bool = True, min_numeric_len: int = 4, ngram_stop: bool = True) -> Activation:
     """Activate schema objects from a question.
 
     ``idf`` scales single-token evidence by how rare the token is across the schema
     (a token shared by half the columns is nearly worthless as a seed); n-gram, value
     and glossary matches are not scaled. Digit-only tokens shorter than
     ``min_numeric_len`` are ignored as single tokens (``5`` from "5-year").
+    ``ngram_stop`` also matches question n-grams that keep their stopwords against object
+    names ("date of birth" -> ``date_of_birth``, "first name" -> ``first_name``) and
+    stopword-free n-grams against the stopword-free form of names.
     """
     q = question.lower()
     raw = tokenize(question, keep_stop=True)
@@ -238,17 +266,38 @@ def activate(sg: SchemaGraph, idx: LexicalIndex, question: str, *, idf: bool = T
                 if sg.g[node][nb].get("etype") == "glossary":
                     act.bump(nb, 1.2, f"glossary target of '{phrase}'")
 
-    # 2. sample values appearing in the question (value-based linking)
-    for val, nodes in idx.values.items():
-        if len(val) >= 3 and re.search(rf"(?<![a-z0-9]){re.escape(val)}(?![a-z0-9])", q):
+    # 2. sample values appearing in the question as whole words (value-based linking); the
+    #    question's word n-grams are looked up in the value index instead of scanning every
+    #    value with a regex (that scan was 95 % of activation time on 2,500-value schemas)
+    words = _words(q)
+    seen_pairs: set[tuple[str, str]] = set()
+    for size in range(1, MAX_VALUE_TOKENS + 1):
+        for i in range(len(words) - size + 1):
+            for val, n in idx.value_grams.get("_".join(words[i : i + size]), ()):
+                if (val, n) in seen_pairs:
+                    continue
+                seen_pairs.add((val, n))
+                act.bump(n, 1.5, f"value '{val}' in question")
+                if val not in act.matched_values:
+                    act.matched_values.append(val)
+    for val, nodes in idx.long_values.items():
+        if re.search(rf"(?<![a-z0-9]){re.escape(val)}(?![a-z0-9])", q):
             for n in nodes:
                 act.bump(n, 1.5, f"value '{val}' in question")
             act.matched_values.append(val)
 
     # 3. n-grams against full object names
-    for ng in ngrams(toks, 3):
-        for n in idx.names.get(ng, []):
+    if ngram_stop:
+        hit: dict[str, str] = {}  # node -> first gram that matched (a name is one piece of evidence, however many forms match it)
+        for ng in dict.fromkeys(ngrams(toks, 3) + ngrams(raw, 3)):
+            for n in idx.names.get(ng, []) + idx.names_nostop.get(ng, []):
+                hit.setdefault(n, ng)
+        for n, ng in hit.items():
             act.bump(n, 1.6, f"n-gram '{ng}' == name")
+    else:
+        for ng in ngrams(toks, 3):
+            for n in idx.names.get(ng, []):
+                act.bump(n, 1.6, f"n-gram '{ng}' == name")
 
     # 4. single tokens, with expansions
     expanded: list[tuple[str, float, str]] = []

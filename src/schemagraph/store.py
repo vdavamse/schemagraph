@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS connections (
     type TEXT NOT NULL,
     config JSON NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    updated_at TIMESTAMP NOT NULL,
+    priority INTEGER
 );
 CREATE TABLE IF NOT EXISTS snapshots (
     source TEXT PRIMARY KEY,
@@ -87,19 +88,27 @@ class Store:
         for stmt in _SCHEMA.strip().split(";"):
             if stmt.strip():
                 self.con.execute(stmt)
+        cols = {r[0] for r in self.con.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'connections'").fetchall()}
+        if "priority" not in cols:  # stores created before 2026-09-17 (explicit merge order per connection)
+            self.con.execute("ALTER TABLE connections ADD COLUMN priority INTEGER")
 
     def close(self) -> None:
         self.con.close()
 
     # ------------------------------------------------------------ connections
-    def upsert_connection(self, name: str, type_name: str, config: dict[str, Any]) -> None:
+    def upsert_connection(self, name: str, type_name: str, config: dict[str, Any], priority: int | None = None, *, clear_priority: bool = False) -> None:
+        """``priority``: merge order (lower merges first and wins conflicting fields). None keeps the stored
+        value on re-register (the UI form has no priority field); a new connection with None merges by source
+        type. ``clear_priority`` resets a stored priority to that default."""
         now = datetime.now(UTC)
+        keep = "NULL" if clear_priority else "COALESCE(excluded.priority, connections.priority)"
         self.con.execute(
-            """
-            INSERT INTO connections (name, type, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT (name) DO UPDATE SET type = excluded.type, config = excluded.config, updated_at = excluded.updated_at
+            f"""
+            INSERT INTO connections (name, type, config, created_at, updated_at, priority) VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (name) DO UPDATE SET type = excluded.type, config = excluded.config, updated_at = excluded.updated_at,
+              priority = {keep}
             """,
-            [name, type_name, json.dumps(config), now, now],
+            [name, type_name, json.dumps(config), now, now, None if clear_priority else priority],
         )
 
     def delete_connection(self, name: str) -> None:
@@ -107,15 +116,16 @@ class Store:
         self.con.execute("DELETE FROM snapshots WHERE source = ?", [name])
 
     def connections(self) -> list[dict[str, Any]]:
-        rows = self.con.execute("SELECT name, type, config, created_at, updated_at FROM connections ORDER BY name").fetchall()
+        rows = self.con.execute("SELECT name, type, config, created_at, updated_at, priority FROM connections ORDER BY name").fetchall()
         out = []
-        for name, type_name, config, created, updated in rows:
+        for name, type_name, config, created, updated, priority in rows:
             snap = self.con.execute("SELECT n_tables, n_edges, n_terms, built_at, warnings FROM snapshots WHERE source = ?", [name]).fetchone()
             out.append(
                 {
                     "name": name,
                     "type": type_name,
                     "config": redact(json.loads(config)),
+                    "priority": priority,
                     "created_at": created.isoformat() if created else None,
                     "updated_at": updated.isoformat() if updated else None,
                     "built": bool(snap),
@@ -157,8 +167,15 @@ class Store:
         )
 
     def snapshots(self) -> list[SchemaSnapshot]:
-        rows = self.con.execute("SELECT payload FROM snapshots ORDER BY source").fetchall()
-        return [SchemaSnapshot.model_validate_json(r[0]) for r in rows]
+        """All stored snapshots, each carrying its connection's merge ``priority`` (order is decided by ``build_graph``)."""
+        rows = self.con.execute("SELECT s.payload, c.priority FROM snapshots s LEFT JOIN connections c ON c.name = s.source ORDER BY s.source").fetchall()
+        out = []
+        for payload, priority in rows:
+            snap = SchemaSnapshot.model_validate_json(payload)
+            if priority is not None:
+                snap.priority = priority
+            out.append(snap)
+        return out
 
     def snapshot(self, source: str) -> SchemaSnapshot | None:
         row = self.con.execute("SELECT payload FROM snapshots WHERE source = ?", [source]).fetchone()
@@ -201,5 +218,5 @@ class Store:
         ]
 
     def user_snapshot(self) -> SchemaSnapshot:
-        """Glossary + join hints as a synthetic snapshot merged last (human curation wins)."""
-        return SchemaSnapshot(source="user", source_type="user", terms=self.terms(), edges=[e for _, e in self.join_hints()]).stamp()
+        """Glossary + join hints as a synthetic snapshot at priority 0, merged first (human curation wins)."""
+        return SchemaSnapshot(source="user", source_type="user", priority=0, terms=self.terms(), edges=[e for _, e in self.join_hints()]).stamp()

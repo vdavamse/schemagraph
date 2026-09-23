@@ -7,12 +7,12 @@ from tests.conftest import STORE_DDL
 
 
 def test_engine_persist_and_reload(tmp_path):
-    eng = Engine(tmp_path, llm=None)
+    eng = Engine(tmp_path, llm=None, embed=False)
     snap = eng.add_connection("store", "ddl", {"ddl": STORE_DDL, "dialect": "postgres", "default_schema": "public"})
     assert len(snap.tables) == 7
     eng.upsert_term(__import__("schemagraph.model", fromlist=["BusinessTerm"]).BusinessTerm(name="revenue", targets=["public.orders.total_amount"]))
     eng.close()
-    eng2 = Engine(tmp_path, llm=None)
+    eng2 = Engine(tmp_path, llm=None, embed=False)
     assert eng2.stats()["tables"] == 7 and "revenue" in eng2.graph.terms
     r = eng2.link("revenue by customer")
     assert any(t.fqn == "public.orders" for t in r.tables)
@@ -22,7 +22,7 @@ def test_engine_persist_and_reload(tmp_path):
 
 def test_env_substitution_in_config(tmp_path, monkeypatch):
     monkeypatch.setenv("MY_DDL", "CREATE TABLE t (id INT PRIMARY KEY);")
-    eng = Engine(tmp_path, llm=None)
+    eng = Engine(tmp_path, llm=None, embed=False)
     snap = eng.add_connection("env", "ddl", {"ddl": "${MY_DDL}"})
     assert snap.tables[0].name == "t"
     assert eng.connections()[0]["config"]["ddl"] == "${MY_DDL}"  # stored unexpanded
@@ -30,7 +30,7 @@ def test_env_substitution_in_config(tmp_path, monkeypatch):
 
 
 def test_api_roundtrip(tmp_path):
-    app = create_app(Engine(tmp_path, llm=None), web_dist=tmp_path / "nope")
+    app = create_app(Engine(tmp_path, llm=None, embed=False), web_dist=tmp_path / "nope")
     c = TestClient(app)
     r = c.post("/api/ddl", json={"name": "store", "ddl": STORE_DDL, "dialect": "postgres", "default_schema": "public"})
     assert r.status_code == 200 and r.json()["tables"] == 7
@@ -52,7 +52,7 @@ def test_api_roundtrip(tmp_path):
 
 
 def test_mcp_tools_registered(tmp_path):
-    eng = Engine(tmp_path, llm=None)
+    eng = Engine(tmp_path, llm=None, embed=False)
     eng.add_connection("store", "ddl", {"ddl": STORE_DDL, "dialect": "postgres", "default_schema": "public"})
     server = create_server(eng)
     import anyio
@@ -62,3 +62,71 @@ def test_mcp_tools_registered(tmp_path):
     assert {"link_schema", "link_schema_json", "get_table", "find_join_path", "search_tables"} <= names
     out = anyio.run(server.call_tool, "find_join_path", {"from_table": "customer", "to_table": "shipment"})
     assert "public.order_items" in str(out)
+
+
+def test_engine_embed_auto_and_explicit(tmp_path, monkeypatch):
+    from schemagraph.engine import Engine
+
+    eng = Engine(tmp_path / "h", llm=None, embed=False)
+    assert eng.has_embed is False and eng.stats()["embed"] is False
+    monkeypatch.setenv("SCHEMAGRAPH_EMBED", "0")
+    assert Engine(tmp_path / "h1", llm=None).has_embed is False
+
+
+def test_engine_embed_loads_at_reload(tmp_path, embed_model):
+    from schemagraph.engine import Engine
+
+    eng = Engine(tmp_path / "h2", llm=None, embed="auto")
+    assert eng.has_embed is True
+    assert eng.linker._embedder is not None and eng.linker._embedder.model_name == embed_model  # loaded before any request
+    eng.add_connection("store", "ddl", {"ddl": "CREATE TABLE shipment (id INT, carrier VARCHAR);"})
+    q = "which delivery company shipped each order"
+    ex = eng.explain(q)
+    assert any("embedding" in " ".join(s["why"]) for s in ex["seeds"].values())  # explain sees the engine's embed setting
+    assert [t for t, _ in ex["tables"]][:1] == [t.fqn for t in eng.link(q).tables][:1]
+
+
+def test_join_path_falls_back_to_lineage_and_priority_survives_reregister(tmp_path):
+    from schemagraph.engine import Engine
+    from schemagraph.model import Edge, SchemaSnapshot, Table
+
+    eng = Engine(tmp_path, llm=None, embed=False)
+    eng.add_connection("dbt", "ddl", {"ddl": "CREATE TABLE stg (id INT); CREATE TABLE fct (id INT);"}, priority=5)
+    eng.store.save_snapshot(SchemaSnapshot(source="lin", source_type="dbt", tables=[Table(name="stg"), Table(name="fct")], edges=[Edge(kind="lineage", from_table="stg", to_table="fct")]))
+    eng.reload()
+    assert eng.join_path("stg", "fct") == [["stg", "fct"]]  # no join route: the lineage route is reported
+    eng.add_connection("dbt", "ddl", {"ddl": "CREATE TABLE stg (id INT); CREATE TABLE fct (id INT);"})  # e.g. edited in the UI
+    assert next(c for c in eng.connections() if c["name"] == "dbt")["priority"] == 5
+    eng.add_connection("dbt", "ddl", {"ddl": "CREATE TABLE stg (id INT);"}, clear_priority=True)
+    assert next(c for c in eng.connections() if c["name"] == "dbt")["priority"] is None
+
+
+def test_embedding_load_is_retried_on_reload(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from schemagraph.linking.linker import Linker
+
+    calls = {"n": 0}
+
+    def flaky(self, model_name):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("offline")
+        return SimpleNamespace(nodes=[])
+
+    monkeypatch.setattr(Linker, "embedder", flaky)
+    cached = {"v": False}
+    monkeypatch.setattr(Engine, "_model_cached", staticmethod(lambda: cached["v"]))
+    eng = Engine(tmp_path, llm=None, embed=True)
+    assert eng.has_embed is False  # first load failed: off, with a warning
+    eng.reload()
+    assert eng.has_embed is False and calls["n"] == 1  # not cached: no Hub retry on reload
+    cached["v"] = True
+    eng.reload()
+    assert eng.has_embed is True  # cached now: the next reload turns embeddings on
+
+
+def test_cli_opt_values_parse_as_json_or_string():
+    from schemagraph.cli import _parse_opt
+
+    assert _parse_opt("top3") == "top3" and _parse_opt("true") is True and _parse_opt("0.5") == 0.5 and _parse_opt("") == ""

@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -25,14 +26,41 @@ DEFAULT_HOME = Path(os.environ.get("SCHEMAGRAPH_HOME", ".schemagraph"))
 
 
 class Engine:
-    def __init__(self, home: str | Path | None = None, *, llm: Any | None = "auto"):
+    def __init__(self, home: str | Path | None = None, *, llm: Any | None = "auto", embed: bool | str | None = None):
+        """``embed``: seed paraphrases with the optional static embedding model (``LinkOptions.embed``;
+        Spider2-Lite: +0.4 strict, +3 strict@7). ``None`` reads ``SCHEMAGRAPH_EMBED`` (``1`` / ``0`` /
+        ``auto``, default ``auto``); ``"auto"`` turns it on when the ``embed`` extra is installed. The
+        model loads in :meth:`reload`, never inside a request; if it cannot load (not cached and
+        offline), embeddings stay off with a warning. Set ``HF_HUB_OFFLINE=1`` on air-gapped hosts."""
         self.home = Path(home) if home else DEFAULT_HOME
         self.store = Store(self.home / "schemagraph.duckdb")
         self._lock = threading.RLock()
         self.graph: SchemaGraph = SchemaGraph()
         self.linker: Linker | None = None
         self._llm = llm
+        self._embed_requested = self._resolve_embed(embed)
+        self._embed = False  # effective: requested and the model loaded at the last reload
+        self._embed_failed = False  # a load failed: later reloads retry only from the local cache, never the Hub
         self.reload()
+
+    @staticmethod
+    def _resolve_embed(embed: bool | str | None) -> bool:
+        if embed is None:
+            embed = os.environ.get("SCHEMAGRAPH_EMBED", "auto").strip().lower()
+            if embed != "auto":
+                embed = embed in {"1", "true", "yes", "on"}
+        if embed != "auto":
+            return bool(embed)
+        try:
+            import model2vec  # noqa: F401
+
+            return True
+        except ImportError:
+            return False
+
+    @property
+    def has_embed(self) -> bool:
+        return self._embed
 
     # ----------------------------------------------------------- lifecycle
     def close(self) -> None:
@@ -41,10 +69,40 @@ class Engine:
     def reload(self) -> None:
         with self._lock:
             snaps = self.store.snapshots()
-            snaps.append(self.store.user_snapshot())
+            snaps.append(self.store.user_snapshot())  # priority 0: merged first, so curation wins conflicts
             self.graph = build_graph(snaps)
             llm = self._resolve_llm()
             self.linker = Linker(self.graph, llm=llm)
+            self._embed = self._embed_requested and (not self._embed_failed or self._model_cached()) and self._warm_embedder()
+
+    @staticmethod
+    def _model_cached() -> bool:
+        """The embedding model can load without the network (a local directory or the HF cache)."""
+        model = LinkOptions().embed_model
+        if Path(model).is_dir():
+            return True
+        try:
+            from huggingface_hub import try_to_load_from_cache
+
+            return isinstance(try_to_load_from_cache(model, "model.safetensors"), str)
+        except Exception:
+            return False
+
+    def _warm_embedder(self) -> bool:
+        """Load the model and encode the catalog now, so the cost and any failure land at startup,
+        not in a request. After a failure, reloads retry only once the model is in the local cache
+        (a Hub timeout would otherwise be paid on every reload, under the lock)."""
+        assert self.linker is not None
+        model = LinkOptions().embed_model
+        t0 = time.perf_counter()
+        try:
+            self.linker.embedder(model)
+        except Exception as e:
+            log.warning("embedding model %s unavailable, embeddings off until it is cached locally: %s", model, e)
+            self._embed_failed = True
+            return False
+        log.info("embeddings on: %s, %d objects encoded in %.2fs", model, len(self.linker.embedder(model).nodes), time.perf_counter() - t0)
+        return True
 
     def _resolve_llm(self):
         if self._llm != "auto":
@@ -70,9 +128,11 @@ class Engine:
     def connector_schema(self, type_name: str) -> dict[str, Any]:
         return config_schema(type_name)
 
-    def add_connection(self, name: str, type_name: str, config: dict[str, Any], *, build: bool = True) -> SchemaSnapshot | None:
+    def add_connection(self, name: str, type_name: str, config: dict[str, Any], *, build: bool = True, priority: int | None = None, clear_priority: bool = False) -> SchemaSnapshot | None:
+        """``priority``: merge order (lower merges first and wins conflicting fields); None keeps a stored
+        priority, else merges by source type. ``clear_priority`` goes back to the source-type order."""
         make_connector(type_name, name, substitute_env(config))  # validate config shape
-        self.store.upsert_connection(name, type_name, config)
+        self.store.upsert_connection(name, type_name, config, priority=priority, clear_priority=clear_priority)
         if build:
             return self.build(name)
         return None
@@ -132,15 +192,20 @@ class Engine:
     # ----------------------------------------------------------- queries
     def link(self, question: str, **kw: Any) -> LinkResult:
         assert self.linker is not None
-        opts = LinkOptions(**kw)
-        if opts.use_llm and not self.has_llm:
-            opts.use_llm = False
-        with self._lock:
+        with self._lock:  # read the embed flag under the lock: a reload can turn it off
+            opts = LinkOptions(**{"embed": self._embed, **kw})
+            if opts.use_llm and not self.has_llm:
+                opts.use_llm = False
             return self.linker.link(question, opts)
 
-    def explain(self, question: str) -> dict[str, Any]:
+    def explain(self, question: str, **kw: Any) -> dict[str, Any]:
+        """Same options as :meth:`link` (the engine's ``embed`` setting included), so it shows the seeds that ranked."""
         assert self.linker is not None
-        return self.linker.explain(question)
+        with self._lock:
+            opts = LinkOptions(**{"embed": self._embed, **kw})
+            if opts.use_llm and not self.has_llm:
+                opts.use_llm = False
+            return self.linker.explain(question, opts)
 
     def tables(self) -> list[Table]:
         return sorted(self.graph.tables.values(), key=lambda t: t.fqn)
@@ -158,10 +223,13 @@ class Engine:
         if not ta or not tb:
             raise KeyError(a if not ta else b)
         paths, _ = union_of_shortest_paths(self.graph, [ta.fqn], [tb.fqn])
+        if not paths:  # no join route: fall back to lineage so "how do these connect" still answers
+            paths, _ = union_of_shortest_paths(self.graph, [ta.fqn], [tb.fqn], kinds=None)
         return [[self.graph.g.nodes[n]["fqn"] for n in p] for p in paths]
 
     def stats(self) -> dict[str, Any]:
         s = self.graph.stats()
         s["llm"] = self.has_llm
+        s["embed"] = self.has_embed
         s["home"] = str(self.home)
         return s

@@ -15,6 +15,14 @@ app = typer.Typer(help="schemagraph: graph-native schema context engine for text
 HomeOpt = Annotated[Path | None, typer.Option("--home", "-H", help="Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)")]
 
 
+def _parse_opt(v: str):
+    """``--opt`` value: JSON when it parses (numbers, booleans, lists), else the raw string (``agg=top3``)."""
+    try:
+        return json.loads(v)
+    except ValueError:
+        return v
+
+
 def _engine(home: Path | None) -> Engine:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     return Engine(home)
@@ -63,12 +71,14 @@ def add(
     name: Annotated[str, typer.Argument()],
     config: Annotated[str, typer.Option("--config", "-c", help="JSON config or @file.json; ${ENV} references allowed")],
     no_build: bool = False,
+    priority: Annotated[int | None, typer.Option(help="merge order: lower merges first and wins conflicting fields (default: by source type, user > collibra > dbt > unity_catalog > duckdb > ddl > aws_glue); omitted on re-register keeps the stored one")] = None,
+    clear_priority: Annotated[bool, typer.Option(help="reset a stored priority to the source-type order")] = False,
     home: HomeOpt = None,
 ):
     """Register any connector from a JSON config."""
     eng = _engine(home)
     cfg = json.loads(Path(config[1:]).read_text(encoding="utf-8")) if config.startswith("@") else json.loads(config)
-    snap = eng.add_connection(name, type_name, cfg, build=not no_build)
+    snap = eng.add_connection(name, type_name, cfg, build=not no_build, priority=priority, clear_priority=clear_priority)
     if snap:
         typer.echo(f"{name}: {len(snap.tables)} tables, {len(snap.edges)} edges, {len(snap.terms)} terms")
     else:
@@ -145,6 +155,31 @@ def serve(host: str = "127.0.0.1", port: int = 8765, home: HomeOpt = None):
 
 
 @app.command()
+def bench_spider1(
+    tables_json: Annotated[Path, typer.Argument(help="Spider-format tables.json (declared FKs)")],
+    questions_json: Annotated[Path, typer.Argument(help="questions [{db_id, question, query}]")],
+    max_tables: int = 4,
+    anchor_k: int = 2,
+    infer: bool = typer.Option(False, help="add name-based inferred edges on top of the declared FKs"),
+    limit: int | None = None,
+    dialect: str = "sqlite",
+    out: Path = Path("bench_results"),
+    tag: str | None = typer.Option(None, help="output file tag"),
+    opt: Annotated[list[str] | None, typer.Option("--opt", help="extra LinkOptions as key=value (repeatable)")] = None,
+):
+    """Gold-table recall over a Spider-format dataset with real foreign keys (bridge tables, path union and pruning are measurable here)."""
+    from schemagraph.bench.spider1 import format_table, run
+
+    extra: dict = {}
+    for kv in opt or []:
+        k, v = kv.split("=", 1)
+        extra[k] = _parse_opt(v)
+    res = run(tables_json, questions_json, max_tables=max_tables, anchor_k=anchor_k, infer=infer, limit=limit, dialect=dialect, out_dir=out, tag=tag, **extra)
+    typer.echo(format_table(res["summary"]))
+    typer.echo(f"skipped (unknown db or no gold table): {res['summary']['config']['skipped']}")
+
+
+@app.command()
 def bench_spider2_lite(
     spider2_root: Annotated[Path, typer.Argument(help="path to the xlang-ai/Spider2 clone")],
     max_tables: int = 20,
@@ -180,7 +215,7 @@ def bench_spider2_lite(
     extra: dict = {}
     for kv in opt or []:
         k, v = kv.split("=", 1)
-        extra[k] = json.loads(v) if v[:1] in "[{0123456789-tf" or v in {"true", "false"} else v
+        extra[k] = _parse_opt(v)
     res = run(spider2_root, max_tables=max_tables, anchor_k=anchor_k, use_docs=docs, doc_chars=doc_chars, infer=infer, dialects=set(dialect) if dialect else None, limit=limit, min_db_tables=min_db_tables, collapse_families=families, use_llm=llm, llm=picker, out_dir=out, progress=progress, tag=tag, suite=suite, desc_weight=desc_weight, only=set(only) if only else None, **extra)
     typer.echo(format_table(res["summary"]))
     typer.echo(f"\nresults written to {out}/")

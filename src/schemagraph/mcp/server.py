@@ -59,7 +59,7 @@ def create_server(engine: Engine | None = None) -> FastMCP:
 
     @mcp.tool()
     def find_join_path(from_table: str, to_table: str) -> dict[str, Any]:
-        """Shortest join path(s) between two tables over foreign keys, dbt lineage, catalog relations and join hints."""
+        """Shortest join path(s) between two tables over foreign keys, catalog relations, dbt relationship tests, join hints and inferred keys; when none exists, the dbt lineage route (provenance, no declared join keys)."""
         try:
             paths = eng.join_path(from_table, to_table)
         except KeyError as e:

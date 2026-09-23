@@ -16,6 +16,15 @@ Edges (undirected ``nx.Graph`` with attribute lists) carry ``etype``:
 * ``mention``     token <-> table/column/term  (added by the lexical indexer)
 
 The table-level projection used for path-finding is derived with :func:`table_graph`.
+
+Merge order is explicit: :func:`build_graph` sorts snapshots by :func:`snapshot_priority`
+(a per-connection ``priority`` if set, else :data:`SOURCE_PRIORITY` by source type, with the
+user's glossary and join hints first), and the first source to fill a field wins. The build
+runs in three passes: every snapshot's tables, then every relation edge, then every glossary
+term, so a foreign key or term that points at a table another source introspects never
+depends on which source loaded first. :meth:`SchemaGraph.add_snapshot` is the incremental
+path: it resolves one snapshot's edges and terms against the tables loaded so far, and a
+stub created for a referenced-only table is replaced when the real table arrives.
 """
 
 from __future__ import annotations
@@ -33,6 +42,50 @@ RELATION_WEIGHT: dict[str, float] = {
     "lineage": 1.6,
     "inferred": 2.5,
 }
+
+# How much PPR activation flows across a relation edge of each kind (``affinity`` attribute).
+# Kept separate from RELATION_WEIGHT: that one is a *cost* for path-finding, and reading it as
+# transition mass made an inferred edge carry 2.5x the flow of a declared foreign key. Uniform
+# by default; only ``LinkOptions.ppr_edge_attr="affinity"`` reads it (the benchmark decides).
+PPR_AFFINITY: dict[str, float] = {
+    "foreign_key": 1.0,
+    "relationship_test": 1.0,
+    "join_hint": 1.0,
+    "catalog_relation": 1.0,
+    "lineage": 1.0,
+    "inferred": 1.0,
+}
+
+
+# Merge precedence by the ``source_type`` a connector emits (not its registry name: the
+# unity_catalog connector emits "unity", aws_glue emits "glue"); lower merges first and wins
+# conflicting scalar fields. Curated sources beat introspected ones; the user's own glossary
+# and hints beat everything.
+SOURCE_PRIORITY: dict[str, int] = {
+    "user": 0,
+    "collibra": 10,
+    "dbt": 20,
+    "unity": 30,
+    "duckdb": 40,
+    "ddl": 50,
+    "glue": 60,
+}
+DEFAULT_PRIORITY = 70
+
+# Relation kinds that describe a *join*. Lineage (dbt ref()/source(), Unity table lineage) is
+# provenance: two models fed by the same source are related but cannot be joined through it,
+# so it stays out of the path-finding projection and is rendered as context instead.
+JOIN_KINDS: frozenset[str] = frozenset({"foreign_key", "relationship_test", "join_hint", "catalog_relation", "inferred"})
+
+
+def snapshot_priority(snap: SchemaSnapshot) -> int:
+    return snap.priority if snap.priority is not None else SOURCE_PRIORITY.get(snap.source_type, DEFAULT_PRIORITY)
+
+
+def merge_key(snap: SchemaSnapshot) -> tuple[bool, int, str]:
+    """Sort key for merging: the user's curation first whatever a connection's priority, then
+    :func:`snapshot_priority` (any int, as set), then source name for a stable tie-break."""
+    return (snap.source_type != "user", snapshot_priority(snap), snap.source)
 
 
 def tnode(fqn: str) -> str:
@@ -55,26 +108,45 @@ class SchemaGraph:
         self.tables: dict[str, Table] = {}  # lower fqn -> Table (merged)
         self.terms: dict[str, BusinessTerm] = {}  # lower name -> term
         self.sources: dict[str, str] = {}  # source name -> source_type
+        self._stubs: set[str] = set()  # lower fqns of referenced-only placeholder tables
 
     # ---------------------------------------------------------------- building
     def add_snapshot(self, snap: SchemaSnapshot) -> None:
-        snap.stamp()
-        if snap.tables or snap.edges or snap.terms:
-            self.sources[snap.source] = snap.source_type
-        for t in snap.tables:
-            self._merge_table(t)
+        """Merge one snapshot incrementally: its tables, then its edges and terms, resolved
+        against every table loaded so far. :func:`build_graph` is the order-independent path."""
+        self.add_tables(snap)
         for e in snap.edges:
             self.add_edge(e)
         for b in snap.terms:
             self.add_term(b)
 
+    def add_tables(self, snap: SchemaSnapshot) -> None:
+        snap.stamp()
+        if snap.tables or snap.edges or snap.terms:
+            self.sources[snap.source] = snap.source_type
+        for t in snap.tables:
+            self._merge_table(t)
+
     def _merge_table(self, t: Table) -> None:
         key = t.fqn.lower()
         existing = self.tables.get(key)
-        if existing is None:
+        replaced = False
+        if "stub" in t.properties:  # only the graph marks stubs; a round-tripped snapshot cannot
+            t = t.model_copy(update={"properties": {k: v for k, v in t.properties.items() if k != "stub"}})
+        if existing is not None and key in self._stubs:
+            # a referenced-only placeholder: the real table replaces it; the node keeps the edges
+            # already attached to it and remembers who referenced it in ``source``
+            real = t.model_copy(deep=True)
+            real.source = ",".join(dict.fromkeys(filter(None, real.source.split(",") + existing.source.split(","))))
+            self.tables[key] = real
+            self._stubs.discard(key)
+            self.g.add_node(tnode(t.fqn), ntype="table", fqn=real.fqn, name=real.name.lower())
+            existing = None
+            replaced = True
+        elif existing is None:
             self.tables[key] = t.model_copy(deep=True)
             self.g.add_node(tnode(t.fqn), ntype="table", fqn=t.fqn, name=t.name.lower())
-        else:
+        if existing is not None:
             # merge: fill blanks, union columns, union tags/properties
             existing.description = existing.description or t.description
             existing.owner = existing.owner or t.owner
@@ -111,7 +183,17 @@ class SchemaGraph:
             cn = cnode(table.fqn, c.name)
             if cn not in self.g:
                 self.g.add_node(cn, ntype="column", fqn=table.fqn, name=c.name.lower(), table=tn)
-                self.g.add_edge(tn, cn, etype="contains", weight=0.5)
+                self.g.add_edge(tn, cn, etype="contains", weight=0.5, affinity=0.5)
+        if replaced:
+            # the stub had no columns: attach the column-level FKs and glossary targets that
+            # could only resolve to the table while it was a placeholder
+            for m in list(self.g.neighbors(tn)):
+                if self.g[tn][m].get("etype") == "relation":
+                    for r in self.g[tn][m]["relations"]:
+                        self._add_fk_cols(r)
+            for term in list(self.terms.values()):
+                if any(tg.lower().startswith(key + ".") for tg in term.targets):
+                    self.add_term(term)
 
     def add_edge(self, e: Edge) -> None:
         a, b = tnode(e.from_table), tnode(e.to_table)
@@ -119,23 +201,28 @@ class SchemaGraph:
             if n not in self.g:
                 # referenced table not introspected: create a stub so the path exists
                 stub = Table(name=fqn.split(".")[-1], schema=".".join(fqn.split(".")[1:-1]) or None, catalog=fqn.split(".")[0] if fqn.count(".") >= 2 else None, source=e.source, properties={"stub": "true"})
-                self.tables.setdefault(fqn.lower(), stub)
+                if fqn.lower() not in self.tables:
+                    self.tables[fqn.lower()] = stub
+                    self._stubs.add(fqn.lower())
                 self.g.add_node(n, ntype="table", fqn=fqn, name=stub.name.lower())
         if a == b:
             return
         data = self.g.get_edge_data(a, b)
         if data is None or data.get("etype") != "relation":
-            self.g.add_edge(a, b, etype="relation", relations=[], weight=RELATION_WEIGHT.get(e.kind, 2.0))
+            self.g.add_edge(a, b, etype="relation", relations=[], weight=RELATION_WEIGHT.get(e.kind, 2.0), affinity=PPR_AFFINITY.get(e.kind, 1.0))
             data = self.g.get_edge_data(a, b)
         rels: list[Edge] = data["relations"]
         if all(r.key != e.key for r in rels):
             rels.append(e)
-        data["weight"] = min(RELATION_WEIGHT.get(r.kind, 2.0) for r in rels)
-        # column-level FK edges
+        data["weight"] = min(RELATION_WEIGHT.get(r.kind, 2.0) for r in rels)  # cost: best evidence wins
+        data["affinity"] = max(PPR_AFFINITY.get(r.kind, 1.0) for r in rels)
+        self._add_fk_cols(e)
+
+    def _add_fk_cols(self, e: Edge) -> None:
         for fc, tc in zip(e.from_columns, e.to_columns, strict=False):
             ca, cb = cnode(e.from_table, fc), cnode(e.to_table, tc)
             if ca in self.g and cb in self.g:
-                self.g.add_edge(ca, cb, etype="fk_col", weight=0.8)
+                self.g.add_edge(ca, cb, etype="fk_col", weight=0.8, affinity=0.8)
 
     def add_term(self, b: BusinessTerm) -> None:
         key = b.name.strip().lower()
@@ -156,10 +243,13 @@ class SchemaGraph:
         kn = knode(term.name)
         if kn not in self.g:
             self.g.add_node(kn, ntype="term", name=key)
+        # re-resolve from scratch: a target that fell back to its table while the table was a
+        # stub (no columns yet) must not keep that edge once the column exists
+        self.g.remove_edges_from([(kn, m) for m in list(self.g.neighbors(kn)) if self.g[kn][m].get("etype") == "glossary"])
         for target in term.targets:
             n = self._resolve_target(target)
             if n is not None:
-                self.g.add_edge(kn, n, etype="glossary", weight=0.7)
+                self.g.add_edge(kn, n, etype="glossary", weight=0.7, affinity=0.7)
 
     def _resolve_target(self, target: str) -> str | None:
         lt = target.lower()
@@ -205,16 +295,43 @@ class SchemaGraph:
                 out.extend(d["relations"])
         return out
 
-    def table_graph(self) -> nx.Graph:
-        """Projection with only table nodes and ``relation`` edges (for path-finding)."""
+    def table_graph(self, kinds: frozenset[str] | set[str] | None = JOIN_KINDS) -> nx.Graph:
+        """Projection with only table nodes and ``relation`` edges of the given kinds (for path-finding).
+
+        The default keeps join-capable kinds only (:data:`JOIN_KINDS`); ``kinds=None`` keeps every
+        relation, lineage included. Edge ``weight`` is the best join cost among the kept kinds.
+        """
         tg = nx.Graph()
         for n, d in self.g.nodes(data=True):
             if d.get("ntype") == "table":
                 tg.add_node(n, **d)
         for a, b, d in self.g.edges(data=True):
-            if d.get("etype") == "relation":
-                tg.add_edge(a, b, weight=d["weight"], relations=d["relations"])
+            if d.get("etype") != "relation":
+                continue
+            rels = d["relations"] if kinds is None else [r for r in d["relations"] if r.kind in kinds]
+            if rels:
+                tg.add_edge(a, b, weight=min(RELATION_WEIGHT.get(r.kind, 2.0) for r in rels), relations=rels)
         return tg
+
+    def lineage(self, fqn: str) -> tuple[list[str], list[str]]:
+        """(upstream, downstream) table fqns connected to ``fqn`` by ``lineage`` relations."""
+        n = tnode(fqn)
+        up: set[str] = set()
+        down: set[str] = set()
+        if n not in self.g:
+            return [], []
+        for m in self.g.neighbors(n):
+            d = self.g[n][m]
+            if d.get("etype") != "relation":
+                continue
+            for r in d["relations"]:
+                if r.kind != "lineage":
+                    continue
+                if r.from_table.lower() == fqn.lower():
+                    down.add(r.to_table)
+                else:
+                    up.add(r.from_table)
+        return sorted(up), sorted(down)
 
     def stats(self) -> dict[str, int]:
         ntypes: dict[str, int] = {}
@@ -235,7 +352,16 @@ class SchemaGraph:
 
 
 def build_graph(snapshots: list[SchemaSnapshot]) -> SchemaGraph:
+    """Merge snapshots in priority order (see :func:`merge_key`): all tables first, then
+    all relation edges, then all glossary terms, so resolution never depends on merge order."""
     sg = SchemaGraph()
-    for s in snapshots:
-        sg.add_snapshot(s)
+    ordered = sorted(snapshots, key=merge_key)
+    for s in ordered:
+        sg.add_tables(s)
+    for s in ordered:
+        for e in s.edges:
+            sg.add_edge(e)
+    for s in ordered:
+        for b in s.terms:
+            sg.add_term(b)
     return sg

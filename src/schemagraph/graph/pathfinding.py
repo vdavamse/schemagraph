@@ -6,8 +6,16 @@ between every (source, destination) pair and return the union. Bridge tables tha
 semantically irrelevant but structurally mandatory are included by construction.
 
 Deviation from the paper: paths are shortest by *weighted* length, where declared
-foreign keys cost 1.0 and weaker evidence (lineage, inferred) costs more, so a path
-through real join keys beats an equally-short path through lineage edges.
+foreign keys cost 1.0 and weaker evidence (catalog relations, inferred keys) costs more,
+so a path through real join keys beats an equally-short path through weaker evidence.
+Lineage edges are not join paths at all (``SchemaGraph.table_graph`` drops them by
+default); they are rendered as context on the tables they connect.
+
+Paths come from Yen's k-shortest-paths (``nx.shortest_simple_paths``), which yields
+simple paths in non-decreasing weighted length, so enumeration stops at the first path
+longer than ``best + max_extra``. The previous implementation enumerated every simple
+path up to a hop cutoff and filtered by length, which is exponential on dense
+inferred-edge clusters (1.8 s on a 12-clique; benchmark p99 over 600 ms).
 """
 
 from __future__ import annotations
@@ -16,27 +24,38 @@ from itertools import combinations, product
 
 import networkx as nx
 
-from schemagraph.graph.build import SchemaGraph, tnode
+from schemagraph.graph.build import JOIN_KINDS, SchemaGraph, tnode
+
+MAX_PATHS_PER_PAIR = 64  # safety cap on paths enumerated (kept or not) between one anchor pair
 
 
 def shortest_paths_between(tg: nx.Graph, a: str, b: str, max_extra: float = 0.0, cutoff: int = 6) -> list[list[str]]:
-    """All simple paths from a to b whose weighted length is within ``max_extra`` of the shortest."""
+    """All simple paths from a to b whose weighted length is within ``max_extra`` of the shortest.
+
+    The shortest path is always returned; the tied or near-tied alternatives must also
+    have at most ``cutoff`` hops.
+    """
     if a == b:
         return [[a]]
     if a not in tg or b not in tg:
         return []
+    out: list[list[str]] = []
+    best: float | None = None
     try:
-        best = nx.shortest_path_length(tg, a, b, weight="weight")
+        for i, path in enumerate(nx.shortest_simple_paths(tg, a, b, weight="weight")):
+            if i >= MAX_PATHS_PER_PAIR:  # counts enumerated paths: ties over the hop cutoff are not free
+                break
+            length = sum(tg[u][v]["weight"] for u, v in zip(path, path[1:], strict=False))
+            if best is None:
+                best = length
+                out.append(path)
+                continue
+            if length > best + max_extra + 1e-9:
+                break
+            if len(path) - 1 <= cutoff:
+                out.append(path)
     except nx.NetworkXNoPath:
         return []
-    hop_cutoff = min(cutoff, int(best / min(d["weight"] for _, _, d in tg.edges(data=True)) + 1)) if tg.number_of_edges() else cutoff
-    out: list[list[str]] = []
-    for path in nx.all_simple_paths(tg, a, b, cutoff=hop_cutoff):
-        length = sum(tg[u][v]["weight"] for u, v in zip(path, path[1:], strict=False))
-        if length <= best + max_extra + 1e-9:
-            out.append(path)
-    if not out:  # numerical corner case: fall back to one shortest path
-        out.append(nx.shortest_path(tg, a, b, weight="weight"))
     return out
 
 
@@ -47,13 +66,16 @@ def union_of_shortest_paths(
     *,
     max_extra: float = 0.0,
     cutoff: int = 6,
+    kinds: frozenset[str] | set[str] | None = JOIN_KINDS,
 ) -> tuple[list[list[str]], set[str]]:
     """Return (candidate paths, union of table fqns on those paths).
+
+    ``kinds`` selects the relation kinds walked (default: join-capable ones; ``None`` adds lineage).
 
     If ``destinations`` is None, pairs are formed among the sources themselves
     (the common case: "connect all anchor tables").
     """
-    tg = sg.table_graph()
+    tg = sg.table_graph(kinds=kinds)
     src = [tnode(s) for s in sources if tnode(s) in tg]
     dst = [tnode(d) for d in destinations if tnode(d) in tg] if destinations else None
     pairs = list(product(src, dst)) if dst else list(combinations(src, 2))
