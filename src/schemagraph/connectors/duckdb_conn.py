@@ -27,7 +27,7 @@ def introspect_duckdb(cfg: DuckDBConfig, source: str = "duckdb") -> SchemaSnapsh
     try:
         rows = con.execute(
             """
-            SELECT database_name, schema_name, table_name, table_type, comment
+            SELECT database_name, schema_name, table_name, 'BASE TABLE', comment
             FROM duckdb_tables() WHERE NOT internal
             UNION ALL
             SELECT database_name, schema_name, view_name, 'VIEW', comment
