@@ -11,7 +11,7 @@ Regenerate only on purpose: ``SCHEMAGRAPH_UPDATE_GOLDEN=1 uv run pytest -q tests
 The golden files were generated before the refactor; a refactoring commit must never regenerate them
 (except ``surfaces_*`` description-only changes, which the test already ignores).
 
-Callers pass renamed parameters positionally (``sg`` -> ``schema_graph``) so this file survives the rename.
+Callers pass renamed parameters positionally (``schema_graph`` -> ``schema_graph``) so this file survives the rename.
 """
 
 from __future__ import annotations
@@ -244,7 +244,7 @@ def snap_dump(snap: SchemaSnapshot) -> dict:
 
 
 def graph_dump(schema_graph: SchemaGraph) -> dict:
-    nxg = schema_graph.g  # renamed to .graph in the rename commit (goldens unchanged)
+    nxg = schema_graph.graph
     return {
         "nodes": [[n, _to_jsonable(d)] for n, d in nxg.nodes(data=True)],
         "edges": [[u, v, _to_jsonable(d)] for u, v, d in nxg.edges(data=True)],
@@ -353,7 +353,7 @@ def link_payload(linker: Linker, graph_name: str) -> dict:
 
 
 def linker_graph(linker: Linker) -> SchemaGraph:
-    return linker.sg  # renamed to .schema_graph in the rename commit (goldens unchanged)
+    return linker.schema_graph
 
 
 def index_dump(linker: Linker) -> dict:

@@ -60,24 +60,24 @@ def load_model(model_name: str):
 
 
 class EmbeddingActivator:
-    def __init__(self, sg: SchemaGraph, model_name: str = DEFAULT_MODEL) -> None:
+    def __init__(self, schema_graph: SchemaGraph, model_name: str = DEFAULT_MODEL) -> None:
         self.model_name = model_name
         self.model = load_model(model_name)
         self.nodes: list[str] = []
         texts: list[str] = []
-        for n, d in sg.g.nodes(data=True):
+        for n, d in schema_graph.graph.nodes(data=True):
             nt = d.get("ntype")
             if nt == "table":
-                t = sg.tables[d["fqn"].lower()]
+                t = schema_graph.tables[d["fqn"].lower()]
                 texts.append(f"{_words(t.name)} {_words(t.properties.get('business_name'))} {_words(t.description)}".strip())
             elif nt == "column":
-                t = sg.tables[d["fqn"].lower()]
+                t = schema_graph.tables[d["fqn"].lower()]
                 c = t.column(d["name"])
                 if c is None:
                     continue
                 texts.append(f"{_words(t.name)} {_words(c.name)} {_words(c.properties.get('business_name'))} {_words(c.description)}".strip())
             elif nt == "term":
-                term = sg.terms[d["name"]]
+                term = schema_graph.terms[d["name"]]
                 texts.append(f"{_words(term.name)} {' '.join(_words(s) for s in term.synonyms)} {_words(term.description)}".strip())
             else:
                 continue

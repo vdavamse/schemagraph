@@ -178,14 +178,14 @@ class _GraphCache:
             snap = introspect_spider2(Spider2Config(root=str(folder.parent), dialect=dialect, db=db, path=str(folder), sample_values=self.sample_values, collapse_families=self.collapse_families), f"spider2:{db}")
             if self.infer:
                 with_inferred_edges(snap)
-            sg = build_graph([snap])
+            schema_graph = build_graph([snap])
             member_map: dict[str, str] = {}
-            for t in sg.tables.values():
+            for t in schema_graph.tables.values():
                 for m in t.properties.get("members", "").split(","):
                     if m:
                         member_map[m.strip().lower()] = t.fqn.lower()
-            self.cache[key] = (Linker(sg, build_index(sg, desc_weight=self.desc_weight)), len(sg.tables), snap.warnings, member_map)
-            self.schema[key] = {canon(t.fqn, member_map): {c.name.lower() for c in t.columns} for t in sg.tables.values()}
+            self.cache[key] = (Linker(schema_graph, build_index(schema_graph, desc_weight=self.desc_weight)), len(schema_graph.tables), snap.warnings, member_map)
+            self.schema[key] = {canon(t.fqn, member_map): {c.name.lower() for c in t.columns} for t in schema_graph.tables.values()}
             n = 0
             for jf in folder.rglob("*.json"):
                 if jf.name == "DDL.json":
@@ -307,7 +307,7 @@ def run(
                 gold_in_top10=int(max_rank is not None and max_rank <= 10),
                 gold_in_top20=int(max_rank is not None and max_rank <= 20),
                 n_cols_db=cache.raw_cols[(inst.dialect, inst.db)],
-                n_cols_graph=sum(len(t.columns) for t in linker.sg.tables.values()),
+                n_cols_graph=sum(len(t.columns) for t in linker.schema_graph.tables.values()),
                 ddl_tokens=ddl_tokens,
                 **colm,
             )

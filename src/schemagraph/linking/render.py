@@ -6,7 +6,7 @@ from schemagraph.graph.build import SchemaGraph
 from schemagraph.model import LinkResult
 
 
-def render_ddl(sg: SchemaGraph, result: LinkResult, *, samples: bool = True) -> str:
+def render_ddl(schema_graph: SchemaGraph, result: LinkResult, *, samples: bool = True) -> str:
     lines: list[str] = []
     lines.append(f"-- Question: {result.question}")
     lines.append(f"-- Linked tables: {len(result.tables)} (anchors: {', '.join(result.anchors) or 'none'})")
@@ -16,7 +16,7 @@ def render_ddl(sg: SchemaGraph, result: LinkResult, *, samples: bool = True) -> 
         for term, targets in result.glossary.items():
             lines.append(f"-- {term} = {', '.join(targets)}")
     for lt in result.tables:
-        t = sg.table(lt.fqn)
+        t = schema_graph.table(lt.fqn)
         lines.append("")
         head = f"CREATE TABLE {lt.fqn} ("
         lines.append(head)
@@ -41,7 +41,7 @@ def render_ddl(sg: SchemaGraph, result: LinkResult, *, samples: bool = True) -> 
         if t and t.kind not in {"table"}:
             notes.append(f"dbt {t.kind}" if t.kind in {"model", "source", "seed", "snapshot"} else t.kind)
         if t:
-            up, down = sg.lineage(t.fqn)
+            up, down = schema_graph.lineage(t.fqn)
             if up:
                 notes.append(f"built from {', '.join(up[:6])}{', ...' if len(up) > 6 else ''}")
             if down:
@@ -59,7 +59,7 @@ def render_ddl(sg: SchemaGraph, result: LinkResult, *, samples: bool = True) -> 
     if samples:
         block: list[str] = []
         for lt in result.tables:
-            t = sg.table(lt.fqn)
+            t = schema_graph.table(lt.fqn)
             if not t:
                 continue
             vals = [(c.name, t.column(c.name).sample_values) for c in lt.columns if t.column(c.name) and t.column(c.name).sample_values]

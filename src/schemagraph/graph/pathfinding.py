@@ -59,8 +59,7 @@ def shortest_paths_between(tg: nx.Graph, a: str, b: str, max_extra: float = 0.0,
     return out
 
 
-def union_of_shortest_paths(
-    sg: SchemaGraph,
+def union_of_shortest_paths(schema_graph: SchemaGraph,
     sources: list[str],
     destinations: list[str] | None = None,
     *,
@@ -75,7 +74,7 @@ def union_of_shortest_paths(
     If ``destinations`` is None, pairs are formed among the sources themselves
     (the common case: "connect all anchor tables").
     """
-    tg = sg.table_graph(kinds=kinds)
+    tg = schema_graph.table_graph(kinds=kinds)
     src = [tnode(s) for s in sources if tnode(s) in tg]
     dst = [tnode(d) for d in destinations if tnode(d) in tg] if destinations else None
     pairs = list(product(src, dst)) if dst else list(combinations(src, 2))
@@ -90,13 +89,13 @@ def union_of_shortest_paths(
                 continue
             seen.add(key)
             paths.append(p)
-    union = {sg.g.nodes[n]["fqn"] for p in paths for n in p}
-    union.update(sg.g.nodes[n]["fqn"] for n in src + (dst or []))
+    union = {schema_graph.graph.nodes[n]["fqn"] for p in paths for n in p}
+    union.update(schema_graph.graph.nodes[n]["fqn"] for n in src + (dst or []))
     return paths, union
 
 
-def connected_components_of(sg: SchemaGraph, fqns: list[str]) -> list[set[str]]:
-    tg = sg.table_graph()
+def connected_components_of(schema_graph: SchemaGraph, fqns: list[str]) -> list[set[str]]:
+    tg = schema_graph.table_graph()
     nodes = [tnode(f) for f in fqns if tnode(f) in tg]
     comps: list[set[str]] = []
     for comp in nx.connected_components(tg):

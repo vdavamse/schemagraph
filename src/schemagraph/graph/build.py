@@ -104,7 +104,7 @@ class SchemaGraph:
     """Container for the merged graph plus lookup tables."""
 
     def __init__(self) -> None:
-        self.g: nx.Graph = nx.Graph()
+        self.graph: nx.Graph = nx.Graph()
         self.tables: dict[str, Table] = {}  # lower fqn -> Table (merged)
         self.terms: dict[str, BusinessTerm] = {}  # lower name -> term
         self.sources: dict[str, str] = {}  # source name -> source_type
@@ -140,12 +140,12 @@ class SchemaGraph:
             real.source = ",".join(dict.fromkeys(filter(None, real.source.split(",") + existing.source.split(","))))
             self.tables[key] = real
             self._stubs.discard(key)
-            self.g.add_node(tnode(t.fqn), ntype="table", fqn=real.fqn, name=real.name.lower())
+            self.graph.add_node(tnode(t.fqn), ntype="table", fqn=real.fqn, name=real.name.lower())
             existing = None
             replaced = True
         elif existing is None:
             self.tables[key] = t.model_copy(deep=True)
-            self.g.add_node(tnode(t.fqn), ntype="table", fqn=t.fqn, name=t.name.lower())
+            self.graph.add_node(tnode(t.fqn), ntype="table", fqn=t.fqn, name=t.name.lower())
         if existing is not None:
             # merge: fill blanks, union columns, union tags/properties
             existing.description = existing.description or t.description
@@ -181,15 +181,15 @@ class SchemaGraph:
         tn = tnode(table.fqn)
         for c in table.columns:
             cn = cnode(table.fqn, c.name)
-            if cn not in self.g:
-                self.g.add_node(cn, ntype="column", fqn=table.fqn, name=c.name.lower(), table=tn)
-                self.g.add_edge(tn, cn, etype="contains", weight=0.5, affinity=0.5)
+            if cn not in self.graph:
+                self.graph.add_node(cn, ntype="column", fqn=table.fqn, name=c.name.lower(), table=tn)
+                self.graph.add_edge(tn, cn, etype="contains", weight=0.5, affinity=0.5)
         if replaced:
             # the stub had no columns: attach the column-level FKs and glossary targets that
             # could only resolve to the table while it was a placeholder
-            for m in list(self.g.neighbors(tn)):
-                if self.g[tn][m].get("etype") == "relation":
-                    for r in self.g[tn][m]["relations"]:
+            for m in list(self.graph.neighbors(tn)):
+                if self.graph[tn][m].get("etype") == "relation":
+                    for r in self.graph[tn][m]["relations"]:
                         self._add_fk_cols(r)
             for term in list(self.terms.values()):
                 if any(tg.lower().startswith(key + ".") for tg in term.targets):
@@ -198,19 +198,19 @@ class SchemaGraph:
     def add_edge(self, e: Edge) -> None:
         a, b = tnode(e.from_table), tnode(e.to_table)
         for n, fqn in ((a, e.from_table), (b, e.to_table)):
-            if n not in self.g:
+            if n not in self.graph:
                 # referenced table not introspected: create a stub so the path exists
                 stub = Table(name=fqn.split(".")[-1], schema=".".join(fqn.split(".")[1:-1]) or None, catalog=fqn.split(".")[0] if fqn.count(".") >= 2 else None, source=e.source, properties={"stub": "true"})
                 if fqn.lower() not in self.tables:
                     self.tables[fqn.lower()] = stub
                     self._stubs.add(fqn.lower())
-                self.g.add_node(n, ntype="table", fqn=fqn, name=stub.name.lower())
+                self.graph.add_node(n, ntype="table", fqn=fqn, name=stub.name.lower())
         if a == b:
             return
-        data = self.g.get_edge_data(a, b)
+        data = self.graph.get_edge_data(a, b)
         if data is None or data.get("etype") != "relation":
-            self.g.add_edge(a, b, etype="relation", relations=[], weight=RELATION_WEIGHT.get(e.kind, 2.0), affinity=PPR_AFFINITY.get(e.kind, 1.0))
-            data = self.g.get_edge_data(a, b)
+            self.graph.add_edge(a, b, etype="relation", relations=[], weight=RELATION_WEIGHT.get(e.kind, 2.0), affinity=PPR_AFFINITY.get(e.kind, 1.0))
+            data = self.graph.get_edge_data(a, b)
         rels: list[Edge] = data["relations"]
         if all(r.key != e.key for r in rels):
             rels.append(e)
@@ -221,8 +221,8 @@ class SchemaGraph:
     def _add_fk_cols(self, e: Edge) -> None:
         for fc, tc in zip(e.from_columns, e.to_columns, strict=False):
             ca, cb = cnode(e.from_table, fc), cnode(e.to_table, tc)
-            if ca in self.g and cb in self.g:
-                self.g.add_edge(ca, cb, etype="fk_col", weight=0.8, affinity=0.8)
+            if ca in self.graph and cb in self.graph:
+                self.graph.add_edge(ca, cb, etype="fk_col", weight=0.8, affinity=0.8)
 
     def add_term(self, b: BusinessTerm) -> None:
         key = b.name.strip().lower()
@@ -241,15 +241,15 @@ class SchemaGraph:
                     existing.targets.append(t)
         term = self.terms[key]
         kn = knode(term.name)
-        if kn not in self.g:
-            self.g.add_node(kn, ntype="term", name=key)
+        if kn not in self.graph:
+            self.graph.add_node(kn, ntype="term", name=key)
         # re-resolve from scratch: a target that fell back to its table while the table was a
         # stub (no columns yet) must not keep that edge once the column exists
-        self.g.remove_edges_from([(kn, m) for m in list(self.g.neighbors(kn)) if self.g[kn][m].get("etype") == "glossary"])
+        self.graph.remove_edges_from([(kn, m) for m in list(self.graph.neighbors(kn)) if self.graph[kn][m].get("etype") == "glossary"])
         for target in term.targets:
             n = self._resolve_target(target)
             if n is not None:
-                self.g.add_edge(kn, n, etype="glossary", weight=0.7, affinity=0.7)
+                self.graph.add_edge(kn, n, etype="glossary", weight=0.7, affinity=0.7)
 
     def _resolve_target(self, target: str) -> str | None:
         lt = target.lower()
@@ -260,7 +260,7 @@ class SchemaGraph:
             tbl, col = lt.rsplit(".", 1)
             if tbl in self.tables:
                 n = cnode(tbl, col)
-                return n if n in self.g else tnode(tbl)
+                return n if n in self.graph else tnode(tbl)
         # bare table name match (unique)
         matches = [k for k in self.tables if k.split(".")[-1] == lt]
         if len(matches) == 1:
@@ -283,14 +283,14 @@ class SchemaGraph:
         return None
 
     def relations(self, fqn_a: str, fqn_b: str) -> list[Edge]:
-        data = self.g.get_edge_data(tnode(fqn_a), tnode(fqn_b))
+        data = self.graph.get_edge_data(tnode(fqn_a), tnode(fqn_b))
         if not data or data.get("etype") != "relation":
             return []
         return list(data["relations"])
 
     def all_edges(self) -> list[Edge]:
         out: list[Edge] = []
-        for _, _, d in self.g.edges(data=True):
+        for _, _, d in self.graph.edges(data=True):
             if d.get("etype") == "relation":
                 out.extend(d["relations"])
         return out
@@ -302,10 +302,10 @@ class SchemaGraph:
         relation, lineage included. Edge ``weight`` is the best join cost among the kept kinds.
         """
         tg = nx.Graph()
-        for n, d in self.g.nodes(data=True):
+        for n, d in self.graph.nodes(data=True):
             if d.get("ntype") == "table":
                 tg.add_node(n, **d)
-        for a, b, d in self.g.edges(data=True):
+        for a, b, d in self.graph.edges(data=True):
             if d.get("etype") != "relation":
                 continue
             rels = d["relations"] if kinds is None else [r for r in d["relations"] if r.kind in kinds]
@@ -318,10 +318,10 @@ class SchemaGraph:
         n = tnode(fqn)
         up: set[str] = set()
         down: set[str] = set()
-        if n not in self.g:
+        if n not in self.graph:
             return [], []
-        for m in self.g.neighbors(n):
-            d = self.g[n][m]
+        for m in self.graph.neighbors(n):
+            d = self.graph[n][m]
             if d.get("etype") != "relation":
                 continue
             for r in d["relations"]:
@@ -335,10 +335,10 @@ class SchemaGraph:
 
     def stats(self) -> dict[str, int]:
         ntypes: dict[str, int] = {}
-        for _, d in self.g.nodes(data=True):
+        for _, d in self.graph.nodes(data=True):
             ntypes[d.get("ntype", "?")] = ntypes.get(d.get("ntype", "?"), 0) + 1
         etypes: dict[str, int] = {}
-        for _, _, d in self.g.edges(data=True):
+        for _, _, d in self.graph.edges(data=True):
             etypes[d.get("etype", "?")] = etypes.get(d.get("etype", "?"), 0) + 1
         return {
             "tables": ntypes.get("table", 0),
@@ -354,14 +354,14 @@ class SchemaGraph:
 def build_graph(snapshots: list[SchemaSnapshot]) -> SchemaGraph:
     """Merge snapshots in priority order (see :func:`merge_key`): all tables first, then
     all relation edges, then all glossary terms, so resolution never depends on merge order."""
-    sg = SchemaGraph()
+    schema_graph = SchemaGraph()
     ordered = sorted(snapshots, key=merge_key)
     for s in ordered:
-        sg.add_tables(s)
+        schema_graph.add_tables(s)
     for s in ordered:
         for e in s.edges:
-            sg.add_edge(e)
+            schema_graph.add_edge(e)
     for s in ordered:
         for b in s.terms:
-            sg.add_term(b)
-    return sg
+            schema_graph.add_term(b)
+    return schema_graph

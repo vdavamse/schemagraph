@@ -40,9 +40,9 @@ class BM25Index:
         return math.log((self.n_docs - d + 0.5) / (d + 0.5) + 1.0)
 
 
-def build_bm25(sg: SchemaGraph) -> BM25Index:
+def build_bm25(schema_graph: SchemaGraph) -> BM25Index:
     idx = BM25Index()
-    for t in sg.tables.values():
+    for t in schema_graph.tables.values():
         fields: dict[str, list[str]] = defaultdict(list)
         fields["name"] += _name_tokens(t.name)
         fields["desc"] += tokenize(t.description or "")

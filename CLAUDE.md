@@ -70,7 +70,7 @@ connectors/*  ──SchemaSnapshot──►  store.py (DuckDB)  ──►  graph
 
 ### Things that are easy to get wrong
 
-* `Linker(sg)` builds the lexical index and adds `w:` token nodes to the graph in place, then caches the PPR matrix on first use; build the graph, then the linker, never reuse a graph across differently-configured indexes and never mutate the graph after the linker exists.
+* `Linker(schema_graph)` builds the lexical index and adds `w:` token nodes to the graph in place, then caches the PPR matrix on first use; build the graph, then the linker, never reuse a graph across differently-configured indexes and never mutate the graph after the linker exists.
 * Edge attribute `weight` is a *join cost* on `relation` edges (FK 1.0 < inferred 2.5) and a transition affinity everywhere else; PPR reads it as affinity on purpose (measured), the separate `affinity` attribute is the semantically clean alternative.
 * Fused (`rrf`) table scores are rank-based and flat; anything that needs a magnitude (anchor ratio, fill floor) must use the `evidence` dict `_rank` returns, not the score.
 * `Engine` holds an `RLock`; `link()` runs under it because `reload()` swaps the graph. Long-running work inside connectors should not hold it.

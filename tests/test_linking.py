@@ -11,9 +11,9 @@ def test_tokenize_splits_snake_and_camel():
 
 def test_activation_value_and_glossary(store_snapshot):
     store_snapshot.terms.append(BusinessTerm(name="revenue", synonyms=["turnover"], targets=["public.orders.total_amount"]))
-    sg = build_graph([store_snapshot])
-    idx = build_index(sg)
-    act = activate(sg, idx, "turnover for customers in California")
+    schema_graph = build_graph([store_snapshot])
+    idx = build_index(schema_graph)
+    act = activate(schema_graph, idx, "turnover for customers in California")
     assert "turnover" in act.matched_terms
     assert "california" in act.matched_values
     assert act.seeds.get("c:public.customer.state", 0) > 1.0
@@ -88,41 +88,41 @@ def test_llm_anchor_picker_is_used_when_enabled(store_graph):
 
 def test_disconnected_anchors_still_returned():
     snap = SchemaSnapshot(source="x", source_type="ddl", tables=[Table(name="alpha_metrics"), Table(name="beta_events")])
-    sg = build_graph([snap])
-    r = Linker(sg).link("alpha metrics and beta events")
+    schema_graph = build_graph([snap])
+    r = Linker(schema_graph).link("alpha metrics and beta events")
     assert {t.fqn for t in r.tables} == {"alpha_metrics", "beta_events"}
     assert r.join_paths == []
 
 
 def test_value_matching_is_whole_word_and_punctuation_tolerant(store_snapshot):
     store_snapshot.table("public.customer").column("city").sample_values = ["St. Louis", "New York", "iPhone City", "Bo"]
-    sg = build_graph([store_snapshot])
-    idx = build_index(sg)
-    act = activate(sg, idx, "orders shipped to st louis or new york")
+    schema_graph = build_graph([store_snapshot])
+    idx = build_index(schema_graph)
+    act = activate(schema_graph, idx, "orders shipped to st louis or new york")
     assert {"st. louis", "new york"} <= set(act.matched_values)
     assert act.seeds.get("c:public.customer.city", 0) >= 3.0  # two values at 1.5 each
-    assert "texas" not in activate(sg, idx, "texasvalues in the list").matched_values  # whole words only
-    assert "california" in activate(sg, idx, "customers in California!").matched_values
-    assert "iphone city" in activate(sg, idx, "iPhone City stores").matched_values
+    assert "texas" not in activate(schema_graph, idx, "texasvalues in the list").matched_values  # whole words only
+    assert "california" in activate(schema_graph, idx, "customers in California!").matched_values
+    assert "iphone city" in activate(schema_graph, idx, "iPhone City stores").matched_values
     assert "bo" not in idx.values  # too short to be evidence
     store_snapshot.table("public.customer").column("state").sample_values = ["A++", "10%", "$50", "1,000", "10:30", "2023/01/15", "U.S.", "E.U."]
-    sg = build_graph([store_snapshot])
-    idx = build_index(sg)
+    schema_graph = build_graph([store_snapshot])
+    idx = build_index(schema_graph)
     for q in ("a list of deals", "top 10 customers", "more than 50 orders", "top 1,000 customers", "at 10:30 on 2023/01/15"):  # punctuation residue is not a value
-        assert activate(sg, idx, q).matched_values == [], q
-    assert set(activate(sg, idx, "total sales in the U.S. and the E.U.").matched_values) == {"u.s.", "e.u."}  # dotted abbreviations are evidence
+        assert activate(schema_graph, idx, q).matched_values == [], q
+    assert set(activate(schema_graph, idx, "total sales in the U.S. and the E.U.").matched_values) == {"u.s.", "e.u."}  # dotted abbreviations are evidence
 
 
 def test_ngram_matches_names_containing_stopwords():
     snap = SchemaSnapshot(source="x", source_type="ddl", tables=[Table(name="person", columns=[Column(name="date_of_birth"), Column(name="first_name"), Column(name="number_of_employees"), Column(name="birth_date")])])
-    sg = build_graph([snap])
-    idx = build_index(sg)
-    act = activate(sg, idx, "first name and date of birth by number of employees")
+    schema_graph = build_graph([snap])
+    idx = build_index(schema_graph)
+    act = activate(schema_graph, idx, "first name and date of birth by number of employees")
     for col in ("date_of_birth", "first_name", "number_of_employees"):
         reasons = act.reasons.get(f"c:person.{col}", [])
         assert sum(r.startswith("n-gram") for r in reasons) == 1, (col, reasons)  # one piece of evidence per name
     assert not any(r.startswith("n-gram") for r in act.reasons.get("c:person.birth_date", []))
-    off = activate(sg, idx, "first name and date of birth", ngram_stop=False)
+    off = activate(schema_graph, idx, "first name and date of birth", ngram_stop=False)
     assert not any(r.startswith("n-gram") for r in off.reasons.get("c:person.date_of_birth", []))
 
 
@@ -155,17 +155,17 @@ def test_lineage_is_context_not_a_join_path(store_snapshot):
     from schemagraph.graph.pathfinding import union_of_shortest_paths
 
     store_snapshot.edges.append(Edge(kind="lineage", from_table="public.audit_log", to_table="public.shipment"))
-    sg = build_graph([store_snapshot])
-    paths, _ = union_of_shortest_paths(sg, ["public.audit_log"], ["public.shipment"])
+    schema_graph = build_graph([store_snapshot])
+    paths, _ = union_of_shortest_paths(schema_graph, ["public.audit_log"], ["public.shipment"])
     assert paths == []  # lineage alone is not a join path
-    assert not sg.table_graph().has_edge(tnode("public.audit_log"), tnode("public.shipment"))
-    assert sg.table_graph(kinds=None).has_edge(tnode("public.audit_log"), tnode("public.shipment"))
-    assert sg.lineage("public.shipment") == (["public.audit_log"], []) and sg.lineage("public.audit_log") == ([], ["public.shipment"])
-    ddl = Linker(sg).link("carrier for each shipment").ddl
+    assert not schema_graph.table_graph().has_edge(tnode("public.audit_log"), tnode("public.shipment"))
+    assert schema_graph.table_graph(kinds=None).has_edge(tnode("public.audit_log"), tnode("public.shipment"))
+    assert schema_graph.lineage("public.shipment") == (["public.audit_log"], []) and schema_graph.lineage("public.audit_log") == ([], ["public.shipment"])
+    ddl = Linker(schema_graph).link("carrier for each shipment").ddl
     assert "built from public.audit_log" in ddl and "feeds public.shipment" in ddl
     # a foreign-key path is unaffected
-    paths, _ = union_of_shortest_paths(sg, ["public.customer"], ["public.shipment"])
-    assert paths and [sg.g.nodes[n]["fqn"] for n in paths[0]] == ["public.customer", "public.orders", "public.order_items", "public.shipment"]
+    paths, _ = union_of_shortest_paths(schema_graph, ["public.customer"], ["public.shipment"])
+    assert paths and [schema_graph.graph.nodes[n]["fqn"] for n in paths[0]] == ["public.customer", "public.orders", "public.order_items", "public.shipment"]
 
 
 def test_embedding_activator_seeds_paraphrases(store_graph, embed_model):
@@ -186,8 +186,8 @@ def test_embedding_activator_seeds_paraphrases(store_graph, embed_model):
 def test_rank_tiered_column_cap():
     wide = Table(name="wide", columns=[Column(name="id", is_primary_key=True)] + [Column(name=f"metric_{i}") for i in range(30)])
     other = Table(name="narrow", columns=[Column(name="id", is_primary_key=True)] + [Column(name=f"attr_{i}") for i in range(30)])
-    sg = build_graph([SchemaSnapshot(source="x", source_type="ddl", tables=[wide, other])])
-    lk = Linker(sg)
+    schema_graph = build_graph([SchemaSnapshot(source="x", source_type="ddl", tables=[wide, other])])
+    lk = Linker(schema_graph)
     r = lk.link("wide metric", LinkOptions(max_columns_per_table=5, columns_top_uncapped=1, debug=True, ranking_limit=0))
     by = {t.fqn: t for t in r.tables}
     assert r.ranking[0][0] == "wide"

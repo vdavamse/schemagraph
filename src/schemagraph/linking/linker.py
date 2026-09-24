@@ -83,11 +83,11 @@ class LinkOptions:
 
 
 class Linker:
-    def __init__(self, sg: SchemaGraph, index: LexicalIndex | None = None, llm=None):
-        self.sg = sg
-        self.index = index or build_index(sg)
+    def __init__(self, schema_graph: SchemaGraph, index: LexicalIndex | None = None, llm=None):
+        self.schema_graph = schema_graph
+        self.index = index or build_index(schema_graph)
         self.llm = llm  # object with .anchor_tables(question, candidates) -> (sources, destinations)
-        self._spec = specificity_weights(sg)
+        self._spec = specificity_weights(schema_graph)
         self._matrices: dict[str, PPRMatrix] = {}  # per edge attribute; the graph must not change after the index is built
         self._bm25: BM25Index | None = None
         self._embedder = None  # EmbeddingActivator, built on first use with embed=True
@@ -95,7 +95,7 @@ class Linker:
     def _matrix(self, edge_attr: str) -> PPRMatrix:
         m = self._matrices.get(edge_attr)
         if m is None:
-            m = self._matrices[edge_attr] = PPRMatrix(self.sg, edge_attr)
+            m = self._matrices[edge_attr] = PPRMatrix(self.schema_graph, edge_attr)
         return m
 
     def embedder(self, model_name: str):
@@ -103,7 +103,7 @@ class Linker:
         if self._embedder is None or self._embedder.model_name != model_name:
             from schemagraph.linking.embed import EmbeddingActivator
 
-            self._embedder = EmbeddingActivator(self.sg, model_name)
+            self._embedder = EmbeddingActivator(self.schema_graph, model_name)
         return self._embedder
 
     def _rank(self, question: str, opts: LinkOptions) -> tuple[Activation, dict[str, float], dict[str, float], list[tuple[str, float]], dict[str, float]]:
@@ -113,25 +113,25 @@ class Linker:
         table's score relative to the best table under each ranker (max across rankers, in [0, 1]);
         the anchor and fill gates read it instead of the fused score, whose rank-based scale is flat.
         """
-        sg = self.sg
-        act = activate(sg, self.index, question, idf=opts.idf, min_numeric_len=opts.min_numeric_len, ngram_stop=opts.ngram_stop)
+        schema_graph = self.schema_graph
+        act = activate(schema_graph, self.index, question, idf=opts.idf, min_numeric_len=opts.min_numeric_len, ngram_stop=opts.ngram_stop)
         if opts.embed:
             for node, w, why in self.embedder(opts.embed_model).activate(question, threshold=opts.embed_threshold, top_k=opts.embed_top_k, weight=opts.embed_weight):
                 act.bump(node, w, why)
         seeds = act.seeds
         if opts.seed_bm25:
             if self._bm25 is None:
-                self._bm25 = build_bm25(sg)
+                self._bm25 = build_bm25(schema_graph)
             top = sorted(bm25_scores(self._bm25, question).items(), key=lambda x: (-x[1], x[0]))[: opts.seed_k]
             seeds = dict(act.seeds)
             for r, (fqn, _) in enumerate(top):
                 seeds[tnode(fqn)] = seeds.get(tnode(fqn), 0.0) + opts.seed_w / (r + 1)
-        node_scores = personalized_pagerank(sg, seeds, alpha=opts.ppr_alpha, specificity=self._spec, matrix=self._matrix(opts.ppr_edge_attr))
-        tscores = table_scores(sg, node_scores, agg=opts.agg)
+        node_scores = personalized_pagerank(schema_graph, seeds, alpha=opts.ppr_alpha, specificity=self._spec, matrix=self._matrix(opts.ppr_edge_attr))
+        tscores = table_scores(schema_graph, node_scores, agg=opts.agg)
         # direct lexical evidence on the table itself counts extra (PPR dilutes it)
         scale = max(tscores.values(), default=1.0) or 1.0
         for n, w in act.seeds.items():
-            d = sg.g.nodes[n]
+            d = schema_graph.graph.nodes[n]
             if d.get("ntype") == "table":
                 tscores[d["fqn"]] = tscores.get(d["fqn"], 0.0) + 0.35 * scale * min(w, 2.0)
             elif d.get("ntype") == "column":
@@ -142,7 +142,7 @@ class Linker:
         evidence = {f: s / best for f, s in tscores.items()}
         if opts.ranker in {"bm25", "rrf"}:
             if self._bm25 is None:
-                self._bm25 = build_bm25(sg)
+                self._bm25 = build_bm25(schema_graph)
             sparse = bm25_scores(self._bm25, question)
             sbest = max(sparse.values(), default=0.0) or 1.0
             if opts.ranker == "bm25":
@@ -162,25 +162,25 @@ class Linker:
     def link(self, question: str, opts: LinkOptions | None = None) -> LinkResult:
         opts = opts or LinkOptions()
         t0 = time.perf_counter()
-        sg = self.sg
-        if opts.small_schema_bypass and len(sg.tables) <= opts.small_schema_bypass:
+        schema_graph = self.schema_graph
+        if opts.small_schema_bypass and len(schema_graph.tables) <= opts.small_schema_bypass:
             return self._everything(question, opts, t0)
-        if opts.adaptive_budget and len(sg.tables) > opts.large_threshold:
+        if opts.adaptive_budget and len(schema_graph.tables) > opts.large_threshold:
             opts = replace(opts, max_tables=max(opts.max_tables, opts.max_tables_large), anchor_k=max(opts.anchor_k, opts.anchor_k_large))
 
         act, node_scores, tscores, ranked, evidence = self._rank(question, opts)
 
         anchors, sources, destinations = self._pick_anchors(question, ranked, evidence, opts)
-        paths, union = union_of_shortest_paths(sg, sources, destinations, max_extra=opts.path_extra, cutoff=opts.path_cutoff) if opts.paths else ([], set())
+        paths, union = union_of_shortest_paths(schema_graph, sources, destinations, max_extra=opts.path_extra, cutoff=opts.path_cutoff) if opts.paths else ([], set())
         prior = {tnode(f): evidence.get(f, 0.0) for f, _ in ranked[:50]}  # a magnitude: evidence, not the flat fused score
-        join_paths = prune_paths(sg, paths, [tnode(a) for a in anchors], alpha=opts.prune_alpha, theta=opts.prune_theta, top_k=opts.prune_top_k, node_prior=prior)
+        join_paths = prune_paths(schema_graph, paths, [tnode(a) for a in anchors], alpha=opts.prune_alpha, theta=opts.prune_theta, top_k=opts.prune_top_k, node_prior=prior)
         kept_tables = set(anchors)
         for jp in join_paths:
             kept_tables.update(jp.tables)
-        if opts.bypass_if_fits and len(sg.tables) <= opts.max_tables:
+        if opts.bypass_if_fits and len(schema_graph.tables) <= opts.max_tables:
             # the whole schema fits the budget: never risk missing a table, even when the
             # question activated nothing (a question with no schema vocabulary must not return no tables)
-            kept_tables.update(t.fqn for t in sg.tables.values())
+            kept_tables.update(t.fqn for t in schema_graph.tables.values())
         else:
             # fill remaining budget with next-best ranked tables that carry some evidence (recall-first, but not noise)
             for f, _s in ranked:
@@ -191,7 +191,7 @@ class Linker:
         kept_tables = set(sorted(kept_tables, key=lambda f: (-tscores.get(f, 0.0), f))[: max(opts.max_tables, len(anchors))])
 
         tables = self._select_columns(kept_tables, anchors, join_paths, node_scores, act, tscores, opts, rank={f: i + 1 for i, (f, _) in enumerate(ranked)})
-        glossary = {term: [sg.g.nodes[m].get("fqn", m) for m in sg.g.neighbors(self.index.phrases[term]) if sg.g[self.index.phrases[term]][m].get("etype") == "glossary"] for term in act.matched_terms if term in self.index.phrases}
+        glossary = {term: [schema_graph.graph.nodes[m].get("fqn", m) for m in schema_graph.graph.neighbors(self.index.phrases[term]) if schema_graph.graph[self.index.phrases[term]][m].get("etype") == "glossary"] for term in act.matched_terms if term in self.index.phrases}
         result = LinkResult(
             question=question,
             tables=tables,
@@ -211,13 +211,13 @@ class Linker:
         if opts.debug:
             result.ranking = [(f, round(s, 6)) for f, s in (ranked[: opts.ranking_limit] if opts.ranking_limit else ranked)]
         if opts.render:
-            result.ddl = render_ddl(sg, result)
+            result.ddl = render_ddl(schema_graph, result)
         return result
 
     def explain(self, question: str, opts: LinkOptions | None = None) -> dict:
         """Seeds, PPR node scores and the table ranking exactly as ``link`` computes them."""
         opts = opts or LinkOptions()
-        if opts.adaptive_budget and len(self.sg.tables) > opts.large_threshold:
+        if opts.adaptive_budget and len(self.schema_graph.tables) > opts.large_threshold:
             opts = replace(opts, max_tables=max(opts.max_tables, opts.max_tables_large), anchor_k=max(opts.anchor_k, opts.anchor_k_large))
         act, node_scores, _tscores, ranked, _evidence = self._rank(question, opts)
         top = sorted(node_scores.items(), key=lambda x: (-x[1], x[0]))[:40]
@@ -252,9 +252,9 @@ class Linker:
         cands = [f for f, _s in ranked if evidence.get(f, 0.0) >= opts.min_anchor_ratio][: max(opts.anchor_k * 3, 8)]
         if opts.use_llm and self.llm is not None:
             try:
-                sources, destinations = self.llm.anchor_tables(question, [self.sg.tables[f.lower()] for f in cands])
-                sources = [f for f in sources if f.lower() in self.sg.tables]
-                destinations = [f for f in destinations if f.lower() in self.sg.tables]
+                sources, destinations = self.llm.anchor_tables(question, [self.schema_graph.tables[f.lower()] for f in cands])
+                sources = [f for f in sources if f.lower() in self.schema_graph.tables]
+                destinations = [f for f in destinations if f.lower() in self.schema_graph.tables]
                 if sources or destinations:
                     anchors = list(dict.fromkeys(sources + destinations))
                     return anchors, sources or destinations, destinations or None
@@ -264,18 +264,18 @@ class Linker:
         return anchors, anchors, None
 
     def _select_columns(self, kept: set[str], anchors: list[str], join_paths: list[JoinPath], node_scores: dict[str, float], act: Activation, tscores: dict[str, float], opts: LinkOptions, rank: dict[str, int] | None = None) -> list[LinkedTable]:
-        sg = self.sg
+        schema_graph = self.schema_graph
         rank = rank or {}
         join_cols: dict[str, set[str]] = {}
         for jp in join_paths:
             for step in jp.steps:
-                rels = sg.relations(step.from_table, step.to_table)
+                rels = schema_graph.relations(step.from_table, step.to_table)
                 for r in rels:
                     join_cols.setdefault(r.from_table.lower(), set()).update(c.lower() for c in r.from_columns)
                     join_cols.setdefault(r.to_table.lower(), set()).update(c.lower() for c in r.to_columns)
         out: list[LinkedTable] = []
         for fqn in sorted(kept, key=lambda f: (-tscores.get(f, 0.0), f)):
-            t = sg.table(fqn)
+            t = schema_graph.table(fqn)
             if t is None:
                 continue
             is_anchor = fqn in anchors
@@ -315,9 +315,9 @@ class Linker:
     def _everything(self, question: str, opts: LinkOptions, t0: float) -> LinkResult:
         tables = [
             LinkedTable(fqn=t.fqn, score=0.0, is_anchor=False, columns=[LinkedColumn(name=c.name, data_type=c.data_type, description=c.description) for c in t.columns], description=t.description, kind=t.kind)
-            for t in self.sg.tables.values()
+            for t in self.schema_graph.tables.values()
         ]
         res = LinkResult(question=question, tables=tables, join_paths=[], anchors=[], terms_matched=[], stats={"bypass": "small schema", "ms": round((time.perf_counter() - t0) * 1000, 1)})
         if opts.render:
-            res.ddl = render_ddl(self.sg, res)
+            res.ddl = render_ddl(self.schema_graph, res)
         return res

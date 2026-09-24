@@ -150,13 +150,13 @@ def _name_tokens(name: str) -> list[str]:
     return out
 
 
-def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True, desc_weight: float = DESC_WEIGHT) -> LexicalIndex:
+def build_index(schema_graph: SchemaGraph, *, add_token_nodes: bool = True, desc_weight: float = DESC_WEIGHT) -> LexicalIndex:
     idx = LexicalIndex()
-    g = sg.g
+    g = schema_graph.graph
     for n, d in list(g.nodes(data=True)):
         nt = d.get("ntype")
         if nt == "table":
-            t = sg.tables[d["fqn"].lower()]
+            t = schema_graph.tables[d["fqn"].lower()]
             idx.add_name(t.name, n)
             for tok in _name_tokens(t.name):
                 idx.add(tok, n, 1.0)
@@ -170,7 +170,7 @@ def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True, desc_weight: f
                     for tok in _name_tokens(v):
                         idx.add(tok, n, 0.9)
         elif nt == "column":
-            t = sg.tables[d["fqn"].lower()]
+            t = schema_graph.tables[d["fqn"].lower()]
             c = t.column(d["name"])
             if c is None:
                 continue
@@ -189,7 +189,7 @@ def build_index(sg: SchemaGraph, *, add_token_nodes: bool = True, desc_weight: f
             for v in c.sample_values:
                 idx.add_value(v, n)
         elif nt == "term":
-            term = sg.terms[d["name"]]
+            term = schema_graph.terms[d["name"]]
             phrases = [term.name, *term.synonyms]
             for p in phrases:
                 lp = p.strip().lower()
@@ -239,7 +239,7 @@ class Activation:
         self.reasons.setdefault(node, []).append(why)
 
 
-def activate(sg: SchemaGraph, idx: LexicalIndex, question: str, *, idf: bool = True, min_numeric_len: int = 4, ngram_stop: bool = True) -> Activation:
+def activate(schema_graph: SchemaGraph, idx: LexicalIndex, question: str, *, idf: bool = True, min_numeric_len: int = 4, ngram_stop: bool = True) -> Activation:
     """Activate schema objects from a question.
 
     ``idf`` scales single-token evidence by how rare the token is across the schema
@@ -262,8 +262,8 @@ def activate(sg: SchemaGraph, idx: LexicalIndex, question: str, *, idf: bool = T
             act.bump(node, 1.5, f"glossary phrase '{phrase}'")
             act.matched_terms.append(phrase)
             # propagate straight to glossary targets so they compete as anchors
-            for nb in sg.g.neighbors(node):
-                if sg.g[node][nb].get("etype") == "glossary":
+            for nb in schema_graph.graph.neighbors(node):
+                if schema_graph.graph[node][nb].get("etype") == "glossary":
                     act.bump(nb, 1.2, f"glossary target of '{phrase}'")
 
     # 2. sample values appearing in the question as whole words (value-based linking); the
@@ -330,8 +330,8 @@ def activate(sg: SchemaGraph, idx: LexicalIndex, question: str, *, idf: bool = T
     return act
 
 
-def term_targets(sg: SchemaGraph, term_name: str) -> list[str]:
+def term_targets(schema_graph: SchemaGraph, term_name: str) -> list[str]:
     n = knode(term_name)
-    if n not in sg.g:
+    if n not in schema_graph.graph:
         return []
-    return [sg.g.nodes[m].get("fqn", m) for m in sg.g.neighbors(n) if sg.g[n][m].get("etype") == "glossary"]
+    return [schema_graph.graph.nodes[m].get("fqn", m) for m in schema_graph.graph.neighbors(n) if schema_graph.graph[n][m].get("etype") == "glossary"]

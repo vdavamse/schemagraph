@@ -124,7 +124,7 @@ def run(
                 with_inferred_edges(snap)
             linkers[db_id] = Linker(build_graph([snap]))
         linker = linkers[db_id]
-        gold = {g for g in gold_tables(q.get("query") or q.get("sql") or "", dialect) if g in linker.sg.tables}
+        gold = {g for g in gold_tables(q.get("query") or q.get("sql") or "", dialect) if g in linker.schema_graph.tables}
         if not gold:
             skipped += 1
             continue
@@ -142,7 +142,7 @@ def run(
                 db=db_id,
                 n_gold=len(gold),
                 n_pred=len(pred),
-                n_tables_db=len(linker.sg.tables),
+                n_tables_db=len(linker.schema_graph.tables),
                 hit=len(gold & pred),
                 recall=len(gold & pred) / len(gold),
                 precision=len(gold & pred) / len(pred) if pred else 0.0,

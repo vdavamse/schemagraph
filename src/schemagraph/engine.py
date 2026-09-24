@@ -225,7 +225,7 @@ class Engine:
         paths, _ = union_of_shortest_paths(self.graph, [ta.fqn], [tb.fqn])
         if not paths:  # no join route: fall back to lineage so "how do these connect" still answers
             paths, _ = union_of_shortest_paths(self.graph, [ta.fqn], [tb.fqn], kinds=None)
-        return [[self.graph.g.nodes[n]["fqn"] for n in p] for p in paths]
+        return [[self.graph.graph.nodes[n]["fqn"] for n in p] for p in paths]
 
     def stats(self) -> dict[str, Any]:
         s = self.graph.stats()

@@ -29,11 +29,11 @@ from schemagraph.graph.build import SchemaGraph
 log = logging.getLogger("schemagraph")
 
 
-def specificity_weights(sg: SchemaGraph) -> dict[str, float]:
+def specificity_weights(schema_graph: SchemaGraph) -> dict[str, float]:
     """1 / log(1 + number of nodes sharing this name), per node."""
-    names = Counter(d.get("name") for _, d in sg.g.nodes(data=True) if d.get("ntype") in {"column", "table"})
+    names = Counter(d.get("name") for _, d in schema_graph.graph.nodes(data=True) if d.get("ntype") in {"column", "table"})
     out: dict[str, float] = {}
-    for n, d in sg.g.nodes(data=True):
+    for n, d in schema_graph.graph.nodes(data=True):
         cnt = names.get(d.get("name"), 1) if d.get("ntype") in {"column", "table"} else 1
         out[n] = 1.0 / math.log(2 + cnt - 1) if cnt > 1 else 1.0
     return out
@@ -49,15 +49,15 @@ class PPRMatrix:
     has added its token nodes; the graph must not change afterwards.
     """
 
-    def __init__(self, sg: SchemaGraph, edge_attr: str = "weight") -> None:
+    def __init__(self, schema_graph: SchemaGraph, edge_attr: str = "weight") -> None:
         self.edge_attr = edge_attr
-        self.nodes: list[str] = list(sg.g.nodes())
+        self.nodes: list[str] = list(schema_graph.graph.nodes())
         self.index: dict[str, int] = {n: i for i, n in enumerate(self.nodes)}
         n = len(self.nodes)
         rows: list[int] = []
         cols: list[int] = []
         vals: list[float] = []
-        for u, v, d in sg.g.edges(data=True):
+        for u, v, d in schema_graph.graph.edges(data=True):
             w = float(d.get(edge_attr, d.get("weight", 1.0)))
             if w <= 0 or u == v:
                 continue
@@ -107,8 +107,7 @@ class PPRMatrix:
         return {self.nodes[i]: float(x[i]) for i in np.flatnonzero(x > 0)}
 
 
-def personalized_pagerank(
-    sg: SchemaGraph,
+def personalized_pagerank(schema_graph: SchemaGraph,
     seeds: dict[str, float],
     *,
     alpha: float = 0.85,
@@ -119,14 +118,14 @@ def personalized_pagerank(
     """Return PPR scores for every node reachable from the seeds (node id -> score)."""
     if not seeds:
         return {}
-    spec = specificity or specificity_weights(sg)
-    personalization = {n: w * spec.get(n, 1.0) for n, w in seeds.items() if n in sg.g and w > 0}
+    spec = specificity or specificity_weights(schema_graph)
+    personalization = {n: w * spec.get(n, 1.0) for n, w in seeds.items() if n in schema_graph.graph and w > 0}
     if not personalization:
         return {}
-    return (matrix or PPRMatrix(sg)).run(personalization, alpha=alpha, max_iter=max_iter)
+    return (matrix or PPRMatrix(schema_graph)).run(personalization, alpha=alpha, max_iter=max_iter)
 
 
-def table_scores(sg: SchemaGraph, node_scores: dict[str, float], *, agg: str = "top3") -> dict[str, float]:
+def table_scores(schema_graph: SchemaGraph, node_scores: dict[str, float], *, agg: str = "top3") -> dict[str, float]:
     """Aggregate node scores to tables.
 
     ``agg="top3"``: own + best + 0.5*second + 0.25*third + 0.02*rest (wide tables with many
@@ -136,7 +135,7 @@ def table_scores(sg: SchemaGraph, node_scores: dict[str, float], *, agg: str = "
     per_table: dict[str, list[float]] = {}
     own: dict[str, float] = {}
     for n, s in node_scores.items():
-        d = sg.g.nodes[n]
+        d = schema_graph.graph.nodes[n]
         if d.get("ntype") == "table":
             own[d["fqn"]] = s
         elif d.get("ntype") == "column":

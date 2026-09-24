@@ -52,8 +52,7 @@ def flow_resources(
     return resource
 
 
-def prune_paths(
-    sg: SchemaGraph,
+def prune_paths(schema_graph: SchemaGraph,
     paths: list[list[str]],
     anchors: list[str],
     *,
@@ -65,7 +64,7 @@ def prune_paths(
     """Score candidate paths by flow reliability and keep the best ``top_k``."""
     if not paths:
         return []
-    tg = sg.table_graph()
+    tg = schema_graph.table_graph()
     nodes = {n for p in paths for n in p}
     sub = tg.subgraph(nodes).copy()
     res = flow_resources(sub, anchors, alpha=alpha, theta=theta, node_prior=node_prior)
@@ -86,7 +85,7 @@ def prune_paths(
     kept.sort(key=lambda x: (-x[0], len(x[1])))
     out: list[JoinPath] = []
     for rel, p in kept[:top_k]:
-        out.append(JoinPath(tables=[sg.g.nodes[n]["fqn"] for n in p], steps=_steps(sg, p), reliability=round(rel, 4)))
+        out.append(JoinPath(tables=[schema_graph.graph.nodes[n]["fqn"] for n in p], steps=_steps(schema_graph, p), reliability=round(rel, 4)))
     # PathRAG serializes ascending by reliability (most reliable last, closest to the question)
     return out
 
@@ -102,11 +101,11 @@ def _is_subpath(short: list[str], long: list[str]) -> bool:
     return False
 
 
-def _steps(sg: SchemaGraph, path: list[str]) -> list[JoinStep]:
+def _steps(schema_graph: SchemaGraph, path: list[str]) -> list[JoinStep]:
     steps: list[JoinStep] = []
     for u, v in zip(path, path[1:], strict=False):
-        fu, fv = sg.g.nodes[u]["fqn"], sg.g.nodes[v]["fqn"]
-        rels = sg.relations(fu, fv)
+        fu, fv = schema_graph.graph.nodes[u]["fqn"], schema_graph.graph.nodes[v]["fqn"]
+        rels = schema_graph.relations(fu, fv)
         if not rels:
             continue
         best = sorted(rels, key=lambda r: ({"foreign_key": 0, "relationship_test": 0, "join_hint": 0, "catalog_relation": 1, "inferred": 2, "lineage": 3}.get(r.kind, 4)))[0]
