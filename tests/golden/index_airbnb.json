@@ -1,0 +1,8114 @@
+{
+ "index": {
+  "postings": {
+   "daily": [
+    [
+     "t:main.daily_agg_reviews",
+     1.0
+    ]
+   ],
+   "agg": [
+    [
+     "t:main.daily_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.monthly_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.wow_agg_reviews",
+     1.0
+    ]
+   ],
+   "reviews": [
+    [
+     "t:main.daily_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.fct_reviews",
+     1.0
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.monthly_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.raw_reviews",
+     1.0
+    ],
+    [
+     "t:main.src_reviews",
+     1.0
+    ],
+    [
+     "t:main.wow_agg_reviews",
+     1.0
+    ],
+    [
+     "c:main.daily_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     0.35
+    ]
+   ],
+   "aggregate": [
+    [
+     "t:main.daily_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.monthly_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.wow_agg_reviews",
+     1.0
+    ]
+   ],
+   "review": [
+    [
+     "c:main.daily_agg_reviews.review_date",
+     1.0
+    ],
+    [
+     "c:main.daily_agg_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.daily_agg_reviews.review_totals",
+     1.0
+    ],
+    [
+     "c:main.fct_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     1.0
+    ],
+    [
+     "c:main.monthly_agg_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.src_reviews.review_date",
+     1.0
+    ],
+    [
+     "c:main.src_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.src_reviews.review_text",
+     1.0
+    ],
+    [
+     "c:main.wow_agg_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.fct_reviews",
+     1.0
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.monthly_agg_reviews",
+     1.0
+    ],
+    [
+     "t:main.raw_reviews",
+     1.0
+    ],
+    [
+     "t:main.src_reviews",
+     1.0
+    ],
+    [
+     "t:main.wow_agg_reviews",
+     1.0
+    ],
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ]
+   ],
+   "model": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "aggregates": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "total": [
+    [
+     "c:main.daily_agg_reviews.review_totals",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     1.0
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "number": [
+    [
+     "c:main.dim_listings_hosts.minimum_nights",
+     0.35
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "sentiment": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.daily_agg_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.fct_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.monthly_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.monthly_agg_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.src_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.wow_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.wow_agg_reviews.review_sentiment",
+     1.0
+    ],
+    [
+     "c:main.daily_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "day": [
+    [
+     "c:main.mom_agg_reviews.aggregation_date",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "incremental": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ]
+   ],
+   "processes": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ]
+   ],
+   "new": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ]
+   ],
+   "data": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "surrogate": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "key": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "generated": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "date": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.daily_agg_reviews.review_date",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.aggregation_date",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.monthly_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.src_reviews.review_date",
+     1.0
+    ],
+    [
+     "c:main.wow_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "t:main.dim_dates",
+     1.0
+    ],
+    [
+     "c:main.daily_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "c:main.dim_listings_hosts.created_at",
+     0.35
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "ensure": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "uniqueness": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "current": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ]
+   ],
+   "running": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ]
+   ],
+   "incrementally": [
+    [
+     "t:main.daily_agg_reviews",
+     0.35
+    ]
+   ],
+   "totals": [
+    [
+     "c:main.daily_agg_reviews.review_totals",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "count": [
+    [
+     "c:main.daily_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     0.35
+    ]
+   ],
+   "specific": [
+    [
+     "c:main.daily_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     0.35
+    ]
+   ],
+   "positive": [
+    [
+     "c:main.daily_agg_reviews.review_sentiment",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_sentiment",
+     0.35
+    ]
+   ],
+   "neutral": [
+    [
+     "c:main.daily_agg_reviews.review_sentiment",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_sentiment",
+     0.35
+    ]
+   ],
+   "negative": [
+    [
+     "c:main.daily_agg_reviews.review_sentiment",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_sentiment",
+     0.35
+    ]
+   ],
+   "submitted": [
+    [
+     "c:main.daily_agg_reviews.review_date",
+     0.35
+    ]
+   ],
+   "id": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.dim_hosts.host_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings.listing_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.host_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_id",
+     1.0
+    ],
+    [
+     "c:main.fct_reviews.listing_id",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.monthly_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.host_id",
+     1.0
+    ],
+    [
+     "c:main.src_listings.host_id",
+     1.0
+    ],
+    [
+     "c:main.src_listings.listing_id",
+     1.0
+    ],
+    [
+     "c:main.src_reviews.listing_id",
+     1.0
+    ],
+    [
+     "c:main.wow_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "identifier": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.dim_hosts.host_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings.listing_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.host_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_id",
+     1.0
+    ],
+    [
+     "c:main.fct_reviews.listing_id",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.monthly_agg_reviews.date_sentiment_id",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.host_id",
+     1.0
+    ],
+    [
+     "c:main.src_listings.host_id",
+     1.0
+    ],
+    [
+     "c:main.src_listings.listing_id",
+     1.0
+    ],
+    [
+     "c:main.src_reviews.listing_id",
+     1.0
+    ],
+    [
+     "c:main.wow_agg_reviews.date_sentiment_id",
+     1.0
+    ]
+   ],
+   "ensuring": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "combination": [
+    [
+     "c:main.daily_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "mom": [
+    [
+     "c:main.mom_agg_reviews.mom",
+     1.0
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     1.0
+    ]
+   ],
+   "calculates": [
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "rolling": [
+    [
+     "c:main.mom_agg_reviews.aggregation_date",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "30": [
+    [
+     "c:main.mom_agg_reviews.aggregation_date",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "window": [
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "providing": [
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "month": [
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "mo": [
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "comparison": [
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "metrics": [
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "past": [
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "days": [
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "percentage": [
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "change": [
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "compared": [
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "previous": [
+    [
+     "c:main.mom_agg_reviews.mom",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "uses": [
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "aggregation": [
+    [
+     "c:main.mom_agg_reviews.aggregation_date",
+     1.0
+    ],
+    [
+     "c:main.mom_agg_reviews.date_sentiment_id",
+     0.35
+    ],
+    [
+     "c:main.mom_agg_reviews.review_totals",
+     0.35
+    ],
+    [
+     "t:main.mom_agg_reviews",
+     0.35
+    ]
+   ],
+   "representing": [
+    [
+     "c:main.mom_agg_reviews.aggregation_date",
+     0.35
+    ]
+   ],
+   "dim": [
+    [
+     "t:main.dim_dates",
+     1.0
+    ],
+    [
+     "t:main.dim_hosts",
+     1.0
+    ],
+    [
+     "t:main.dim_listings",
+     1.0
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     1.0
+    ]
+   ],
+   "listings": [
+    [
+     "t:main.dim_listings",
+     1.0
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     1.0
+    ],
+    [
+     "t:main.raw_listings",
+     1.0
+    ],
+    [
+     "t:main.src_listings",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     0.35
+    ]
+   ],
+   "hosts": [
+    [
+     "t:main.dim_hosts",
+     1.0
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     1.0
+    ],
+    [
+     "t:main.raw_hosts",
+     1.0
+    ],
+    [
+     "t:main.src_hosts",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     0.35
+    ]
+   ],
+   "dimension": [
+    [
+     "t:main.dim_dates",
+     1.0
+    ],
+    [
+     "t:main.dim_hosts",
+     1.0
+    ],
+    [
+     "t:main.dim_listings",
+     1.0
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     1.0
+    ]
+   ],
+   "listing": [
+    [
+     "c:main.dim_listings.listing_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_name",
+     1.0
+    ],
+    [
+     "c:main.fct_reviews.listing_id",
+     1.0
+    ],
+    [
+     "c:main.src_listings.listing_id",
+     1.0
+    ],
+    [
+     "c:main.src_listings.listing_name",
+     1.0
+    ],
+    [
+     "c:main.src_listings.listing_url",
+     1.0
+    ],
+    [
+     "c:main.src_reviews.listing_id",
+     1.0
+    ],
+    [
+     "t:main.dim_listings",
+     1.0
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     1.0
+    ],
+    [
+     "t:main.raw_listings",
+     1.0
+    ],
+    [
+     "t:main.src_listings",
+     1.0
+    ]
+   ],
+   "host": [
+    [
+     "c:main.dim_hosts.host_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.host_id",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.host_name",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.host_id",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.host_name",
+     1.0
+    ],
+    [
+     "c:main.src_listings.host_id",
+     1.0
+    ],
+    [
+     "t:main.dim_hosts",
+     1.0
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     1.0
+    ],
+    [
+     "t:main.raw_hosts",
+     1.0
+    ],
+    [
+     "t:main.src_hosts",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     0.35
+    ],
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     0.35
+    ]
+   ],
+   "combines": [
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "joining": [
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "merges": [
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "updated": [
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.updated_at",
+     1.0
+    ],
+    [
+     "c:main.src_listings.updated_at",
+     1.0
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "timestamp": [
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "captured": [
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "unique": [
+    [
+     "c:main.dim_listings_hosts.host_id",
+     0.35
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     0.35
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_id",
+     0.35
+    ],
+    [
+     "t:main.dim_listings_hosts",
+     0.35
+    ]
+   ],
+   "created": [
+    [
+     "c:main.dim_listings_hosts.created_at",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.created_at",
+     1.0
+    ],
+    [
+     "c:main.src_listings.created_at",
+     1.0
+    ]
+   ],
+   "at": [
+    [
+     "c:main.dim_listings_hosts.created_at",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.created_at",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.updated_at",
+     1.0
+    ],
+    [
+     "c:main.src_listings.created_at",
+     1.0
+    ],
+    [
+     "c:main.src_listings.updated_at",
+     1.0
+    ]
+   ],
+   "time": [
+    [
+     "c:main.dim_listings_hosts.created_at",
+     0.35
+    ],
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     0.35
+    ]
+   ],
+   "update": [
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     0.35
+    ]
+   ],
+   "takes": [
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     0.35
+    ]
+   ],
+   "greater": [
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     0.35
+    ]
+   ],
+   "value": [
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     0.35
+    ]
+   ],
+   "cte": [
+    [
+     "c:main.dim_listings_hosts.updated_at",
+     0.35
+    ]
+   ],
+   "name": [
+    [
+     "c:main.dim_listings_hosts.host_name",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.listing_name",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.host_name",
+     1.0
+    ],
+    [
+     "c:main.src_listings.listing_name",
+     1.0
+    ],
+    [
+     "c:main.src_reviews.reviewer_name",
+     1.0
+    ]
+   ],
+   "typically": [
+    [
+     "c:main.dim_listings_hosts.listing_name",
+     0.35
+    ]
+   ],
+   "describe": [
+    [
+     "c:main.dim_listings_hosts.listing_name",
+     0.35
+    ]
+   ],
+   "property": [
+    [
+     "c:main.dim_listings_hosts.listing_name",
+     0.35
+    ]
+   ],
+   "room": [
+    [
+     "c:main.dim_listings_hosts.room_type",
+     1.0
+    ],
+    [
+     "c:main.src_listings.room_type",
+     1.0
+    ]
+   ],
+   "type": [
+    [
+     "c:main.dim_listings_hosts.room_type",
+     1.0
+    ],
+    [
+     "c:main.src_listings.room_type",
+     1.0
+    ]
+   ],
+   "being": [
+    [
+     "c:main.dim_listings_hosts.room_type",
+     0.35
+    ]
+   ],
+   "offered": [
+    [
+     "c:main.dim_listings_hosts.room_type",
+     0.35
+    ]
+   ],
+   "entire": [
+    [
+     "c:main.dim_listings_hosts.room_type",
+     0.35
+    ]
+   ],
+   "home": [
+    [
+     "c:main.dim_listings_hosts.room_type",
+     0.35
+    ]
+   ],
+   "private": [
+    [
+     "c:main.dim_listings_hosts.room_type",
+     0.35
+    ]
+   ],
+   "etc": [
+    [
+     "c:main.dim_listings_hosts.room_type",
+     0.35
+    ]
+   ],
+   "minimum": [
+    [
+     "c:main.dim_listings.minimum_nights",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.minimum_nights",
+     1.0
+    ],
+    [
+     "c:main.src_listings.minimum_nights",
+     1.0
+    ]
+   ],
+   "nights": [
+    [
+     "c:main.dim_listings.minimum_nights",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.minimum_nights",
+     1.0
+    ],
+    [
+     "c:main.src_listings.minimum_nights",
+     1.0
+    ]
+   ],
+   "night": [
+    [
+     "c:main.dim_listings.minimum_nights",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.minimum_nights",
+     1.0
+    ],
+    [
+     "c:main.src_listings.minimum_nights",
+     1.0
+    ],
+    [
+     "c:main.dim_listings_hosts.price",
+     0.35
+    ]
+   ],
+   "required": [
+    [
+     "c:main.dim_listings_hosts.minimum_nights",
+     0.35
+    ]
+   ],
+   "book": [
+    [
+     "c:main.dim_listings_hosts.minimum_nights",
+     0.35
+    ]
+   ],
+   "price": [
+    [
+     "c:main.dim_listings_hosts.price",
+     1.0
+    ],
+    [
+     "c:main.src_listings.price_str",
+     1.0
+    ]
+   ],
+   "managing": [
+    [
+     "c:main.dim_listings_hosts.host_name",
+     0.35
+    ]
+   ],
+   "is": [
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.is_superhost",
+     1.0
+    ]
+   ],
+   "superhost": [
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     1.0
+    ],
+    [
+     "c:main.src_hosts.is_superhost",
+     1.0
+    ]
+   ],
+   "indicates": [
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     0.35
+    ]
+   ],
+   "whether": [
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     0.35
+    ]
+   ],
+   "status": [
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     0.35
+    ]
+   ],
+   "awarded": [
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     0.35
+    ]
+   ],
+   "high": [
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     0.35
+    ]
+   ],
+   "ratings": [
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     0.35
+    ]
+   ],
+   "performance": [
+    [
+     "c:main.dim_listings_hosts.is_superhost",
+     0.35
+    ]
+   ],
+   "uniquely": [
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     0.35
+    ]
+   ],
+   "relationship": [
+    [
+     "c:main.dim_listings_hosts.listing_host_id",
+     0.35
+    ]
+   ],
+   "monthly": [
+    [
+     "t:main.monthly_agg_reviews",
+     1.0
+    ]
+   ],
+   "wow": [
+    [
+     "t:main.wow_agg_reviews",
+     1.0
+    ]
+   ],
+   "fct": [
+    [
+     "t:main.fct_reviews",
+     1.0
+    ]
+   ],
+   "fact": [
+    [
+     "t:main.fct_reviews",
+     1.0
+    ]
+   ],
+   "raw": [
+    [
+     "t:main.raw_hosts",
+     1.0
+    ],
+    [
+     "t:main.raw_listings",
+     1.0
+    ],
+    [
+     "t:main.raw_reviews",
+     1.0
+    ]
+   ],
+   "dates": [
+    [
+     "t:main.dim_dates",
+     1.0
+    ]
+   ],
+   "src": [
+    [
+     "t:main.src_hosts",
+     1.0
+    ],
+    [
+     "t:main.src_listings",
+     1.0
+    ],
+    [
+     "t:main.src_reviews",
+     1.0
+    ]
+   ],
+   "source": [
+    [
+     "t:main.src_hosts",
+     1.0
+    ],
+    [
+     "t:main.src_listings",
+     1.0
+    ],
+    [
+     "t:main.src_reviews",
+     1.0
+    ]
+   ],
+   "url": [
+    [
+     "c:main.src_listings.listing_url",
+     1.0
+    ]
+   ],
+   "str": [
+    [
+     "c:main.src_listings.price_str",
+     1.0
+    ]
+   ],
+   "reviewer": [
+    [
+     "c:main.src_reviews.reviewer_name",
+     1.0
+    ]
+   ],
+   "text": [
+    [
+     "c:main.src_reviews.review_text",
+     1.0
+    ]
+   ]
+  },
+  "idf": {
+   "daily": 0.9025062498798073,
+   "agg": 0.638345833092948,
+   "reviews": 0.4586787477594024,
+   "aggregate": 0.638345833092948,
+   "review": 0.26228920754965035,
+   "model": 0.698774179657066,
+   "aggregates": 0.7796786508521063,
+   "total": 0.638345833092948,
+   "number": 0.698774179657066,
+   "sentiment": 0.357003167478738,
+   "day": 0.638345833092948,
+   "incremental": 0.9025062498798073,
+   "processes": 0.9025062498798073,
+   "new": 0.9025062498798073,
+   "data": 0.698774179657066,
+   "surrogate": 0.5499267136431514,
+   "key": 0.5499267136431514,
+   "generated": 0.5499267136431514,
+   "date": 0.3926906350375459,
+   "ensure": 0.7796786508521063,
+   "uniqueness": 0.638345833092948,
+   "current": 0.9025062498798073,
+   "running": 0.9025062498798073,
+   "incrementally": 0.9025062498798073,
+   "totals": 0.638345833092948,
+   "count": 0.7796786508521063,
+   "specific": 0.7796786508521063,
+   "positive": 0.7796786508521063,
+   "neutral": 0.7796786508521063,
+   "negative": 0.7796786508521063,
+   "submitted": 0.9025062498798073,
+   "id": 0.3409672816021875,
+   "identifier": 0.357003167478738,
+   "ensuring": 0.698774179657066,
+   "combination": 0.638345833092948,
+   "mom": 0.7796786508521063,
+   "calculates": 0.9025062498798073,
+   "rolling": 0.7796786508521063,
+   "30": 0.638345833092948,
+   "window": 0.7796786508521063,
+   "providing": 0.9025062498798073,
+   "month": 0.7796786508521063,
+   "mo": 0.7796786508521063,
+   "comparison": 0.9025062498798073,
+   "metrics": 0.9025062498798073,
+   "past": 0.9025062498798073,
+   "days": 0.7796786508521063,
+   "percentage": 0.7796786508521063,
+   "change": 0.7796786508521063,
+   "compared": 0.7796786508521063,
+   "previous": 0.7796786508521063,
+   "uses": 0.9025062498798073,
+   "aggregation": 0.638345833092948,
+   "representing": 0.9025062498798073,
+   "dim": 0.638345833092948,
+   "listings": 0.5900947302271172,
+   "hosts": 0.5900947302271172,
+   "dimension": 0.638345833092948,
+   "listing": 0.3741854163060886,
+   "host": 0.3741854163060886,
+   "combines": 0.9025062498798073,
+   "joining": 0.9025062498798073,
+   "merges": 0.9025062498798073,
+   "updated": 0.638345833092948,
+   "timestamp": 0.9025062498798073,
+   "captured": 0.9025062498798073,
+   "unique": 0.638345833092948,
+   "created": 0.698774179657066,
+   "at": 0.5499267136431514,
+   "time": 0.7796786508521063,
+   "update": 0.9025062498798073,
+   "takes": 0.9025062498798073,
+   "greater": 0.9025062498798073,
+   "value": 0.9025062498798073,
+   "cte": 0.9025062498798073,
+   "name": 0.5900947302271172,
+   "typically": 0.9025062498798073,
+   "describe": 0.9025062498798073,
+   "property": 0.9025062498798073,
+   "room": 0.7796786508521063,
+   "type": 0.7796786508521063,
+   "being": 0.9025062498798073,
+   "offered": 0.9025062498798073,
+   "entire": 0.9025062498798073,
+   "home": 0.9025062498798073,
+   "private": 0.9025062498798073,
+   "etc": 0.9025062498798073,
+   "minimum": 0.698774179657066,
+   "nights": 0.698774179657066,
+   "night": 0.638345833092948,
+   "required": 0.9025062498798073,
+   "book": 0.9025062498798073,
+   "price": 0.7796786508521063,
+   "managing": 0.9025062498798073,
+   "is": 0.7796786508521063,
+   "superhost": 0.7796786508521063,
+   "indicates": 0.9025062498798073,
+   "whether": 0.9025062498798073,
+   "status": 0.9025062498798073,
+   "awarded": 0.9025062498798073,
+   "high": 0.9025062498798073,
+   "ratings": 0.9025062498798073,
+   "performance": 0.9025062498798073,
+   "uniquely": 0.9025062498798073,
+   "relationship": 0.9025062498798073,
+   "monthly": 0.9025062498798073,
+   "wow": 0.9025062498798073,
+   "fct": 0.9025062498798073,
+   "fact": 0.9025062498798073,
+   "raw": 0.698774179657066,
+   "dates": 0.9025062498798073,
+   "src": 0.698774179657066,
+   "source": 0.698774179657066,
+   "url": 0.9025062498798073,
+   "str": 0.9025062498798073,
+   "reviewer": 0.9025062498798073,
+   "text": 0.9025062498798073
+  },
+  "names": {
+   "daily_agg_reviews": [
+    "t:main.daily_agg_reviews"
+   ],
+   "review_totals": [
+    "c:main.daily_agg_reviews.review_totals",
+    "c:main.mom_agg_reviews.review_totals"
+   ],
+   "review_sentiment": [
+    "c:main.daily_agg_reviews.review_sentiment",
+    "c:main.mom_agg_reviews.review_sentiment",
+    "c:main.monthly_agg_reviews.review_sentiment",
+    "c:main.wow_agg_reviews.review_sentiment",
+    "c:main.fct_reviews.review_sentiment",
+    "c:main.src_reviews.review_sentiment"
+   ],
+   "review_date": [
+    "c:main.daily_agg_reviews.review_date",
+    "c:main.src_reviews.review_date"
+   ],
+   "date_sentiment_id": [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "c:main.monthly_agg_reviews.date_sentiment_id",
+    "c:main.wow_agg_reviews.date_sentiment_id"
+   ],
+   "mom_agg_reviews": [
+    "t:main.mom_agg_reviews"
+   ],
+   "aggregation_date": [
+    "c:main.mom_agg_reviews.aggregation_date"
+   ],
+   "mom": [
+    "c:main.mom_agg_reviews.mom"
+   ],
+   "dim_listings_hosts": [
+    "t:main.dim_listings_hosts"
+   ],
+   "created_at": [
+    "c:main.dim_listings_hosts.created_at",
+    "c:main.src_hosts.created_at",
+    "c:main.src_listings.created_at"
+   ],
+   "updated_at": [
+    "c:main.dim_listings_hosts.updated_at",
+    "c:main.src_hosts.updated_at",
+    "c:main.src_listings.updated_at"
+   ],
+   "listing_id": [
+    "c:main.dim_listings_hosts.listing_id",
+    "c:main.dim_listings.listing_id",
+    "c:main.fct_reviews.listing_id",
+    "c:main.src_listings.listing_id",
+    "c:main.src_reviews.listing_id"
+   ],
+   "listing_name": [
+    "c:main.dim_listings_hosts.listing_name",
+    "c:main.src_listings.listing_name"
+   ],
+   "room_type": [
+    "c:main.dim_listings_hosts.room_type",
+    "c:main.src_listings.room_type"
+   ],
+   "minimum_nights": [
+    "c:main.dim_listings_hosts.minimum_nights",
+    "c:main.dim_listings.minimum_nights",
+    "c:main.src_listings.minimum_nights"
+   ],
+   "price": [
+    "c:main.dim_listings_hosts.price"
+   ],
+   "host_id": [
+    "c:main.dim_listings_hosts.host_id",
+    "c:main.dim_hosts.host_id",
+    "c:main.src_hosts.host_id",
+    "c:main.src_listings.host_id"
+   ],
+   "host_name": [
+    "c:main.dim_listings_hosts.host_name",
+    "c:main.src_hosts.host_name"
+   ],
+   "is_superhost": [
+    "c:main.dim_listings_hosts.is_superhost",
+    "c:main.src_hosts.is_superhost"
+   ],
+   "listing_host_id": [
+    "c:main.dim_listings_hosts.listing_host_id"
+   ],
+   "monthly_agg_reviews": [
+    "t:main.monthly_agg_reviews"
+   ],
+   "wow_agg_reviews": [
+    "t:main.wow_agg_reviews"
+   ],
+   "dim_hosts": [
+    "t:main.dim_hosts"
+   ],
+   "dim_listings": [
+    "t:main.dim_listings"
+   ],
+   "fct_reviews": [
+    "t:main.fct_reviews"
+   ],
+   "raw_hosts": [
+    "t:main.raw_hosts"
+   ],
+   "raw_listings": [
+    "t:main.raw_listings"
+   ],
+   "raw_reviews": [
+    "t:main.raw_reviews"
+   ],
+   "dim_dates": [
+    "t:main.dim_dates"
+   ],
+   "src_hosts": [
+    "t:main.src_hosts"
+   ],
+   "src_listings": [
+    "t:main.src_listings"
+   ],
+   "listing_url": [
+    "c:main.src_listings.listing_url"
+   ],
+   "price_str": [
+    "c:main.src_listings.price_str"
+   ],
+   "src_reviews": [
+    "t:main.src_reviews"
+   ],
+   "reviewer_name": [
+    "c:main.src_reviews.reviewer_name"
+   ],
+   "review_text": [
+    "c:main.src_reviews.review_text"
+   ]
+  },
+  "names_nostop": {
+   "host_id": [
+    "c:main.dim_listings_hosts.listing_host_id"
+   ]
+  },
+  "values": {
+   "positive": [
+    "c:main.daily_agg_reviews.review_sentiment",
+    "c:main.mom_agg_reviews.review_sentiment",
+    "c:main.monthly_agg_reviews.review_sentiment",
+    "c:main.wow_agg_reviews.review_sentiment",
+    "c:main.fct_reviews.review_sentiment"
+   ],
+   "negative": [
+    "c:main.daily_agg_reviews.review_sentiment",
+    "c:main.mom_agg_reviews.review_sentiment",
+    "c:main.monthly_agg_reviews.review_sentiment",
+    "c:main.wow_agg_reviews.review_sentiment",
+    "c:main.fct_reviews.review_sentiment"
+   ],
+   "neutral": [
+    "c:main.daily_agg_reviews.review_sentiment",
+    "c:main.mom_agg_reviews.review_sentiment",
+    "c:main.monthly_agg_reviews.review_sentiment",
+    "c:main.wow_agg_reviews.review_sentiment",
+    "c:main.fct_reviews.review_sentiment"
+   ]
+  },
+  "value_grams": {
+   "positive": [
+    [
+     "positive",
+     "c:main.daily_agg_reviews.review_sentiment"
+    ],
+    [
+     "positive",
+     "c:main.mom_agg_reviews.review_sentiment"
+    ],
+    [
+     "positive",
+     "c:main.monthly_agg_reviews.review_sentiment"
+    ],
+    [
+     "positive",
+     "c:main.wow_agg_reviews.review_sentiment"
+    ],
+    [
+     "positive",
+     "c:main.fct_reviews.review_sentiment"
+    ]
+   ],
+   "negative": [
+    [
+     "negative",
+     "c:main.daily_agg_reviews.review_sentiment"
+    ],
+    [
+     "negative",
+     "c:main.mom_agg_reviews.review_sentiment"
+    ],
+    [
+     "negative",
+     "c:main.monthly_agg_reviews.review_sentiment"
+    ],
+    [
+     "negative",
+     "c:main.wow_agg_reviews.review_sentiment"
+    ],
+    [
+     "negative",
+     "c:main.fct_reviews.review_sentiment"
+    ]
+   ],
+   "neutral": [
+    [
+     "neutral",
+     "c:main.daily_agg_reviews.review_sentiment"
+    ],
+    [
+     "neutral",
+     "c:main.mom_agg_reviews.review_sentiment"
+    ],
+    [
+     "neutral",
+     "c:main.monthly_agg_reviews.review_sentiment"
+    ],
+    [
+     "neutral",
+     "c:main.wow_agg_reviews.review_sentiment"
+    ],
+    [
+     "neutral",
+     "c:main.fct_reviews.review_sentiment"
+    ]
+   ]
+  },
+  "long_values": {},
+  "phrases": {},
+  "vocab": [
+   "30",
+   "agg",
+   "aggregate",
+   "aggregates",
+   "aggregation",
+   "at",
+   "awarded",
+   "being",
+   "book",
+   "calculates",
+   "captured",
+   "change",
+   "combination",
+   "combines",
+   "compared",
+   "comparison",
+   "count",
+   "created",
+   "cte",
+   "current",
+   "daily",
+   "data",
+   "date",
+   "dates",
+   "day",
+   "days",
+   "describe",
+   "dim",
+   "dimension",
+   "ensure",
+   "ensuring",
+   "entire",
+   "etc",
+   "fact",
+   "fct",
+   "generated",
+   "greater",
+   "high",
+   "home",
+   "host",
+   "hosts",
+   "id",
+   "identifier",
+   "incremental",
+   "incrementally",
+   "indicates",
+   "is",
+   "joining",
+   "key",
+   "listing",
+   "listings",
+   "managing",
+   "merges",
+   "metrics",
+   "minimum",
+   "mo",
+   "model",
+   "mom",
+   "month",
+   "monthly",
+   "name",
+   "negative",
+   "neutral",
+   "new",
+   "night",
+   "nights",
+   "number",
+   "offered",
+   "past",
+   "percentage",
+   "performance",
+   "positive",
+   "previous",
+   "price",
+   "private",
+   "processes",
+   "property",
+   "providing",
+   "ratings",
+   "raw",
+   "relationship",
+   "representing",
+   "required",
+   "review",
+   "reviewer",
+   "reviews",
+   "rolling",
+   "room",
+   "running",
+   "sentiment",
+   "source",
+   "specific",
+   "src",
+   "status",
+   "str",
+   "submitted",
+   "superhost",
+   "surrogate",
+   "takes",
+   "text",
+   "time",
+   "timestamp",
+   "total",
+   "totals",
+   "type",
+   "typically",
+   "unique",
+   "uniquely",
+   "uniqueness",
+   "update",
+   "updated",
+   "url",
+   "uses",
+   "value",
+   "whether",
+   "window",
+   "wow"
+  ]
+ },
+ "graph_with_tokens": {
+  "nodes": [
+   [
+    "t:main.daily_agg_reviews",
+    {
+     "ntype": "table",
+     "fqn": "main.daily_agg_reviews",
+     "name": "daily_agg_reviews"
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_totals",
+    {
+     "ntype": "column",
+     "fqn": "main.daily_agg_reviews",
+     "name": "review_totals",
+     "table": "t:main.daily_agg_reviews"
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_sentiment",
+    {
+     "ntype": "column",
+     "fqn": "main.daily_agg_reviews",
+     "name": "review_sentiment",
+     "table": "t:main.daily_agg_reviews"
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_date",
+    {
+     "ntype": "column",
+     "fqn": "main.daily_agg_reviews",
+     "name": "review_date",
+     "table": "t:main.daily_agg_reviews"
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    {
+     "ntype": "column",
+     "fqn": "main.daily_agg_reviews",
+     "name": "date_sentiment_id",
+     "table": "t:main.daily_agg_reviews"
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    {
+     "ntype": "table",
+     "fqn": "main.mom_agg_reviews",
+     "name": "mom_agg_reviews"
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    {
+     "ntype": "column",
+     "fqn": "main.mom_agg_reviews",
+     "name": "review_totals",
+     "table": "t:main.mom_agg_reviews"
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_sentiment",
+    {
+     "ntype": "column",
+     "fqn": "main.mom_agg_reviews",
+     "name": "review_sentiment",
+     "table": "t:main.mom_agg_reviews"
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.aggregation_date",
+    {
+     "ntype": "column",
+     "fqn": "main.mom_agg_reviews",
+     "name": "aggregation_date",
+     "table": "t:main.mom_agg_reviews"
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    {
+     "ntype": "column",
+     "fqn": "main.mom_agg_reviews",
+     "name": "mom",
+     "table": "t:main.mom_agg_reviews"
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    {
+     "ntype": "column",
+     "fqn": "main.mom_agg_reviews",
+     "name": "date_sentiment_id",
+     "table": "t:main.mom_agg_reviews"
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    {
+     "ntype": "table",
+     "fqn": "main.dim_listings_hosts",
+     "name": "dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.created_at",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "created_at",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "updated_at",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_id",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "listing_id",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_name",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "listing_name",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.room_type",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "room_type",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.minimum_nights",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "minimum_nights",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.price",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "price",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_id",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "host_id",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_name",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "host_name",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "is_superhost",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings_hosts",
+     "name": "listing_host_id",
+     "table": "t:main.dim_listings_hosts"
+    }
+   ],
+   [
+    "t:main.monthly_agg_reviews",
+    {
+     "ntype": "table",
+     "fqn": "main.monthly_agg_reviews",
+     "name": "monthly_agg_reviews"
+    }
+   ],
+   [
+    "c:main.monthly_agg_reviews.date_sentiment_id",
+    {
+     "ntype": "column",
+     "fqn": "main.monthly_agg_reviews",
+     "name": "date_sentiment_id",
+     "table": "t:main.monthly_agg_reviews"
+    }
+   ],
+   [
+    "c:main.monthly_agg_reviews.review_sentiment",
+    {
+     "ntype": "column",
+     "fqn": "main.monthly_agg_reviews",
+     "name": "review_sentiment",
+     "table": "t:main.monthly_agg_reviews"
+    }
+   ],
+   [
+    "t:main.wow_agg_reviews",
+    {
+     "ntype": "table",
+     "fqn": "main.wow_agg_reviews",
+     "name": "wow_agg_reviews"
+    }
+   ],
+   [
+    "c:main.wow_agg_reviews.date_sentiment_id",
+    {
+     "ntype": "column",
+     "fqn": "main.wow_agg_reviews",
+     "name": "date_sentiment_id",
+     "table": "t:main.wow_agg_reviews"
+    }
+   ],
+   [
+    "c:main.wow_agg_reviews.review_sentiment",
+    {
+     "ntype": "column",
+     "fqn": "main.wow_agg_reviews",
+     "name": "review_sentiment",
+     "table": "t:main.wow_agg_reviews"
+    }
+   ],
+   [
+    "t:main.dim_hosts",
+    {
+     "ntype": "table",
+     "fqn": "main.dim_hosts",
+     "name": "dim_hosts"
+    }
+   ],
+   [
+    "c:main.dim_hosts.host_id",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_hosts",
+     "name": "host_id",
+     "table": "t:main.dim_hosts"
+    }
+   ],
+   [
+    "t:main.dim_listings",
+    {
+     "ntype": "table",
+     "fqn": "main.dim_listings",
+     "name": "dim_listings"
+    }
+   ],
+   [
+    "c:main.dim_listings.listing_id",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings",
+     "name": "listing_id",
+     "table": "t:main.dim_listings"
+    }
+   ],
+   [
+    "c:main.dim_listings.minimum_nights",
+    {
+     "ntype": "column",
+     "fqn": "main.dim_listings",
+     "name": "minimum_nights",
+     "table": "t:main.dim_listings"
+    }
+   ],
+   [
+    "t:main.fct_reviews",
+    {
+     "ntype": "table",
+     "fqn": "main.fct_reviews",
+     "name": "fct_reviews"
+    }
+   ],
+   [
+    "c:main.fct_reviews.review_sentiment",
+    {
+     "ntype": "column",
+     "fqn": "main.fct_reviews",
+     "name": "review_sentiment",
+     "table": "t:main.fct_reviews"
+    }
+   ],
+   [
+    "c:main.fct_reviews.listing_id",
+    {
+     "ntype": "column",
+     "fqn": "main.fct_reviews",
+     "name": "listing_id",
+     "table": "t:main.fct_reviews"
+    }
+   ],
+   [
+    "t:main.raw_hosts",
+    {
+     "ntype": "table",
+     "fqn": "main.raw_hosts",
+     "name": "raw_hosts"
+    }
+   ],
+   [
+    "t:main.raw_listings",
+    {
+     "ntype": "table",
+     "fqn": "main.raw_listings",
+     "name": "raw_listings"
+    }
+   ],
+   [
+    "t:main.raw_reviews",
+    {
+     "ntype": "table",
+     "fqn": "main.raw_reviews",
+     "name": "raw_reviews"
+    }
+   ],
+   [
+    "t:main.dim_dates",
+    {
+     "ntype": "table",
+     "fqn": "main.dim_dates",
+     "name": "dim_dates"
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    {
+     "ntype": "table",
+     "fqn": "main.src_hosts",
+     "name": "src_hosts"
+    }
+   ],
+   [
+    "c:main.src_hosts.host_id",
+    {
+     "ntype": "column",
+     "fqn": "main.src_hosts",
+     "name": "host_id",
+     "table": "t:main.src_hosts"
+    }
+   ],
+   [
+    "c:main.src_hosts.host_name",
+    {
+     "ntype": "column",
+     "fqn": "main.src_hosts",
+     "name": "host_name",
+     "table": "t:main.src_hosts"
+    }
+   ],
+   [
+    "c:main.src_hosts.is_superhost",
+    {
+     "ntype": "column",
+     "fqn": "main.src_hosts",
+     "name": "is_superhost",
+     "table": "t:main.src_hosts"
+    }
+   ],
+   [
+    "c:main.src_hosts.created_at",
+    {
+     "ntype": "column",
+     "fqn": "main.src_hosts",
+     "name": "created_at",
+     "table": "t:main.src_hosts"
+    }
+   ],
+   [
+    "c:main.src_hosts.updated_at",
+    {
+     "ntype": "column",
+     "fqn": "main.src_hosts",
+     "name": "updated_at",
+     "table": "t:main.src_hosts"
+    }
+   ],
+   [
+    "t:main.src_listings",
+    {
+     "ntype": "table",
+     "fqn": "main.src_listings",
+     "name": "src_listings"
+    }
+   ],
+   [
+    "c:main.src_listings.listing_id",
+    {
+     "ntype": "column",
+     "fqn": "main.src_listings",
+     "name": "listing_id",
+     "table": "t:main.src_listings"
+    }
+   ],
+   [
+    "c:main.src_listings.listing_name",
+    {
+     "ntype": "column",
+     "fqn": "main.src_listings",
+     "name": "listing_name",
+     "table": "t:main.src_listings"
+    }
+   ],
+   [
+    "c:main.src_listings.listing_url",
+    {
+     "ntype": "column",
+     "fqn": "main.src_listings",
+     "name": "listing_url",
+     "table": "t:main.src_listings"
+    }
+   ],
+   [
+    "c:main.src_listings.room_type",
+    {
+     "ntype": "column",
+     "fqn": "main.src_listings",
+     "name": "room_type",
+     "table": "t:main.src_listings"
+    }
+   ],
+   [
+    "c:main.src_listings.minimum_nights",
+    {
+     "ntype": "column",
+     "fqn": "main.src_listings",
+     "name": "minimum_nights",
+     "table": "t:main.src_listings"
+    }
+   ],
+   [
+    "c:main.src_listings.host_id",
+    {
+     "ntype": "column",
+     "fqn": "main.src_listings",
+     "name": "host_id",
+     "table": "t:main.src_listings"
+    }
+   ],
+   [
+    "c:main.src_listings.price_str",
+    {
+     "ntype": "column",
+     "fqn": "main.src_listings",
+     "name": "price_str",
+     "table": "t:main.src_listings"
+    }
+   ],
+   [
+    "c:main.src_listings.created_at",
+    {
+     "ntype": "column",
+     "fqn": "main.src_listings",
+     "name": "created_at",
+     "table": "t:main.src_listings"
+    }
+   ],
+   [
+    "c:main.src_listings.updated_at",
+    {
+     "ntype": "column",
+     "fqn": "main.src_listings",
+     "name": "updated_at",
+     "table": "t:main.src_listings"
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    {
+     "ntype": "table",
+     "fqn": "main.src_reviews",
+     "name": "src_reviews"
+    }
+   ],
+   [
+    "c:main.src_reviews.listing_id",
+    {
+     "ntype": "column",
+     "fqn": "main.src_reviews",
+     "name": "listing_id",
+     "table": "t:main.src_reviews"
+    }
+   ],
+   [
+    "c:main.src_reviews.review_date",
+    {
+     "ntype": "column",
+     "fqn": "main.src_reviews",
+     "name": "review_date",
+     "table": "t:main.src_reviews"
+    }
+   ],
+   [
+    "c:main.src_reviews.reviewer_name",
+    {
+     "ntype": "column",
+     "fqn": "main.src_reviews",
+     "name": "reviewer_name",
+     "table": "t:main.src_reviews"
+    }
+   ],
+   [
+    "c:main.src_reviews.review_text",
+    {
+     "ntype": "column",
+     "fqn": "main.src_reviews",
+     "name": "review_text",
+     "table": "t:main.src_reviews"
+    }
+   ],
+   [
+    "c:main.src_reviews.review_sentiment",
+    {
+     "ntype": "column",
+     "fqn": "main.src_reviews",
+     "name": "review_sentiment",
+     "table": "t:main.src_reviews"
+    }
+   ],
+   [
+    "w:daily",
+    {
+     "ntype": "token",
+     "name": "daily"
+    }
+   ],
+   [
+    "w:agg",
+    {
+     "ntype": "token",
+     "name": "agg"
+    }
+   ],
+   [
+    "w:reviews",
+    {
+     "ntype": "token",
+     "name": "reviews"
+    }
+   ],
+   [
+    "w:aggregate",
+    {
+     "ntype": "token",
+     "name": "aggregate"
+    }
+   ],
+   [
+    "w:review",
+    {
+     "ntype": "token",
+     "name": "review"
+    }
+   ],
+   [
+    "w:model",
+    {
+     "ntype": "token",
+     "name": "model"
+    }
+   ],
+   [
+    "w:aggregates",
+    {
+     "ntype": "token",
+     "name": "aggregates"
+    }
+   ],
+   [
+    "w:total",
+    {
+     "ntype": "token",
+     "name": "total"
+    }
+   ],
+   [
+    "w:number",
+    {
+     "ntype": "token",
+     "name": "number"
+    }
+   ],
+   [
+    "w:sentiment",
+    {
+     "ntype": "token",
+     "name": "sentiment"
+    }
+   ],
+   [
+    "w:day",
+    {
+     "ntype": "token",
+     "name": "day"
+    }
+   ],
+   [
+    "w:incremental",
+    {
+     "ntype": "token",
+     "name": "incremental"
+    }
+   ],
+   [
+    "w:processes",
+    {
+     "ntype": "token",
+     "name": "processes"
+    }
+   ],
+   [
+    "w:new",
+    {
+     "ntype": "token",
+     "name": "new"
+    }
+   ],
+   [
+    "w:data",
+    {
+     "ntype": "token",
+     "name": "data"
+    }
+   ],
+   [
+    "w:surrogate",
+    {
+     "ntype": "token",
+     "name": "surrogate"
+    }
+   ],
+   [
+    "w:key",
+    {
+     "ntype": "token",
+     "name": "key"
+    }
+   ],
+   [
+    "w:generated",
+    {
+     "ntype": "token",
+     "name": "generated"
+    }
+   ],
+   [
+    "w:date",
+    {
+     "ntype": "token",
+     "name": "date"
+    }
+   ],
+   [
+    "w:ensure",
+    {
+     "ntype": "token",
+     "name": "ensure"
+    }
+   ],
+   [
+    "w:uniqueness",
+    {
+     "ntype": "token",
+     "name": "uniqueness"
+    }
+   ],
+   [
+    "w:current",
+    {
+     "ntype": "token",
+     "name": "current"
+    }
+   ],
+   [
+    "w:running",
+    {
+     "ntype": "token",
+     "name": "running"
+    }
+   ],
+   [
+    "w:incrementally",
+    {
+     "ntype": "token",
+     "name": "incrementally"
+    }
+   ],
+   [
+    "w:totals",
+    {
+     "ntype": "token",
+     "name": "totals"
+    }
+   ],
+   [
+    "w:count",
+    {
+     "ntype": "token",
+     "name": "count"
+    }
+   ],
+   [
+    "w:specific",
+    {
+     "ntype": "token",
+     "name": "specific"
+    }
+   ],
+   [
+    "w:positive",
+    {
+     "ntype": "token",
+     "name": "positive"
+    }
+   ],
+   [
+    "w:neutral",
+    {
+     "ntype": "token",
+     "name": "neutral"
+    }
+   ],
+   [
+    "w:negative",
+    {
+     "ntype": "token",
+     "name": "negative"
+    }
+   ],
+   [
+    "w:submitted",
+    {
+     "ntype": "token",
+     "name": "submitted"
+    }
+   ],
+   [
+    "w:id",
+    {
+     "ntype": "token",
+     "name": "id"
+    }
+   ],
+   [
+    "w:identifier",
+    {
+     "ntype": "token",
+     "name": "identifier"
+    }
+   ],
+   [
+    "w:ensuring",
+    {
+     "ntype": "token",
+     "name": "ensuring"
+    }
+   ],
+   [
+    "w:combination",
+    {
+     "ntype": "token",
+     "name": "combination"
+    }
+   ],
+   [
+    "w:mom",
+    {
+     "ntype": "token",
+     "name": "mom"
+    }
+   ],
+   [
+    "w:calculates",
+    {
+     "ntype": "token",
+     "name": "calculates"
+    }
+   ],
+   [
+    "w:rolling",
+    {
+     "ntype": "token",
+     "name": "rolling"
+    }
+   ],
+   [
+    "w:30",
+    {
+     "ntype": "token",
+     "name": "30"
+    }
+   ],
+   [
+    "w:window",
+    {
+     "ntype": "token",
+     "name": "window"
+    }
+   ],
+   [
+    "w:providing",
+    {
+     "ntype": "token",
+     "name": "providing"
+    }
+   ],
+   [
+    "w:month",
+    {
+     "ntype": "token",
+     "name": "month"
+    }
+   ],
+   [
+    "w:mo",
+    {
+     "ntype": "token",
+     "name": "mo"
+    }
+   ],
+   [
+    "w:comparison",
+    {
+     "ntype": "token",
+     "name": "comparison"
+    }
+   ],
+   [
+    "w:metrics",
+    {
+     "ntype": "token",
+     "name": "metrics"
+    }
+   ],
+   [
+    "w:past",
+    {
+     "ntype": "token",
+     "name": "past"
+    }
+   ],
+   [
+    "w:days",
+    {
+     "ntype": "token",
+     "name": "days"
+    }
+   ],
+   [
+    "w:percentage",
+    {
+     "ntype": "token",
+     "name": "percentage"
+    }
+   ],
+   [
+    "w:change",
+    {
+     "ntype": "token",
+     "name": "change"
+    }
+   ],
+   [
+    "w:compared",
+    {
+     "ntype": "token",
+     "name": "compared"
+    }
+   ],
+   [
+    "w:previous",
+    {
+     "ntype": "token",
+     "name": "previous"
+    }
+   ],
+   [
+    "w:uses",
+    {
+     "ntype": "token",
+     "name": "uses"
+    }
+   ],
+   [
+    "w:aggregation",
+    {
+     "ntype": "token",
+     "name": "aggregation"
+    }
+   ],
+   [
+    "w:representing",
+    {
+     "ntype": "token",
+     "name": "representing"
+    }
+   ],
+   [
+    "w:dim",
+    {
+     "ntype": "token",
+     "name": "dim"
+    }
+   ],
+   [
+    "w:listings",
+    {
+     "ntype": "token",
+     "name": "listings"
+    }
+   ],
+   [
+    "w:hosts",
+    {
+     "ntype": "token",
+     "name": "hosts"
+    }
+   ],
+   [
+    "w:dimension",
+    {
+     "ntype": "token",
+     "name": "dimension"
+    }
+   ],
+   [
+    "w:listing",
+    {
+     "ntype": "token",
+     "name": "listing"
+    }
+   ],
+   [
+    "w:host",
+    {
+     "ntype": "token",
+     "name": "host"
+    }
+   ],
+   [
+    "w:combines",
+    {
+     "ntype": "token",
+     "name": "combines"
+    }
+   ],
+   [
+    "w:joining",
+    {
+     "ntype": "token",
+     "name": "joining"
+    }
+   ],
+   [
+    "w:merges",
+    {
+     "ntype": "token",
+     "name": "merges"
+    }
+   ],
+   [
+    "w:updated",
+    {
+     "ntype": "token",
+     "name": "updated"
+    }
+   ],
+   [
+    "w:timestamp",
+    {
+     "ntype": "token",
+     "name": "timestamp"
+    }
+   ],
+   [
+    "w:captured",
+    {
+     "ntype": "token",
+     "name": "captured"
+    }
+   ],
+   [
+    "w:unique",
+    {
+     "ntype": "token",
+     "name": "unique"
+    }
+   ],
+   [
+    "w:created",
+    {
+     "ntype": "token",
+     "name": "created"
+    }
+   ],
+   [
+    "w:at",
+    {
+     "ntype": "token",
+     "name": "at"
+    }
+   ],
+   [
+    "w:time",
+    {
+     "ntype": "token",
+     "name": "time"
+    }
+   ],
+   [
+    "w:update",
+    {
+     "ntype": "token",
+     "name": "update"
+    }
+   ],
+   [
+    "w:takes",
+    {
+     "ntype": "token",
+     "name": "takes"
+    }
+   ],
+   [
+    "w:greater",
+    {
+     "ntype": "token",
+     "name": "greater"
+    }
+   ],
+   [
+    "w:value",
+    {
+     "ntype": "token",
+     "name": "value"
+    }
+   ],
+   [
+    "w:cte",
+    {
+     "ntype": "token",
+     "name": "cte"
+    }
+   ],
+   [
+    "w:name",
+    {
+     "ntype": "token",
+     "name": "name"
+    }
+   ],
+   [
+    "w:typically",
+    {
+     "ntype": "token",
+     "name": "typically"
+    }
+   ],
+   [
+    "w:describe",
+    {
+     "ntype": "token",
+     "name": "describe"
+    }
+   ],
+   [
+    "w:property",
+    {
+     "ntype": "token",
+     "name": "property"
+    }
+   ],
+   [
+    "w:room",
+    {
+     "ntype": "token",
+     "name": "room"
+    }
+   ],
+   [
+    "w:type",
+    {
+     "ntype": "token",
+     "name": "type"
+    }
+   ],
+   [
+    "w:being",
+    {
+     "ntype": "token",
+     "name": "being"
+    }
+   ],
+   [
+    "w:offered",
+    {
+     "ntype": "token",
+     "name": "offered"
+    }
+   ],
+   [
+    "w:entire",
+    {
+     "ntype": "token",
+     "name": "entire"
+    }
+   ],
+   [
+    "w:home",
+    {
+     "ntype": "token",
+     "name": "home"
+    }
+   ],
+   [
+    "w:private",
+    {
+     "ntype": "token",
+     "name": "private"
+    }
+   ],
+   [
+    "w:etc",
+    {
+     "ntype": "token",
+     "name": "etc"
+    }
+   ],
+   [
+    "w:minimum",
+    {
+     "ntype": "token",
+     "name": "minimum"
+    }
+   ],
+   [
+    "w:nights",
+    {
+     "ntype": "token",
+     "name": "nights"
+    }
+   ],
+   [
+    "w:night",
+    {
+     "ntype": "token",
+     "name": "night"
+    }
+   ],
+   [
+    "w:required",
+    {
+     "ntype": "token",
+     "name": "required"
+    }
+   ],
+   [
+    "w:book",
+    {
+     "ntype": "token",
+     "name": "book"
+    }
+   ],
+   [
+    "w:price",
+    {
+     "ntype": "token",
+     "name": "price"
+    }
+   ],
+   [
+    "w:managing",
+    {
+     "ntype": "token",
+     "name": "managing"
+    }
+   ],
+   [
+    "w:is",
+    {
+     "ntype": "token",
+     "name": "is"
+    }
+   ],
+   [
+    "w:superhost",
+    {
+     "ntype": "token",
+     "name": "superhost"
+    }
+   ],
+   [
+    "w:indicates",
+    {
+     "ntype": "token",
+     "name": "indicates"
+    }
+   ],
+   [
+    "w:whether",
+    {
+     "ntype": "token",
+     "name": "whether"
+    }
+   ],
+   [
+    "w:status",
+    {
+     "ntype": "token",
+     "name": "status"
+    }
+   ],
+   [
+    "w:awarded",
+    {
+     "ntype": "token",
+     "name": "awarded"
+    }
+   ],
+   [
+    "w:high",
+    {
+     "ntype": "token",
+     "name": "high"
+    }
+   ],
+   [
+    "w:ratings",
+    {
+     "ntype": "token",
+     "name": "ratings"
+    }
+   ],
+   [
+    "w:performance",
+    {
+     "ntype": "token",
+     "name": "performance"
+    }
+   ],
+   [
+    "w:uniquely",
+    {
+     "ntype": "token",
+     "name": "uniquely"
+    }
+   ],
+   [
+    "w:relationship",
+    {
+     "ntype": "token",
+     "name": "relationship"
+    }
+   ],
+   [
+    "w:monthly",
+    {
+     "ntype": "token",
+     "name": "monthly"
+    }
+   ],
+   [
+    "w:wow",
+    {
+     "ntype": "token",
+     "name": "wow"
+    }
+   ],
+   [
+    "w:fct",
+    {
+     "ntype": "token",
+     "name": "fct"
+    }
+   ],
+   [
+    "w:fact",
+    {
+     "ntype": "token",
+     "name": "fact"
+    }
+   ],
+   [
+    "w:raw",
+    {
+     "ntype": "token",
+     "name": "raw"
+    }
+   ],
+   [
+    "w:dates",
+    {
+     "ntype": "token",
+     "name": "dates"
+    }
+   ],
+   [
+    "w:src",
+    {
+     "ntype": "token",
+     "name": "src"
+    }
+   ],
+   [
+    "w:source",
+    {
+     "ntype": "token",
+     "name": "source"
+    }
+   ],
+   [
+    "w:url",
+    {
+     "ntype": "token",
+     "name": "url"
+    }
+   ],
+   [
+    "w:str",
+    {
+     "ntype": "token",
+     "name": "str"
+    }
+   ],
+   [
+    "w:reviewer",
+    {
+     "ntype": "token",
+     "name": "reviewer"
+    }
+   ],
+   [
+    "w:text",
+    {
+     "ntype": "token",
+     "name": "text"
+    }
+   ]
+  ],
+  "edges": [
+   [
+    "t:main.daily_agg_reviews",
+    "c:main.daily_agg_reviews.review_totals",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "c:main.daily_agg_reviews.review_sentiment",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "c:main.daily_agg_reviews.review_date",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:daily",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:agg",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:reviews",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:aggregate",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:model",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:aggregates",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:total",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:number",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:day",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:incremental",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:processes",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:new",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:data",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:surrogate",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:key",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:generated",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:ensure",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:uniqueness",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:current",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:running",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.daily_agg_reviews",
+    "w:incrementally",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_totals",
+    "w:reviews",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_totals",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_totals",
+    "w:total",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_totals",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_totals",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_totals",
+    "w:totals",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_totals",
+    "w:count",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_totals",
+    "w:specific",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_sentiment",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_sentiment",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_sentiment",
+    "w:positive",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_sentiment",
+    "w:neutral",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_sentiment",
+    "w:negative",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_date",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_date",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.review_date",
+    "w:submitted",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:surrogate",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:key",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:generated",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:uniqueness",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:ensuring",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.daily_agg_reviews.date_sentiment_id",
+    "w:combination",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "c:main.mom_agg_reviews.review_totals",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "c:main.mom_agg_reviews.review_sentiment",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "c:main.mom_agg_reviews.aggregation_date",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "c:main.mom_agg_reviews.mom",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:agg",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:reviews",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:aggregate",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:model",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:aggregates",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:total",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:number",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:day",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:data",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:surrogate",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:key",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:generated",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:ensure",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:uniqueness",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:totals",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:mom",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:calculates",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:rolling",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:30",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:window",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:providing",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:month",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:mo",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:comparison",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:metrics",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:past",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:days",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:percentage",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:change",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:compared",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:previous",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:uses",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.mom_agg_reviews",
+    "w:aggregation",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:reviews",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:total",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:day",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:totals",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:count",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:specific",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:30",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:window",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_totals",
+    "w:aggregation",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_sentiment",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_sentiment",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_sentiment",
+    "w:positive",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_sentiment",
+    "w:neutral",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.review_sentiment",
+    "w:negative",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.aggregation_date",
+    "w:day",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.aggregation_date",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.aggregation_date",
+    "w:rolling",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.aggregation_date",
+    "w:30",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.aggregation_date",
+    "w:aggregation",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.aggregation_date",
+    "w:representing",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:totals",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:mom",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:30",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:month",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:mo",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:days",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:percentage",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:change",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:compared",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.mom",
+    "w:previous",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:surrogate",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:key",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:generated",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:uniqueness",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:ensuring",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:combination",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.mom_agg_reviews.date_sentiment_id",
+    "w:aggregation",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.created_at",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.updated_at",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.listing_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.listing_name",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.room_type",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.minimum_nights",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.price",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.host_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.host_name",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.is_superhost",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "c:main.dim_listings_hosts.listing_host_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "t:main.dim_hosts",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "relationship_test",
+       "from_table": "main.dim_listings_hosts",
+       "to_table": "main.dim_hosts",
+       "from_columns": [
+        "HOST_ID"
+       ],
+       "to_columns": [
+        "HOST_ID"
+       ],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.0,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "t:main.dim_listings",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "relationship_test",
+       "from_table": "main.dim_listings_hosts",
+       "to_table": "main.dim_listings",
+       "from_columns": [
+        "LISTING_ID"
+       ],
+       "to_columns": [
+        "LISTING_ID"
+       ],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.0,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "t:main.fct_reviews",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "relationship_test",
+       "from_table": "main.fct_reviews",
+       "to_table": "main.dim_listings_hosts",
+       "from_columns": [
+        "LISTING_ID"
+       ],
+       "to_columns": [
+        "LISTING_ID"
+       ],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.0,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:model",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:data",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:surrogate",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:key",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:generated",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:ensuring",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:combination",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:dim",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:listings",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:hosts",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:dimension",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:combines",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:joining",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:merges",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:updated",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:timestamp",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:captured",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "w:unique",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.created_at",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.created_at",
+    "w:created",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.created_at",
+    "w:at",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.created_at",
+    "w:time",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:listings",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:hosts",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:updated",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:at",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:time",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:update",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:takes",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:greater",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:value",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.updated_at",
+    "w:cte",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_id",
+    "c:main.dim_listings.listing_id",
+    {
+     "etype": "fk_col",
+     "weight": 0.8,
+     "affinity": 0.8
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_id",
+    "c:main.fct_reviews.listing_id",
+    {
+     "etype": "fk_col",
+     "weight": 0.8,
+     "affinity": 0.8
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_id",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_id",
+    "w:unique",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_name",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_name",
+    "w:name",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_name",
+    "w:typically",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_name",
+    "w:describe",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_name",
+    "w:property",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.room_type",
+    "w:room",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.room_type",
+    "w:type",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.room_type",
+    "w:being",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.room_type",
+    "w:offered",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.room_type",
+    "w:entire",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.room_type",
+    "w:home",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.room_type",
+    "w:private",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.room_type",
+    "w:etc",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.minimum_nights",
+    "w:number",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.minimum_nights",
+    "w:minimum",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.minimum_nights",
+    "w:nights",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.minimum_nights",
+    "w:night",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.minimum_nights",
+    "w:required",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.minimum_nights",
+    "w:book",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.price",
+    "w:night",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.price",
+    "w:price",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_id",
+    "c:main.dim_hosts.host_id",
+    {
+     "etype": "fk_col",
+     "weight": 0.8,
+     "affinity": 0.8
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_id",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_id",
+    "w:unique",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_name",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_name",
+    "w:name",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.host_name",
+    "w:managing",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:is",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:superhost",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:indicates",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:whether",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:status",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:awarded",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:high",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:ratings",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.is_superhost",
+    "w:performance",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:surrogate",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:key",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:generated",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:combination",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:unique",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:uniquely",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "c:main.dim_listings_hosts.listing_host_id",
+    "w:relationship",
+    {
+     "etype": "mention",
+     "weight": 0.105,
+     "affinity": 0.105
+    }
+   ],
+   [
+    "t:main.monthly_agg_reviews",
+    "c:main.monthly_agg_reviews.date_sentiment_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.monthly_agg_reviews",
+    "c:main.monthly_agg_reviews.review_sentiment",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.monthly_agg_reviews",
+    "t:main.fct_reviews",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "lineage",
+       "from_table": "main.fct_reviews",
+       "to_table": "main.monthly_agg_reviews",
+       "from_columns": [],
+       "to_columns": [],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.6,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.monthly_agg_reviews",
+    "w:agg",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.monthly_agg_reviews",
+    "w:reviews",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.monthly_agg_reviews",
+    "w:aggregate",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.monthly_agg_reviews",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.monthly_agg_reviews",
+    "w:monthly",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.monthly_agg_reviews.date_sentiment_id",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.monthly_agg_reviews.date_sentiment_id",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.monthly_agg_reviews.date_sentiment_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.monthly_agg_reviews.date_sentiment_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.monthly_agg_reviews.review_sentiment",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.monthly_agg_reviews.review_sentiment",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.wow_agg_reviews",
+    "c:main.wow_agg_reviews.date_sentiment_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.wow_agg_reviews",
+    "c:main.wow_agg_reviews.review_sentiment",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.wow_agg_reviews",
+    "t:main.fct_reviews",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "lineage",
+       "from_table": "main.fct_reviews",
+       "to_table": "main.wow_agg_reviews",
+       "from_columns": [],
+       "to_columns": [],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.6,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.wow_agg_reviews",
+    "w:agg",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.wow_agg_reviews",
+    "w:reviews",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.wow_agg_reviews",
+    "w:aggregate",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.wow_agg_reviews",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.wow_agg_reviews",
+    "w:wow",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.wow_agg_reviews.date_sentiment_id",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.wow_agg_reviews.date_sentiment_id",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.wow_agg_reviews.date_sentiment_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.wow_agg_reviews.date_sentiment_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.wow_agg_reviews.review_sentiment",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.wow_agg_reviews.review_sentiment",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_hosts",
+    "c:main.dim_hosts.host_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_hosts",
+    "t:main.src_hosts",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "lineage",
+       "from_table": "main.src_hosts",
+       "to_table": "main.dim_hosts",
+       "from_columns": [],
+       "to_columns": [],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.6,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.dim_hosts",
+    "w:dim",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_hosts",
+    "w:hosts",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_hosts",
+    "w:dimension",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_hosts",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_hosts.host_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_hosts.host_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_hosts.host_id",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings",
+    "c:main.dim_listings.listing_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings",
+    "c:main.dim_listings.minimum_nights",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.dim_listings",
+    "t:main.src_listings",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "lineage",
+       "from_table": "main.src_listings",
+       "to_table": "main.dim_listings",
+       "from_columns": [],
+       "to_columns": [],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.6,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.dim_listings",
+    "t:main.fct_reviews",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "relationship_test",
+       "from_table": "main.fct_reviews",
+       "to_table": "main.dim_listings",
+       "from_columns": [
+        "LISTING_ID"
+       ],
+       "to_columns": [
+        "LISTING_ID"
+       ],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.0,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.dim_listings",
+    "w:dim",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings",
+    "w:listings",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings",
+    "w:dimension",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_listings",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings.listing_id",
+    "c:main.fct_reviews.listing_id",
+    {
+     "etype": "fk_col",
+     "weight": 0.8,
+     "affinity": 0.8
+    }
+   ],
+   [
+    "c:main.dim_listings.listing_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings.listing_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings.listing_id",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings.minimum_nights",
+    "w:minimum",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings.minimum_nights",
+    "w:nights",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.dim_listings.minimum_nights",
+    "w:night",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.fct_reviews",
+    "c:main.fct_reviews.review_sentiment",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.fct_reviews",
+    "c:main.fct_reviews.listing_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.fct_reviews",
+    "t:main.src_reviews",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "lineage",
+       "from_table": "main.src_reviews",
+       "to_table": "main.fct_reviews",
+       "from_columns": [],
+       "to_columns": [],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.6,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.fct_reviews",
+    "w:reviews",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.fct_reviews",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.fct_reviews",
+    "w:fct",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.fct_reviews",
+    "w:fact",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.fct_reviews.review_sentiment",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.fct_reviews.review_sentiment",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.fct_reviews.listing_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.fct_reviews.listing_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.fct_reviews.listing_id",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.raw_hosts",
+    "t:main.src_hosts",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "lineage",
+       "from_table": "main.raw_hosts",
+       "to_table": "main.src_hosts",
+       "from_columns": [],
+       "to_columns": [],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.6,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.raw_hosts",
+    "w:hosts",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.raw_hosts",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.raw_hosts",
+    "w:raw",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.raw_listings",
+    "t:main.src_listings",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "lineage",
+       "from_table": "main.raw_listings",
+       "to_table": "main.src_listings",
+       "from_columns": [],
+       "to_columns": [],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.6,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.raw_listings",
+    "w:listings",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.raw_listings",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.raw_listings",
+    "w:raw",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.raw_reviews",
+    "t:main.src_reviews",
+    {
+     "etype": "relation",
+     "relations": [
+      {
+       "kind": "lineage",
+       "from_table": "main.raw_reviews",
+       "to_table": "main.src_reviews",
+       "from_columns": [],
+       "to_columns": [],
+       "description": null,
+       "confidence": 1.0,
+       "source": "airbnb"
+      }
+     ],
+     "weight": 1.6,
+     "affinity": 1.0
+    }
+   ],
+   [
+    "t:main.raw_reviews",
+    "w:reviews",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.raw_reviews",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.raw_reviews",
+    "w:raw",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_dates",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_dates",
+    "w:dim",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_dates",
+    "w:dimension",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.dim_dates",
+    "w:dates",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    "c:main.src_hosts.host_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    "c:main.src_hosts.host_name",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    "c:main.src_hosts.is_superhost",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    "c:main.src_hosts.created_at",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    "c:main.src_hosts.updated_at",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    "w:hosts",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    "w:src",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_hosts",
+    "w:source",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.host_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.host_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.host_id",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.host_name",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.host_name",
+    "w:name",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.is_superhost",
+    "w:is",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.is_superhost",
+    "w:superhost",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.created_at",
+    "w:created",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.created_at",
+    "w:at",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.updated_at",
+    "w:updated",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_hosts.updated_at",
+    "w:at",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "c:main.src_listings.listing_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "c:main.src_listings.listing_name",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "c:main.src_listings.listing_url",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "c:main.src_listings.room_type",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "c:main.src_listings.minimum_nights",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "c:main.src_listings.host_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "c:main.src_listings.price_str",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "c:main.src_listings.created_at",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "c:main.src_listings.updated_at",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "w:listings",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "w:src",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_listings",
+    "w:source",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.listing_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.listing_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.listing_id",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.listing_name",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.listing_name",
+    "w:name",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.listing_url",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.listing_url",
+    "w:url",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.room_type",
+    "w:room",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.room_type",
+    "w:type",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.minimum_nights",
+    "w:minimum",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.minimum_nights",
+    "w:nights",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.minimum_nights",
+    "w:night",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.host_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.host_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.host_id",
+    "w:host",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.price_str",
+    "w:price",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.price_str",
+    "w:str",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.created_at",
+    "w:created",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.created_at",
+    "w:at",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.updated_at",
+    "w:updated",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_listings.updated_at",
+    "w:at",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    "c:main.src_reviews.listing_id",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    "c:main.src_reviews.review_date",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    "c:main.src_reviews.reviewer_name",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    "c:main.src_reviews.review_text",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    "c:main.src_reviews.review_sentiment",
+    {
+     "etype": "contains",
+     "weight": 0.5,
+     "affinity": 0.5
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    "w:reviews",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    "w:src",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "t:main.src_reviews",
+    "w:source",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.listing_id",
+    "w:id",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.listing_id",
+    "w:identifier",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.listing_id",
+    "w:listing",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.review_date",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.review_date",
+    "w:date",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.reviewer_name",
+    "w:name",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.reviewer_name",
+    "w:reviewer",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.review_text",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.review_text",
+    "w:text",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.review_sentiment",
+    "w:review",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ],
+   [
+    "c:main.src_reviews.review_sentiment",
+    "w:sentiment",
+    {
+     "etype": "mention",
+     "weight": 0.3,
+     "affinity": 0.3
+    }
+   ]
+  ],
+  "tables": {
+   "main.daily_agg_reviews": {
+    "name": "daily_agg_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": "This model aggregates the total number of reviews and their sentiment for each day. It is an incremental model that processes new data daily. \nA surrogate key is generated based on the review sentiment and review date to ensure uniqueness. The model only processes reviews from the current date when running incrementally.\n",
+    "columns": [
+     {
+      "name": "REVIEW_TOTALS",
+      "data_type": null,
+      "description": "The total count of reviews for a specific sentiment on a given date.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": "The sentiment of the review (e.g., positive, neutral, or negative).",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_DATE",
+      "data_type": null,
+      "description": "The date on which the review was submitted.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "DATE_SENTIMENT_ID",
+      "data_type": null,
+      "description": "A surrogate key generated from the review sentiment and the review date, ensuring uniqueness for each date-sentiment combination.",
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "DATE_SENTIMENT_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "daily_agg_reviews"
+    },
+    "source": "airbnb"
+   },
+   "main.mom_agg_reviews": {
+    "name": "mom_agg_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": "This model calculates the total number of reviews and their sentiment over a rolling 30-day window, providing month-over-month (MoM) comparison metrics. \nThe model aggregates review data over the past 30 days and calculates the percentage change in review totals compared to the previous month. \nIt uses a surrogate key generated from the aggregation date and review sentiment to ensure uniqueness.\n",
+    "columns": [
+     {
+      "name": "REVIEW_TOTALS",
+      "data_type": null,
+      "description": "The total count of reviews for a specific sentiment during the 30-day aggregation window.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": "The sentiment of the review (e.g., positive, neutral, or negative).",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "AGGREGATION_DATE",
+      "data_type": null,
+      "description": "The aggregation date representing the date on which the 30-day rolling aggregation was calculated.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "MOM",
+      "data_type": null,
+      "description": "The month-over-month (MoM) percentage change in review totals compared to the previous 30 days.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "DATE_SENTIMENT_ID",
+      "data_type": null,
+      "description": "A surrogate key generated from the aggregation date and review sentiment, ensuring uniqueness for each date-sentiment combination.",
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "DATE_SENTIMENT_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "mom_agg_reviews"
+    },
+    "source": "airbnb"
+   },
+   "main.dim_listings_hosts": {
+    "name": "dim_listings_hosts",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": "This model combines listing information with host details by joining the `dim_listings` and `dim_hosts` tables.\nIt merges the data based on `HOST_ID`, ensuring the most recent `UPDATED_AT` timestamp between the two tables is captured.\nA surrogate key is generated for each unique combination of `LISTING_ID` and `HOST_ID`.\n",
+    "columns": [
+     {
+      "name": "CREATED_AT",
+      "data_type": null,
+      "description": "The date and time when the listing was created.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "UPDATED_AT",
+      "data_type": null,
+      "description": "The most recent update time between the listing and the host. \nIt takes the greater value of `listings_cte.UPDATED_AT` and `hosts_cte.UPDATED_AT`.\n",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": "The unique identifier for the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_NAME",
+      "data_type": null,
+      "description": "The name of the listing, typically used to describe the property.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "ROOM_TYPE",
+      "data_type": null,
+      "description": "The type of room being offered (e.g., entire home, private room, etc.).",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "minimum_nights",
+      "data_type": null,
+      "description": "The minimum number of nights required to book the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "PRICE",
+      "data_type": null,
+      "description": "The price per night for the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "HOST_ID",
+      "data_type": null,
+      "description": "The unique identifier for the host of the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "HOST_NAME",
+      "data_type": null,
+      "description": "The name of the host managing the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "IS_SUPERHOST",
+      "data_type": null,
+      "description": "Indicates whether the host is a 'Superhost', a status awarded for high ratings and performance.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_HOST_ID",
+      "data_type": null,
+      "description": "A surrogate key generated for each unique combination of `LISTING_ID` and `HOST_ID`.\nThis key is used to uniquely identify the relationship between a listing and its host.\n",
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "LISTING_HOST_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "dim_listings_hosts"
+    },
+    "source": "airbnb"
+   },
+   "main.monthly_agg_reviews": {
+    "name": "monthly_agg_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "DATE_SENTIMENT_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "DATE_SENTIMENT_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "monthly_agg_reviews",
+     "sql_path": "models/agg/monthly_agg_reviews.sql"
+    },
+    "source": "airbnb"
+   },
+   "main.wow_agg_reviews": {
+    "name": "wow_agg_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "DATE_SENTIMENT_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "DATE_SENTIMENT_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "wow_agg_reviews",
+     "sql_path": "models/agg/wow_agg_reviews.sql"
+    },
+    "source": "airbnb"
+   },
+   "main.dim_hosts": {
+    "name": "dim_hosts",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "HOST_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "HOST_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "dim_hosts",
+     "sql_path": "models/dim/dim_hosts.sql"
+    },
+    "source": "airbnb"
+   },
+   "main.dim_listings": {
+    "name": "dim_listings",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "MINIMUM_NIGHTS",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "LISTING_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "dim_listings",
+     "sql_path": "models/dim/dim_listings.sql"
+    },
+    "source": "airbnb"
+   },
+   "main.fct_reviews": {
+    "name": "fct_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "fct_reviews",
+     "sql_path": "models/fact/fct_reviews.sql"
+    },
+    "source": "airbnb"
+   },
+   "main.raw_hosts": {
+    "name": "raw_hosts",
+    "schema": "main",
+    "catalog": null,
+    "kind": "source",
+    "description": null,
+    "columns": [],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "hosts",
+     "source_name": "airbnb"
+    },
+    "source": "airbnb"
+   },
+   "main.raw_listings": {
+    "name": "raw_listings",
+    "schema": "main",
+    "catalog": null,
+    "kind": "source",
+    "description": null,
+    "columns": [],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "listings",
+     "source_name": "airbnb"
+    },
+    "source": "airbnb"
+   },
+   "main.raw_reviews": {
+    "name": "raw_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "source",
+    "description": null,
+    "columns": [],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "reviews",
+     "source_name": "airbnb"
+    },
+    "source": "airbnb"
+   },
+   "main.dim_dates": {
+    "name": "dim_dates",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "dim_dates",
+     "sql_path": "models/dim/dim_dates.sql"
+    },
+    "source": "airbnb"
+   },
+   "main.src_hosts": {
+    "name": "src_hosts",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "HOST_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "HOST_NAME",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "IS_SUPERHOST",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "CREATED_AT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "UPDATED_AT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "src_hosts",
+     "sql_path": "models/source/src_hosts.sql"
+    },
+    "source": "airbnb"
+   },
+   "main.src_listings": {
+    "name": "src_listings",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_NAME",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_URL",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "ROOM_TYPE",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "MINIMUM_NIGHTS",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "HOST_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "PRICE_STR",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "CREATED_AT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "UPDATED_AT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "src_listings",
+     "sql_path": "models/source/src_listings.sql"
+    },
+    "source": "airbnb"
+   },
+   "main.src_reviews": {
+    "name": "src_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_DATE",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEWER_NAME",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_TEXT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "src_reviews",
+     "sql_path": "models/source/src_reviews.sql"
+    },
+    "source": "airbnb"
+   }
+  },
+  "terms": {},
+  "sources": {
+   "airbnb": "dbt"
+  },
+  "stats": {
+   "tables": 15,
+   "columns": 48,
+   "terms": 0,
+   "tokens": 117,
+   "relations": 12,
+   "relation_pairs": 12,
+   "sources": 1
+  },
+  "table_graph_edges": [
+   [
+    "t:main.dim_listings_hosts",
+    "t:main.dim_hosts",
+    1.0
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "t:main.dim_listings",
+    1.0
+   ],
+   [
+    "t:main.dim_listings_hosts",
+    "t:main.fct_reviews",
+    1.0
+   ],
+   [
+    "t:main.dim_listings",
+    "t:main.fct_reviews",
+    1.0
+   ]
+  ],
+  "lineage": {
+   "main.daily_agg_reviews": [
+    [],
+    []
+   ],
+   "main.mom_agg_reviews": [
+    [],
+    []
+   ],
+   "main.dim_listings_hosts": [
+    [],
+    []
+   ],
+   "main.monthly_agg_reviews": [
+    [
+     "main.fct_reviews"
+    ],
+    []
+   ],
+   "main.wow_agg_reviews": [
+    [
+     "main.fct_reviews"
+    ],
+    []
+   ],
+   "main.dim_hosts": [
+    [
+     "main.src_hosts"
+    ],
+    []
+   ],
+   "main.dim_listings": [
+    [
+     "main.src_listings"
+    ],
+    []
+   ],
+   "main.fct_reviews": [
+    [
+     "main.src_reviews"
+    ],
+    [
+     "main.monthly_agg_reviews",
+     "main.wow_agg_reviews"
+    ]
+   ],
+   "main.raw_hosts": [
+    [],
+    [
+     "main.src_hosts"
+    ]
+   ],
+   "main.raw_listings": [
+    [],
+    [
+     "main.src_listings"
+    ]
+   ],
+   "main.raw_reviews": [
+    [],
+    [
+     "main.src_reviews"
+    ]
+   ],
+   "main.dim_dates": [
+    [],
+    []
+   ],
+   "main.src_hosts": [
+    [
+     "main.raw_hosts"
+    ],
+    [
+     "main.dim_hosts"
+    ]
+   ],
+   "main.src_listings": [
+    [
+     "main.raw_listings"
+    ],
+    [
+     "main.dim_listings"
+    ]
+   ],
+   "main.src_reviews": [
+    [
+     "main.raw_reviews"
+    ],
+    [
+     "main.fct_reviews"
+    ]
+   ]
+  }
+ }
+}

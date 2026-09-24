@@ -1,0 +1,876 @@
+{
+ "nodes": [
+  [
+   "t:proj.shop.events_*",
+   {
+    "ntype": "table",
+    "fqn": "proj.shop.events_*",
+    "name": "events_*"
+   }
+  ],
+  [
+   "c:proj.shop.events_*.event_name",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.events_*",
+    "name": "event_name",
+    "table": "t:proj.shop.events_*"
+   }
+  ],
+  [
+   "c:proj.shop.events_*.user_id",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.events_*",
+    "name": "user_id",
+    "table": "t:proj.shop.events_*"
+   }
+  ],
+  [
+   "c:proj.shop.events_*.page",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.events_*",
+    "name": "page",
+    "table": "t:proj.shop.events_*"
+   }
+  ],
+  [
+   "c:proj.shop.events_*.params.key",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.events_*",
+    "name": "params.key",
+    "table": "t:proj.shop.events_*"
+   }
+  ],
+  [
+   "t:proj.shop.orders",
+   {
+    "ntype": "table",
+    "fqn": "proj.shop.orders",
+    "name": "orders"
+   }
+  ],
+  [
+   "c:proj.shop.orders.order_id",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.orders",
+    "name": "order_id",
+    "table": "t:proj.shop.orders"
+   }
+  ],
+  [
+   "c:proj.shop.orders.user_id",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.orders",
+    "name": "user_id",
+    "table": "t:proj.shop.orders"
+   }
+  ],
+  [
+   "c:proj.shop.orders.product_code",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.orders",
+    "name": "product_code",
+    "table": "t:proj.shop.orders"
+   }
+  ],
+  [
+   "c:proj.shop.orders.amount",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.orders",
+    "name": "amount",
+    "table": "t:proj.shop.orders"
+   }
+  ],
+  [
+   "t:proj.shop.products",
+   {
+    "ntype": "table",
+    "fqn": "proj.shop.products",
+    "name": "products"
+   }
+  ],
+  [
+   "c:proj.shop.products.product_code",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.products",
+    "name": "product_code",
+    "table": "t:proj.shop.products"
+   }
+  ],
+  [
+   "c:proj.shop.products.title",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.products",
+    "name": "title",
+    "table": "t:proj.shop.products"
+   }
+  ],
+  [
+   "t:proj.shop.users",
+   {
+    "ntype": "table",
+    "fqn": "proj.shop.users",
+    "name": "users"
+   }
+  ],
+  [
+   "c:proj.shop.users.user_id",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.users",
+    "name": "user_id",
+    "table": "t:proj.shop.users"
+   }
+  ],
+  [
+   "c:proj.shop.users.country",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.users",
+    "name": "country",
+    "table": "t:proj.shop.users"
+   }
+  ],
+  [
+   "c:proj.shop.users.signup_date",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.users",
+    "name": "signup_date",
+    "table": "t:proj.shop.users"
+   }
+  ],
+  [
+   "t:proj.shop.county_*_1yr",
+   {
+    "ntype": "table",
+    "fqn": "proj.shop.county_*_1yr",
+    "name": "county_*_1yr"
+   }
+  ],
+  [
+   "c:proj.shop.county_*_1yr.geo_id",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.county_*_1yr",
+    "name": "geo_id",
+    "table": "t:proj.shop.county_*_1yr"
+   }
+  ],
+  [
+   "c:proj.shop.county_*_1yr.median_income",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.county_*_1yr",
+    "name": "median_income",
+    "table": "t:proj.shop.county_*_1yr"
+   }
+  ],
+  [
+   "c:proj.shop.county_*_1yr.population",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.county_*_1yr",
+    "name": "population",
+    "table": "t:proj.shop.county_*_1yr"
+   }
+  ],
+  [
+   "t:proj.shop.imaging_level*_metadata_r*",
+   {
+    "ntype": "table",
+    "fqn": "proj.shop.imaging_level*_metadata_r*",
+    "name": "imaging_level*_metadata_r*"
+   }
+  ],
+  [
+   "c:proj.shop.imaging_level*_metadata_r*.series_id",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.imaging_level*_metadata_r*",
+    "name": "series_id",
+    "table": "t:proj.shop.imaging_level*_metadata_r*"
+   }
+  ],
+  [
+   "c:proj.shop.imaging_level*_metadata_r*.modality",
+   {
+    "ntype": "column",
+    "fqn": "proj.shop.imaging_level*_metadata_r*",
+    "name": "modality",
+    "table": "t:proj.shop.imaging_level*_metadata_r*"
+   }
+  ]
+ ],
+ "edges": [
+  [
+   "t:proj.shop.events_*",
+   "c:proj.shop.events_*.event_name",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.events_*",
+   "c:proj.shop.events_*.user_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.events_*",
+   "c:proj.shop.events_*.page",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.events_*",
+   "c:proj.shop.events_*.params.key",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.events_*",
+   "t:proj.shop.users",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "inferred",
+      "from_table": "proj.shop.events_*",
+      "to_table": "proj.shop.users",
+      "from_columns": [
+       "user_id"
+      ],
+      "to_columns": [
+       "user_id"
+      ],
+      "description": "name match user_id -> users.user_id",
+      "confidence": 0.6,
+      "source": "spider2:shop"
+     }
+    ],
+    "weight": 2.5,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:proj.shop.events_*",
+   "t:proj.shop.orders",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "inferred",
+      "from_table": "proj.shop.events_*",
+      "to_table": "proj.shop.orders",
+      "from_columns": [
+       "user_id"
+      ],
+      "to_columns": [
+       "user_id"
+      ],
+      "description": "shared key user_id",
+      "confidence": 0.4,
+      "source": "spider2:shop"
+     }
+    ],
+    "weight": 2.5,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:proj.shop.events_*.user_id",
+   "c:proj.shop.users.user_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "c:proj.shop.events_*.user_id",
+   "c:proj.shop.orders.user_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:proj.shop.orders",
+   "c:proj.shop.orders.order_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.orders",
+   "c:proj.shop.orders.user_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.orders",
+   "c:proj.shop.orders.product_code",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.orders",
+   "c:proj.shop.orders.amount",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.orders",
+   "t:proj.shop.users",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "inferred",
+      "from_table": "proj.shop.orders",
+      "to_table": "proj.shop.users",
+      "from_columns": [
+       "user_id"
+      ],
+      "to_columns": [
+       "user_id"
+      ],
+      "description": "name match user_id -> users.user_id",
+      "confidence": 0.6,
+      "source": "spider2:shop"
+     }
+    ],
+    "weight": 2.5,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:proj.shop.orders",
+   "t:proj.shop.products",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "inferred",
+      "from_table": "proj.shop.orders",
+      "to_table": "proj.shop.products",
+      "from_columns": [
+       "product_code"
+      ],
+      "to_columns": [
+       "product_code"
+      ],
+      "description": "name match product_code -> products.product_code",
+      "confidence": 0.6,
+      "source": "spider2:shop"
+     }
+    ],
+    "weight": 2.5,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:proj.shop.orders.user_id",
+   "c:proj.shop.users.user_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "c:proj.shop.orders.product_code",
+   "c:proj.shop.products.product_code",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:proj.shop.products",
+   "c:proj.shop.products.product_code",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.products",
+   "c:proj.shop.products.title",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.users",
+   "c:proj.shop.users.user_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.users",
+   "c:proj.shop.users.country",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.users",
+   "c:proj.shop.users.signup_date",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.county_*_1yr",
+   "c:proj.shop.county_*_1yr.geo_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.county_*_1yr",
+   "c:proj.shop.county_*_1yr.median_income",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.county_*_1yr",
+   "c:proj.shop.county_*_1yr.population",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.imaging_level*_metadata_r*",
+   "c:proj.shop.imaging_level*_metadata_r*.series_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:proj.shop.imaging_level*_metadata_r*",
+   "c:proj.shop.imaging_level*_metadata_r*.modality",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ]
+ ],
+ "tables": {
+  "proj.shop.events_*": {
+   "name": "events_*",
+   "schema": "shop",
+   "catalog": "proj",
+   "kind": "table",
+   "description": "(date-sharded family of 3 tables, events_20210101 … events_20210103)",
+   "columns": [
+    {
+     "name": "event_name",
+     "data_type": "STRING",
+     "description": "name of the event",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "purchase",
+      "view_item"
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "user_id",
+     "data_type": "INT64",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "page",
+     "data_type": "STRING",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "/cart",
+      "/p"
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "params.key",
+     "data_type": "STRING",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [
+      "nested"
+     ],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "family": "true",
+    "members": "proj.shop.events_20210101,proj.shop.events_20210102,proj.shop.events_20210103",
+    "business_name": "shop events"
+   },
+   "source": "spider2:shop"
+  },
+  "proj.shop.orders": {
+   "name": "orders",
+   "schema": "shop",
+   "catalog": "proj",
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "order_id",
+     "data_type": "INT64",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "user_id",
+     "data_type": "INT64",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "product_code",
+     "data_type": "STRING",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "amount",
+     "data_type": "NUMERIC",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "fullname": "proj.shop.orders"
+   },
+   "source": "spider2:shop"
+  },
+  "proj.shop.products": {
+   "name": "products",
+   "schema": "shop",
+   "catalog": "proj",
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "product_code",
+     "data_type": "STRING",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "title",
+     "data_type": "STRING",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "fullname": "proj.shop.products"
+   },
+   "source": "spider2:shop"
+  },
+  "proj.shop.users": {
+   "name": "users",
+   "schema": "shop",
+   "catalog": "proj",
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "user_id",
+     "data_type": "INT64",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "country",
+     "data_type": "STRING",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "Portugal",
+      "Czech Republic"
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "signup_date",
+     "data_type": "DATE",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "fullname": "proj.shop.users"
+   },
+   "source": "spider2:shop"
+  },
+  "proj.shop.county_*_1yr": {
+   "name": "county_*_1yr",
+   "schema": "shop",
+   "catalog": "proj",
+   "kind": "table",
+   "description": "(date-sharded family of 2 tables, county_2018_1yr … county_2019_1yr)",
+   "columns": [
+    {
+     "name": "geo_id",
+     "data_type": "STRING",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "median_income",
+     "data_type": "FLOAT64",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "population",
+     "data_type": "INT64",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "family": "true",
+    "members": "proj.shop.county_2018_1yr,proj.shop.county_2019_1yr",
+    "business_name": "shop county 1yr"
+   },
+   "source": "spider2:shop"
+  },
+  "proj.shop.imaging_level*_metadata_r*": {
+   "name": "imaging_level*_metadata_r*",
+   "schema": "shop",
+   "catalog": "proj",
+   "kind": "table",
+   "description": "(date-sharded family of 4 tables, imaging_level2_metadata_r1 … imaging_level4_metadata_r2)",
+   "columns": [
+    {
+     "name": "series_id",
+     "data_type": "STRING",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "modality",
+     "data_type": "STRING",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "family": "true",
+    "members": "proj.shop.imaging_level2_metadata_r1,proj.shop.imaging_level2_metadata_r2,proj.shop.imaging_level4_metadata_r1,proj.shop.imaging_level4_metadata_r2",
+    "business_name": "shop imaging level metadata r"
+   },
+   "source": "spider2:shop"
+  }
+ },
+ "terms": {},
+ "sources": {
+  "spider2:shop": "spider2"
+ },
+ "stats": {
+  "tables": 6,
+  "columns": 18,
+  "terms": 0,
+  "tokens": 0,
+  "relations": 4,
+  "relation_pairs": 4,
+  "sources": 1
+ },
+ "table_graph_edges": [
+  [
+   "t:proj.shop.events_*",
+   "t:proj.shop.users",
+   2.5
+  ],
+  [
+   "t:proj.shop.events_*",
+   "t:proj.shop.orders",
+   2.5
+  ],
+  [
+   "t:proj.shop.orders",
+   "t:proj.shop.users",
+   2.5
+  ],
+  [
+   "t:proj.shop.orders",
+   "t:proj.shop.products",
+   2.5
+  ]
+ ],
+ "lineage": {
+  "proj.shop.events_*": [
+   [],
+   []
+  ],
+  "proj.shop.orders": [
+   [],
+   []
+  ],
+  "proj.shop.products": [
+   [],
+   []
+  ],
+  "proj.shop.users": [
+   [],
+   []
+  ],
+  "proj.shop.county_*_1yr": [
+   [],
+   []
+  ],
+  "proj.shop.imaging_level*_metadata_r*": [
+   [],
+   []
+  ]
+ }
+}

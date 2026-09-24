@@ -1,0 +1,112 @@
+{
+ "requests": [
+  {
+   "betas": [
+    "server-side-fallback-2026-07-01"
+   ],
+   "fallbacks": "default",
+   "model": "m",
+   "max_tokens": 1024,
+   "system": "You are a database schema analyst. Given a natural-language question and a list of candidate tables, identify which tables the SQL answer would need. 'source' tables hold columns used in WHERE/JOIN conditions and filters; 'destination' tables hold columns that appear in the SELECT output or aggregations. A table may be both. Only use table names from the candidate list. Prefer fewer tables; intermediate join tables will be found automatically.",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Question: revenue by state\n\nCandidate tables (name: columns):\npublic.customer: id, name, email, state (US state, e.g. California), city -- One row per customer account\npublic.orders: id, customer_id, store_id, total_amount (order revenue in USD), order_date, status (current order status: paid, refunded, pe)\npublic.product_category: id, name, segment\npublic.products: id, name, category_id, price -- Product catalog: items by category and price\npublic.order_items: id, order_id, product_id, quantity, line_total\npublic.shipment: id, order_item_id, shipped_date, carrier (UPS, FedEx, DHL)\npublic.audit_log: id, actor, action, at"
+    }
+   ],
+   "output_config": {
+    "format": {
+     "type": "json_schema",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "source_tables": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "destination_tables": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "rationale": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "source_tables",
+       "destination_tables",
+       "rationale"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "effort": "low"
+   }
+  },
+  {
+   "model": "m",
+   "max_tokens": 1024,
+   "system": "You are a database schema analyst. Given a natural-language question and a list of candidate tables, identify which tables the SQL answer would need. 'source' tables hold columns used in WHERE/JOIN conditions and filters; 'destination' tables hold columns that appear in the SELECT output or aggregations. A table may be both. Only use table names from the candidate list. Prefer fewer tables; intermediate join tables will be found automatically.",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Question: revenue by state\n\nCandidate tables (name: columns):\npublic.customer: id, name, email, state (US state, e.g. California), city -- One row per customer account\npublic.orders: id, customer_id, store_id, total_amount (order revenue in USD), order_date, status (current order status: paid, refunded, pe)\npublic.product_category: id, name, segment\npublic.products: id, name, category_id, price -- Product catalog: items by category and price\npublic.order_items: id, order_id, product_id, quantity, line_total\npublic.shipment: id, order_item_id, shipped_date, carrier (UPS, FedEx, DHL)\npublic.audit_log: id, actor, action, at"
+    }
+   ],
+   "output_config": {
+    "format": {
+     "type": "json_schema",
+     "schema": {
+      "type": "object",
+      "properties": {
+       "source_tables": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "destination_tables": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "rationale": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "source_tables",
+       "destination_tables",
+       "rationale"
+      ],
+      "additionalProperties": false
+     }
+    },
+    "effort": "low"
+   }
+  }
+ ],
+ "picks": [
+  [
+   [
+    "public.customer"
+   ],
+   [
+    "public.orders"
+   ]
+  ],
+  [
+   [
+    "public.customer"
+   ],
+   [
+    "public.orders"
+   ]
+  ]
+ ]
+}
