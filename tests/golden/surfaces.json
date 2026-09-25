@@ -1351,7 +1351,7 @@
  "mcp_tools": [
   {
    "name": "link_schema",
-   "description": "Return the sub-schema (annotated DDL with join paths and glossary) needed to answer a natural-language question.\n\nArgs:\n    question: The user's question in natural language.\n    max_tables: Upper bound on tables returned.\n    columns: \"relevant\" (pruned) or \"all\".\n    use_llm: Let a Claude call choose anchor tables (needs ANTHROPIC_API_KEY).\n",
+   "description": "Return the sub-schema (annotated DDL with join paths and glossary) needed to answer a natural-language question.\n\nArgs:\n    question: The user's question in natural language.\n    max_tables: Upper bound on tables returned.\n    columns: \"relevant\" (pruned) or \"all\".\n    use_llm: Let a Claude call choose anchor tables (needs ANTHROPIC_API_KEY).\n    adaptive_budget: On schemas of more than 30 tables, raise max_tables to at least 20. Pass false to keep a small max_tables as is.\n",
    "inputSchema": {
     "properties": {
      "question": {
@@ -1371,6 +1371,11 @@
      "use_llm": {
       "default": false,
       "title": "Use Llm",
+      "type": "boolean"
+     },
+     "adaptive_budget": {
+      "default": true,
+      "title": "Adaptive Budget",
       "type": "boolean"
      }
     },
@@ -1396,7 +1401,7 @@
   },
   {
    "name": "link_schema_json",
-   "description": "Same as link_schema but structured: tables with scores, columns with reasons, join paths, matched glossary terms.",
+   "description": "Same as link_schema but structured: tables with scores, columns with reasons, join paths, matched glossary terms.\n\nArgs:\n    question: The user's question in natural language.\n    max_tables: Upper bound on tables returned.\n    adaptive_budget: On schemas of more than 30 tables, raise max_tables to at least 20. Pass false to keep a small max_tables as is.\n    include_ddl: Also fill \"ddl\" with the annotated DDL link_schema returns (empty otherwise).\n",
    "inputSchema": {
     "properties": {
      "question": {
@@ -1407,6 +1412,16 @@
       "default": 20,
       "title": "Max Tables",
       "type": "integer"
+     },
+     "adaptive_budget": {
+      "default": true,
+      "title": "Adaptive Budget",
+      "type": "boolean"
+     },
+     "include_ddl": {
+      "default": false,
+      "title": "Include Ddl",
+      "type": "boolean"
      }
     },
     "required": [
@@ -2238,6 +2253,139 @@
     ]
    ]
   },
+  "ask": {
+   "help": "Write, run (read-only) and pick SQL for a question (needs the agent extra and model keys).",
+   "params": [
+    [
+     "question",
+     [
+      "question"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "connection",
+     [
+      "--connection",
+      "-c"
+     ],
+     "None",
+     "str",
+     "duckdb connection to run on (default: the only one)"
+    ],
+    [
+     "db",
+     [
+      "--db"
+     ],
+     "None",
+     "path",
+     "run on this .duckdb/.sqlite file instead of the connection's"
+    ],
+    [
+     "mcp_url",
+     [
+      "--mcp-url"
+     ],
+     "None",
+     "str",
+     "schemagraph MCP server (streamable HTTP) the agents read the schema from, e.g. http://127.0.0.1:8765/mcp (default: serve this home's schema for the call)"
+    ],
+    [
+     "strategy",
+     [
+      "--strategy"
+     ],
+     "'abmcts'",
+     "choice",
+     "abmcts | best_of_n | refine | single"
+    ],
+    [
+     "budget",
+     [
+      "--budget"
+     ],
+     "16",
+     "int",
+     "generator nodes"
+    ],
+    [
+     "batch",
+     [
+      "--batch"
+     ],
+     "4",
+     "int",
+     "nodes generated concurrently"
+    ],
+    [
+     "seed",
+     [
+      "--seed"
+     ],
+     "0",
+     "int",
+     null
+    ],
+    [
+     "gen_model",
+     [
+      "--gen-model"
+     ],
+     "None",
+     "str",
+     "generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max)"
+    ],
+    [
+     "judge_model",
+     [
+      "--judge-model"
+     ],
+     "None",
+     "str",
+     "judge/selector model (default $SCHEMAGRAPH_JUDGE_MODEL or typesafe:jev-1.13.0)"
+    ],
+    [
+     "judge",
+     [
+      "--judge"
+     ],
+     "True",
+     "boolean",
+     "score candidates with the judge"
+    ],
+    [
+     "selector",
+     [
+      "--selector"
+     ],
+     "True",
+     "boolean",
+     "final pairwise pick among the top candidates"
+    ],
+    [
+     "as_json",
+     [
+      "--json"
+     ],
+     "False",
+     "boolean",
+     "print the full AnswerResult as JSON"
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
   "bench-spider1": {
    "help": "Gold-table recall over a Spider-format dataset with real foreign keys (bridge tables, path union and pruning are measurable here).",
    "params": [
@@ -2330,6 +2478,182 @@
      "None",
      "str",
      "extra LinkOptions as key=value (repeatable)"
+    ]
+   ]
+  },
+  "bench-spider2-exec": {
+   "help": "Execution accuracy of the agent loop on the 135 Spider 2.0-Lite local (SQLite) tasks.",
+   "params": [
+    [
+     "spider2_root",
+     [
+      "spider2_root"
+     ],
+     "None",
+     "path",
+     "path to the xlang-ai/Spider2 clone (with the local SQLite databases unpacked)"
+    ],
+    [
+     "strategy",
+     [
+      "--strategy"
+     ],
+     "'abmcts'",
+     "choice",
+     "abmcts | best_of_n | refine | single"
+    ],
+    [
+     "budget",
+     [
+      "--budget"
+     ],
+     "16",
+     "int",
+     null
+    ],
+    [
+     "batch",
+     [
+      "--batch"
+     ],
+     "4",
+     "int",
+     null
+    ],
+    [
+     "seed",
+     [
+      "--seed"
+     ],
+     "0",
+     "int",
+     null
+    ],
+    [
+     "gen_model",
+     [
+      "--gen-model"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "judge_model",
+     [
+      "--judge-model"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "selector",
+     [
+      "--selector"
+     ],
+     "True",
+     "boolean",
+     "final pairwise pick among the top candidates"
+    ],
+    [
+     "judge_only",
+     [
+      "--judge-only"
+     ],
+     "False",
+     "boolean",
+     "judge study: AUROC of each --compare-judge against execution match on one candidate pool"
+    ],
+    [
+     "compare_judge",
+     [
+      "--compare-judge"
+     ],
+     "None",
+     "str",
+     "judge models for --judge-only (repeatable; default Jev and Qwen)"
+    ],
+    [
+     "pool",
+     [
+      "--pool"
+     ],
+     "None",
+     "path",
+     "--judge-only: reuse this candidate pool (jsonl)"
+    ],
+    [
+     "pool_size",
+     [
+      "--pool-size"
+     ],
+     "8",
+     "int",
+     "--judge-only: candidates generated per task"
+    ],
+    [
+     "docs",
+     [
+      "--docs"
+     ],
+     "True",
+     "boolean",
+     "pass the task's external-knowledge document"
+    ],
+    [
+     "concurrency",
+     [
+      "--concurrency"
+     ],
+     "1",
+     "int",
+     "tasks in parallel (>1 is faster but AB-MCTS runs are not reproducible)"
+    ],
+    [
+     "limit",
+     [
+      "--limit"
+     ],
+     "None",
+     "int",
+     null
+    ],
+    [
+     "only",
+     [
+      "--only"
+     ],
+     "None",
+     "str",
+     "only these instance ids (repeatable)"
+    ],
+    [
+     "out",
+     [
+      "--out"
+     ],
+     "PosixPath('bench_results')",
+     "path",
+     null
+    ],
+    [
+     "tag",
+     [
+      "--tag"
+     ],
+     "None",
+     "str",
+     "output file tag (default <strategy>_n<budget>, or judge)"
+    ],
+    [
+     "resume",
+     [
+      "--resume"
+     ],
+     "True",
+     "boolean",
+     "skip tasks already in the rows file"
     ]
    ]
   },
@@ -2615,7 +2939,7 @@
    ]
   },
   "mcp": {
-   "help": "Run the MCP server (stdio by default).",
+   "help": "Run the MCP server (stdio by default; --transport http serves http://HOST:PORT/mcp).",
    "params": [
     [
      "home",
@@ -2633,8 +2957,26 @@
       "--transport"
      ],
      "'stdio'",
+     "choice",
+     "stdio, http (streamable HTTP at /mcp; alias streamable-http) or sse"
+    ],
+    [
+     "host",
+     [
+      "--host"
+     ],
+     "'127.0.0.1'",
      "str",
-     null
+     "Interface to bind with --transport http or sse"
+    ],
+    [
+     "port",
+     [
+      "--port"
+     ],
+     "8766",
+     "int",
+     "Port with --transport http or sse"
     ]
    ]
   },
@@ -2696,7 +3038,7 @@
    ]
   },
   "serve": {
-   "help": "Run the HTTP API + frontend.",
+   "help": "Run the HTTP API + frontend, with the MCP server (streamable HTTP) at /mcp.",
    "params": [
     [
      "host",

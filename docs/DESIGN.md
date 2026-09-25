@@ -2,7 +2,7 @@
 
 **One sentence.** Catalog metadata in (DDL, DuckDB, dbt, Unity Catalog, AWS Glue, Collibra), a single provenance-tagged schema graph in the middle, and a linked, join-complete sub-schema out — as annotated DDL for an LLM, over HTTP and MCP, with a UI to feed and curate it.
 
-It sits in the same slot as JetBrains' Databao Context Engine and SignalPilot's semantic layer, minus governance and SQL execution (those belong to the agent that calls this), and with the schema-linking core rebuilt around **graph traversal** instead of embedding search.
+It sits in the same slot as JetBrains' Databao Context Engine and SignalPilot's semantic layer, minus governance (that belongs to the agent that calls this); read-only SQL execution exists only in the optional agent layer (see *Answer loop*), and with the schema-linking core rebuilt around **graph traversal** instead of embedding search.
 
 ## Why graph traversal
 
@@ -92,18 +92,32 @@ One DuckDB file: `connections`, `snapshots` (full JSON per source), `glossary`, 
 
 ## Surfaces
 
-* **HTTP** (`api/app.py`): `/api/connections`, `/api/ddl`, `/api/build`, `/api/graph/*`, `/api/link`, `/api/explain`, `/api/glossary`, `/api/join-hints`; serves `web/dist` at `/`.
-* **MCP** (`mcp/server.py`): `link_schema`, `link_schema_json`, `search_tables`, `get_table`, `find_join_path`, `list_glossary`, `graph_stats`. Read-only.
-* **CLI** (`cli.py`): `add-ddl`, `add-dbt`, `add-duckdb`, `add <type> <name> -c '{json}'`, `build`, `link`, `explain`, `path`, `serve`, `mcp`.
+* **HTTP** (`api/app.py`): `/api/connections`, `/api/ddl`, `/api/build`, `/api/graph/*`, `/api/link`, `/api/explain`, `/api/glossary`, `/api/join-hints`; serves the MCP server at `/mcp` (streamable HTTP, same Engine) and `web/dist` at `/`.
+* **MCP** (`mcp/server.py`): `link_schema`, `link_schema_json`, `search_tables`, `get_table`, `find_join_path`, `list_glossary`, `graph_stats`. Read-only; no tool executes SQL. `link_schema` and `link_schema_json` take `adaptive_budget` (false keeps a small `max_tables` on a large schema), and `link_schema_json` takes `include_ddl` so one call returns the tables and the DDL. The server reads a `SchemaSource` (`mcp/source.py`): the Engine, a bare `Linker` through `LinkerSource` (the benchmark, which has no Store), or either restricted to one connection through `ScopedSource`. It runs over stdio or streamable HTTP (`mcp --transport http`, the `/mcp` mount on `serve`, or `mcp/http.serve_http`, which serves it on an ephemeral localhost port for the length of a `with` block).
+* **CLI** (`cli.py`): `add-ddl`, `add-dbt`, `add-duckdb`, `add <type> <name> -c '{json}'`, `build`, `link`, `explain`, `path`, `serve`, `mcp [--transport stdio|http|sse]`, and with the `agent` extra `ask [--mcp-url URL]` and `bench-spider2-exec`.
 * **Web** (`web/`): Connections, Paste DDL, Link playground, Graph (cytoscape), Glossary & hints.
 
 ## LLM use
 
 Optional and small: one call per question (`llm/anchors.py`) that returns source/destination tables via a JSON-schema output format, using `claude-opus-5` by default with `effort: low` and server-side refusal fallbacks enabled. Enabled only when `ANTHROPIC_API_KEY` is set and the caller passes `use_llm=true`. Everything else is deterministic and free.
 
+## Answer loop (optional `agent` extra, issue #6)
+
+`schemagraph ask` / `Engine.answer` go past context: write SQL, run it read-only, score it, search.
+
+* **The schema comes over MCP.** The agents are MCP clients of schemagraph itself, so they see exactly what any other agent sees. The generator's schema tools are the server's `link_schema`, `search_tables`, `get_table`, `find_join_path` and `list_glossary` (a pydantic-ai `MCPToolset` filtered to those five, each result capped at 12,000 characters); the orchestrator reads links, tables, relations, neighbours and join paths through `SchemaClient`, one memoised fastmcp session (linking is deterministic). `Engine.answer` serves the engine, scoped to the connection, on an ephemeral `127.0.0.1` port for the call, unless `AgentConfig.mcp_url` (`ask --mcp-url`) names a running server; an external server such as `serve`'s `/mcp` is not scoped. Execution is the one thing MCP does not provide: `sample_values` and the bounded `run_query` probe are local tools over the read-only executor, so the server stays execution-free.
+
+* **Why AB-MCTS.** TreeQuest's `ABMCTSA` (Sakana, arXiv:2503.04412) uses Thompson sampling per node to choose between a new child ("go wider": a fresh draft at the root) and expanding an existing one ("go deeper": a refinement fed with the parent's feedback), and between actions. With `generate(parent)`, `parent=None` is a best-of-N draft and `parent=<candidate>` a Refine step, so BestOfN (breadth only: independent drafts, alternating the tight and wide context actions) and a DSPy-Refine-style chain (depth only) are special cases; `search.py` implements all three on the same generate/score functions and the benchmark compares them at equal budget. DSPy itself is not a dependency.
+* **Actions are context widths.** `tight` links 7 tables with the adaptive budget off; `wide` links 20. The tree searches over schema context as well as SQL; the generator can widen or narrow it further with its MCP tools and probe the data with `sample_values` and `run_query`.
+* **Every published text-to-SQL tree search scores with execution** (Alpha-SQL, CHASE-SQL, ReFoRCE); an LLM-only judge gets optimised for its own biases. So execution is the signal, read-only in three layers: a sqlglot guard (one query, no DDL/DML/ATTACH/PRAGMA/SET/COPY/INSTALL/LOAD/INTO, no file table functions or file-like names), the engine's own statement check, and a hardened connection (DuckDB `read_only` + `enable_external_access=false` + `lock_configuration`; SQLite `mode=ro` + an allow-list authorizer + no ATTACH), each bounded by a timeout and row caps.
+* **Score** in [0, 1]: 0 for a guard reject, 0.05 for an execution error, else `0.15 + 0.85 * (0.4 * det + 0.6 * judge)`, where `det` = 1 − penalties of deterministic findings (unknown table/column with closest-name suggestions, cartesian product, ungrouped column, empty result, all-NULL columns, row explosion; joins off the relation graph are reported, not penalised, until measured) and `judge` the mean of six rubric probabilities. Findings and judge doubts become the refine prompt's feedback.
+* **Judge = TypeSafe Jev**, a classifier that answers typed questions with a probability each (not an LLM): one plain question per `float` field in [0, 1], the prompt is only the material (question, SQL, result columns and ≤ 10 preview rows, no DDL), and `missing` is a `list[Literal[...]]` built from the linked and neighbouring tables the query skips. Jev is weak at arithmetic, dates and multi-hop questions, so those stay in the deterministic checks; its confidences are not calibrated out of the box (per-field logistic calibration against execution match is the follow-up). Jev cannot write text, so refinement advice comes from a lazy Qwen critic, called once per expanded parent. The final pick is a round-robin pairwise Jev selector over the top-k results (deduplicated by result), asked in both orders to cancel position bias (CHASE-SQL).
+* **What the model sees.** Tool results and previews come from the database, so a query like `duckdb_databases()` or `pragma_database_list` shows the database's own path and settings to the generator (a remote API). Nothing outside the database is readable. Queries run against the whole database file: a DuckDB connection's `schemas` setting limits what the agent is shown (catalog, suggestions, checks), not what a query can read. Data in preview rows can also carry prompt injection into the judge; previews are cut to 10 rows of 60 characters and the judge has no tools.
+* **Judge first.** `bench-spider2-exec --judge-only` scores one fixed candidate pool with each judge (Jev and the same rubric on Qwen) and reports AUROC against execution match before any search run.
+
 ## Non-goals (v1)
 
-* No SQL execution, no governance (validation, LIMIT injection, PII redaction, budgets). The calling agent owns that boundary.
+* No writes and no governance (row-level security, PII redaction, budgets): the calling agent owns that boundary. SQL execution is confined to the optional agent layer and is read-only and bounded; the linker, MCP and HTTP tools never execute.
 * No embeddings in the core. The lexical + PPR path is the LinearRAG bet; the optional `embed` extra (`linking/embed.py`, a 30 MB static model from the Hugging Face Hub, no torch; set `HF_HUB_OFFLINE=1` on air-gapped hosts once it is cached) adds paraphrase seeds behind the same `Activation` interface and is measured at +0.4 strict / +3 strict@7 on Spider 2.0-Lite.
 * No BI metrics layer. Glossary terms map words to columns; they are not governed calculations.
 
@@ -123,6 +137,8 @@ What the benchmark forced into the core, each ablated:
 * `connectors/spider2.py` — **partition-family collapse**: tables in one schema whose names differ only in digit runs and share ≥ 80% of columns become one logical table with a member list. The same treatment belongs in the Unity/Glue connectors for partitioned datasets.
 * `linking/linker.py` — **adaptive budget** (schemas over 30 tables get 20 tables and 6 anchors) and **bypass-if-fits** (a schema that fits the budget is returned whole, with anchors and join paths still computed) — the "Death of Schema Linking" result, operationalised. Default budget is 20 tables.
 * Rejected: DBCopilot-style **schema routing** (boosting the dataset with the most activation mass) — Spider 2 gold sets routinely join across datasets and it cost 6–7 strict points. Kept as an option (`schema_routing`), off.
+
+`schemagraph bench-spider2-exec <Spider2 clone>` (agent extra, model keys, the local SQLite databases) measures execution accuracy of the answer loop on the 135 `local*` tasks, serving each database's linker on its own in-process MCP server (`LinkerSource` + `serve_http`) while that database's tasks run, with a plain-Python port of the official comparison (`bench/spider2_eval.py`, parity-tested against the original on real gold SQL and random tables): EX of the final pick, of the top-score candidate and of any candidate (oracle), per strategy at equal budget.
 
 ## Next steps
 

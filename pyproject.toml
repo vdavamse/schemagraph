@@ -22,6 +22,7 @@ dependencies = [
 [project.optional-dependencies]
 llm = ["anthropic>=1.0"]
 glue = ["boto3>=1.34"]
+agent = ["pydantic-ai-slim[mcp,openai,typesafe]>=2.45", "treequest>=0.3.2"]
 all = ["anthropic>=1.0", "boto3>=1.34"]
 embed = [
     "model2vec>=0.3",
@@ -41,6 +42,7 @@ dev = [
     "boto3>=1.34",
     "anthropic>=1.0",
     "tiktoken>=0.14.0",
+    "pandas>=2.0",  # parity test of bench/spider2_eval.py against the official comparator
 ]
 
 [build-system]
