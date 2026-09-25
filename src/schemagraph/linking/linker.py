@@ -642,7 +642,9 @@ class Linker:
             opts: The linking options.
 
         Returns:
-            ``(candidate paths, tables on any candidate path, pruned join paths)``.
+            ``(candidate paths, fqns of tables on any candidate path plus every anchor in the
+            join projection, pruned join paths)``; all three are empty when ``opts.paths`` is
+            off.
         """
         if opts.paths:
             paths, union = union_of_shortest_paths(

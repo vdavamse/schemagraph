@@ -5,8 +5,8 @@ Two conservative rules, both emitting ``inferred`` edges (lowest trust weight):
 1. **Reference-by-name**: a column ``<x>_id`` / ``<x>id`` (also ``_key``, ``_code``,
    ``_number``, ``_no``, ``_num``) in table A, with ``x`` at least three characters and not a
    generic word, and a table named ``x`` / ``xs`` / ``x`` with ``ies`` / ``x_*`` in the same
-   schema. The target column is the first of ``id``, A's column name, ``<x>_id``, ``<x>id`` or
-   any primary-key column  ->  A.<x>_id -> X.<target>.
+   schema. The target is X's first column, in column order, that is named ``id``, A's column
+   name, ``<x>_id`` or ``<x>id``, or is a primary key  ->  A.<x>_id -> X.<target>.
 2. **Shared key column**: a key-looking column name (the suffixes above) or a primary-key
    column, present in two or more tables of the same schema. Generic names (``id``, ``code``,
    ``name``, ...) and names shared by more than ``max_fanout`` tables are skipped (they're hubs,

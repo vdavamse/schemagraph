@@ -193,7 +193,7 @@ def _table_from_unity(
 def _apply_constraints(table: Table, raw: dict[str, Any], source: str) -> list[Edge]:
     """Apply ``table_constraints`` to a table: set its primary key, return its foreign-key edges.
 
-    Mutates ``table`` in place (a later primary-key constraint replaces an earlier one).
+    Mutates ``table`` in place (``primary_key`` comes from the last primary-key constraint).
     """
     edges: list[Edge] = []
     for cons in raw.get("table_constraints") or []:

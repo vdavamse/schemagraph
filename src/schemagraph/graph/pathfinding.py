@@ -98,9 +98,10 @@ def union_of_shortest_paths(
 
     Stage 5 of the linker (SchemaGraphSQL's union of shortest paths; see ``docs/DESIGN.md``):
     this is what pulls bridge tables into the linked schema. If ``destinations`` is None,
-    pairs are formed among the sources themselves (the common case: "connect all anchor
-    tables"); otherwise every (source, destination) pair is connected. A path already found
-    in either direction is not repeated.
+    empty, or has no table in the join projection, pairs are formed among the sources
+    themselves (the common case: "connect all anchor tables"); otherwise every
+    (source, destination) pair is connected. A path already found in either direction is not
+    repeated.
 
     Args:
         schema_graph: The graph whose table projection is searched.
