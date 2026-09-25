@@ -126,8 +126,8 @@ class LinkOptions:
             hand-rolled BM25F, linking/bm25.py) | ``"bm25s"`` (the bm25s library over one
             field-repeated document per table, linking/bm25s_backend.py; needs the ``bm25s``
             extra; an ablation, see bench_results/README.md).
-        bm25_method: bm25s scoring method with ``bm25_backend="bm25s"`` (``"lucene"``,
-            ``"bm25+"``, ...); ignored by BM25F.
+        bm25_method: bm25s scoring method with ``bm25_backend="bm25s"`` (``"lucene"`` or
+            ``"bm25+"``); ignored by BM25F.
         seed_bm25: SPRIG seed-side fusion: top ``seed_k`` sparse-ranker tables also seed PPR
             (personalization only). Rejected 2026-09-23: +1-2 strict, -0.3 strict@7 with embed.
         seed_k: Sparse-ranker tables used as PPR seeds (SPRIG: 5-10).

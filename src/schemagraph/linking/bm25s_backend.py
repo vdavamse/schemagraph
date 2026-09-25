@@ -25,8 +25,11 @@ FIELD_REPEAT = {"name": 3, "columns": 3, "business": 3, "tags": 1, "desc": 1}
 # Same saturation and length normalisation as the BM25F default.
 K1 = 1.2
 B = 0.75
-# The scoring methods bm25s implements; its constructor accepts any string and fails at index().
-METHODS = ("robertson", "lucene", "atire", "bm25l", "bm25+")
+# The bm25s methods benchmarked on Spider 2.0-Lite. Both keep IDF positive, so every table that
+# holds a query term scores > 0, as in BM25F. robertson and atire are left out on purpose: bm25s
+# clamps robertson's IDF to 0 once a token is in more than half the tables (atire's once it is in
+# all of them), so those tables would score 0 and look unmatched.
+METHODS = ("lucene", "bm25+")
 
 
 def _import_bm25s():
@@ -45,8 +48,7 @@ class BM25SIndex:
 
     Args:
         schema_graph: The graph whose tables become documents, in table order.
-        method: A bm25s method (``"lucene"``, ``"robertson"``, ``"atire"``, ``"bm25l"``,
-            ``"bm25+"``).
+        method: A bm25s method in ``METHODS`` (``"lucene"`` or ``"bm25+"``).
 
     Raises:
         ValueError: ``method`` is not one of ``METHODS``.
@@ -79,8 +81,7 @@ class BM25SIndex:
 
         Query terms are grouped by weight (surface forms, expansions), each group scored with
         one ``get_scores`` call and the vectors summed with their weights. Only tables holding
-        some query term are kept, and only with a positive score: bm25+ gives every document a
-        positive floor per query term.
+        some query term are kept: bm25+ gives every document a positive floor per query term.
 
         Returns:
             Table fqn -> positive score.
@@ -96,4 +97,4 @@ class BM25SIndex:
             vector = weight * self.retriever.get_scores(tokens)
             total = vector if total is None else total + vector
         candidates = {i for tokens in groups.values() for t in tokens for i in self.postings[t]}
-        return {self.fqns[i]: float(total[i]) for i in sorted(candidates) if total[i] > 0}
+        return {self.fqns[i]: float(total[i]) for i in sorted(candidates)}

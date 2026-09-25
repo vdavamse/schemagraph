@@ -204,6 +204,23 @@ def test_bm25s_backend_ranks_tables(store_graph, method):
     assert lk._bm25 is None  # the ranking came from bm25s, BM25F was never built
 
 
+@pytest.mark.parametrize("method", ["lucene", "bm25+"])
+def test_bm25s_backend_scores_common_terms(method):
+    pytest.importorskip("bm25s")
+    from schemagraph.linking.bm25s_backend import BM25SIndex
+
+    # "customer" and "amount" sit in 3 of 4 tables: robertson's (clamped) IDF is 0 here, which
+    # used to empty the ranking; the kept methods score every holder positively, like BM25F
+    tables = [
+        Table(name=f"orders_{side}", columns=[Column(name="customer_id"), Column(name="amount")])
+        for side in ("east", "west", "north")
+    ] + [Table(name="region", columns=[Column(name="region_name")])]
+    schema_graph = build_graph([SchemaSnapshot(source="x", source_type="ddl", tables=tables)])
+    scores = BM25SIndex(schema_graph, method).scores("customer amount")
+    assert set(scores) == {"orders_east", "orders_west", "orders_north"}
+    assert all(score > 0 for score in scores.values())
+
+
 def test_bm25s_backend_empty_vocabulary():
     pytest.importorskip("bm25s")
     from schemagraph.linking.bm25s_backend import BM25SIndex
@@ -220,6 +237,10 @@ def test_bm25_backend_errors(store_graph, monkeypatch):
         Linker(store_graph).link("carrier", LinkOptions(bm25_backend="tantivy"))
     with pytest.raises(ValueError, match="bm25_method"):
         Linker(store_graph).link("carrier", LinkOptions(bm25_backend="bm25s", bm25_method="nope"))
+    with pytest.raises(ValueError, match="bm25_method"):  # zero IDF, see METHODS
+        Linker(store_graph).link(
+            "carrier", LinkOptions(bm25_backend="bm25s", bm25_method="robertson")
+        )
     monkeypatch.setitem(sys.modules, "bm25s", None)
     with pytest.raises(ImportError, match="uv sync --extra bm25s"):
         Linker(store_graph).link("carrier", LinkOptions(bm25_backend="bm25s"))

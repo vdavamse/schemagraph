@@ -11,7 +11,7 @@ schemagraph is a schema context engine for text-to-SQL: catalog metadata in (pas
 ## Commands
 
 ```bash
-uv sync --all-extras                       # Python 3.11+, installs anthropic + boto3 + model2vec (embed) extras and dev deps
+uv sync --all-extras                       # Python 3.11+, installs anthropic + boto3 + model2vec (embed) + bm25s extras and dev deps
 uv run pytest -q                           # whole suite, ~20 s on the Windows mount, no network
 uv run pytest -q tests/test_linking.py     # one file
 uv run pytest -q tests/test_linking.py -k bypass   # one test by keyword
@@ -60,7 +60,7 @@ connectors/*  ──SchemaSnapshot──►  store.py (DuckDB)  ──►  graph
 * **`linking/linker.py`** is the pipeline; every stage is a `LinkOptions` field so it can be ablated from the benchmark CLI:
   1. `lexical.activate` — tokens, n-grams (with and without stopwords, `ngram_stop`), abbreviations, lemmas, glossary phrases, sample values (word n-gram lookup, not a regex per value) → seed weights with reason strings. Single-token evidence is IDF-scaled; n-gram/value/glossary hits are not. With `embed=True` (`linking/embed.py`, extra `embed`) the question's phrases also seed the closest objects by static-embedding cosine, which is what recovers paraphrases.
   2. `graph/ppr.personalized_pagerank` — HippoRAG-style PPR with node specificity, run as a power iteration on a cached sparse matrix (`PPRMatrix`, tol 1e-12); `table_scores(agg="top3")` folds columns into tables. `ppr_edge_attr` picks the edge attribute read as transition mass (`weight` = join cost, the measured default; `affinity` = uniform per kind).
-  3. ranking — `ranker="rrf"` fuses the PPR table ranking with BM25F over one document per table (`linking/bm25.py`) by reciprocal rank; `ppr` and `bm25` alone are the ablations. Anchor and fill gates read per-ranker relative *evidence*, not the fused score.
+  3. ranking — `ranker="rrf"` fuses the PPR table ranking with BM25F over one document per table (`linking/bm25.py`) by reciprocal rank; `ppr` and `bm25` alone are the ablations. `bm25_backend="bm25s"` (extra `bm25s`, `linking/bm25s_backend.py`) swaps BM25F for the bm25s library over one field-repeated document per table; an ablation, BM25F stays the default. Anchor and fill gates read per-ranker relative *evidence*, not the fused score.
   4. anchors — top-k tables, or `llm/anchors.py` (one Claude call) when `use_llm` and a key is set.
   5. `graph/pathfinding.union_of_shortest_paths` — all weighted-shortest simple paths between anchors via Yen's `shortest_simple_paths` (capped at 64 per pair); this is what pulls in bridge tables.
   6. `graph/pruning.prune_paths` — PathRAG flow pruning, sub-path dedup (inert on Spider2-Lite, which has almost no relation edges).
