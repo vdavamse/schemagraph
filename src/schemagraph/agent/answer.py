@@ -49,6 +49,11 @@ GEN_TIMEOUT_S = 120.0
 JUDGE_TIMEOUT_S = 30.0
 # Output tokens of the critic's advice.
 CRITIC_MAX_TOKENS = 800
+# Extra output tokens and request timeout of a role whose model reasons: reasoning counts
+# against ``max_tokens``, and a reasoning request takes longer (the node timeout still bounds
+# the whole node, ``AgentConfig.node_timeout_s``).
+REASONING_MAX_TOKENS = 8192
+REASONING_TIMEOUT_S = 180.0
 # Usage roles whose records are attached to the node they ran for.
 _NODE_ROLES = frozenset({"generator", "judge"})
 
@@ -156,6 +161,16 @@ class Answerer:
             ms=(time.perf_counter() - started) * 1000,
         )
 
+    def _limits(self, role: str, max_tokens: int | None, timeout: float) -> dict[str, Any]:
+        """Return ``role``'s output-token cap and request timeout, widened when it reasons."""
+        if self.models.reasoning(role):
+            max_tokens = (max_tokens or 0) + REASONING_MAX_TOKENS
+            timeout = max(timeout, REASONING_TIMEOUT_S)
+        limits: dict[str, Any] = {"timeout": timeout}
+        if max_tokens is not None:
+            limits["max_tokens"] = max_tokens
+        return limits
+
     async def _link(self, action: Action) -> LinkedSchema:
         """Link the question for a context action; ``tight`` keeps its small budget as is."""
         tight = action == "tight"
@@ -225,8 +240,7 @@ class Answerer:
             toolsets=[self._toolset],
             model_settings={
                 "temperature": temperature,
-                "max_tokens": GEN_MAX_TOKENS,
-                "timeout": GEN_TIMEOUT_S,
+                **self._limits("generator", GEN_MAX_TOKENS, GEN_TIMEOUT_S),
             },
             usage_limits=agents.generator_limits(),
             retries={"tools": 1, "output": self.cfg.output_retries},
@@ -342,7 +356,7 @@ class Answerer:
                 node_id=candidate.id,
                 sink=self.records,
                 output_type=rubric,
-                model_settings={"timeout": JUDGE_TIMEOUT_S},
+                model_settings=self._limits("judge", None, JUDGE_TIMEOUT_S),
             )
         except Exception:
             return None  # the candidate is scored on the checks alone
@@ -374,7 +388,7 @@ class Answerer:
                     model_name=self.models.names["critic"],
                     node_id=parent.id,
                     sink=self.records,
-                    model_settings={"max_tokens": CRITIC_MAX_TOKENS, "timeout": GEN_TIMEOUT_S},
+                    model_settings=self._limits("critic", CRITIC_MAX_TOKENS, GEN_TIMEOUT_S),
                 )
             except Exception:
                 parent.advice = ""  # refine from the deterministic feedback alone
@@ -391,7 +405,7 @@ class Answerer:
                 model=self.models.selector,
                 model_name=self.models.names["selector"],
                 sink=self.records,
-                model_settings={"timeout": JUDGE_TIMEOUT_S},
+                model_settings=self._limits("selector", None, JUDGE_TIMEOUT_S),
             )
         except Exception:
             return 0.5  # no preference; the failure is in the records

@@ -16,9 +16,10 @@ from dataclasses import dataclass
 from functools import cache
 from typing import Any
 
-from pydantic_ai import Agent, ModelRetry, RunContext
+from pydantic_ai import Agent, ModelRetry, RunContext, capture_run_messages
 from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 from pydantic_ai.mcp import CallToolFunc, MCPToolset, ToolResult
+from pydantic_ai.messages import ModelMessage, ModelResponse
 from pydantic_ai.tools import ToolDefinition
 from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.usage import RunUsage, UsageLimits
@@ -50,6 +51,10 @@ GENERATOR_REQUEST_LIMIT = 10
 GENERATOR_TOOL_CALLS_LIMIT = 8
 # Characters of a failure message kept on a usage record or a search node.
 FAILURE_CHARS = 500
+# USD per million (input, output) tokens of models whose responses carry no billed cost, by a
+# substring of the model name. Jev's published price, output free; OpenRouter chat models report
+# their cost and never need an entry.
+FALLBACK_PRICES = {"jev": (0.042, 0.0)}
 _TRUNCATED = "\n… (truncated)"
 
 
@@ -297,17 +302,56 @@ async def _run_with_backoff(
     """
     for delay in RETRY_DELAYS:
         try:
-            return await agent.run(prompt, model=model, usage=usage, **run_options)
+            return await _priced_run(
+                agent, prompt, model=model, usage=usage, record=record, **run_options
+            )
         except Exception as error:
             if not _retryable(error):
                 record.error = _error_text(error)
                 raise
         await asyncio.sleep(delay * (1 + random.random() / 4))
     try:
-        return await agent.run(prompt, model=model, usage=usage, **run_options)
+        return await _priced_run(
+            agent, prompt, model=model, usage=usage, record=record, **run_options
+        )
     except Exception as error:
         record.error = _error_text(error)
         raise
+
+
+async def _priced_run(
+    agent: Agent[Any, Any], prompt: str, *, record: UsageRecord, **options: Any
+) -> Any:
+    """Run ``agent`` once and add the cost of every response it got to ``record``.
+
+    The messages are captured so that a run that fails or is cancelled after some responses is
+    still charged for them.
+    """
+    with capture_run_messages() as messages:
+        try:
+            return await agent.run(prompt, **options)
+        finally:
+            _add_cost(record, messages)
+
+
+def _add_cost(record: UsageRecord, messages: list[ModelMessage]) -> None:
+    """Add the billed cost of the responses in ``messages`` to ``record``."""
+    fallback = next(
+        (price for key, price in FALLBACK_PRICES.items() if key in record.model.lower()), None
+    )
+    for message in messages:
+        if not isinstance(message, ModelResponse):
+            continue
+        cost = (message.provider_details or {}).get("cost")
+        if isinstance(cost, int | float):
+            record.cost_usd += float(cost)
+        elif fallback is not None:
+            usage = message.usage
+            record.cost_usd += (
+                usage.input_tokens * fallback[0] + usage.output_tokens * fallback[1]
+            ) / 1e6
+        else:
+            record.unpriced += 1
 
 
 async def run_agent(
@@ -358,6 +402,9 @@ async def run_agent(
         record.requests = usage.requests
         record.input_tokens = usage.input_tokens or 0
         record.output_tokens = usage.output_tokens or 0
+        record.reasoning_tokens = usage.details.get("reasoning_tokens", 0)
+        record.cache_read_tokens = usage.cache_read_tokens or 0
+        record.cache_write_tokens = usage.cache_write_tokens or 0
         record.tool_calls = usage.tool_calls
         record.ms = (time.perf_counter() - started) * 1000
         if sink is not None:

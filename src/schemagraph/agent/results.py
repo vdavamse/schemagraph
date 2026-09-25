@@ -221,8 +221,14 @@ class UsageRecord(BaseModel):
         calls: Agent runs.
         requests: Model requests.
         input_tokens: Prompt tokens.
-        output_tokens: Completion tokens.
+        output_tokens: Completion tokens, reasoning included.
+        reasoning_tokens: The part of ``output_tokens`` spent reasoning, where reported.
+        cache_read_tokens: Prompt tokens read from the provider's cache.
+        cache_write_tokens: Prompt tokens written to the provider's cache.
         tool_calls: Tool calls the model made.
+        cost_usd: Billed cost in USD: what the provider reported (OpenRouter), else the
+            fallback price of the model; failed and retried requests included.
+        unpriced: Model responses with neither a reported cost nor a fallback price.
         ms: Wall time.
         ok: Whether every run succeeded.
         error: The failure message of a failed run.
@@ -235,7 +241,12 @@ class UsageRecord(BaseModel):
     requests: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    reasoning_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
     tool_calls: int = 0
+    cost_usd: float = 0.0
+    unpriced: int = 0
     ms: float = 0.0
     ok: bool = True
     error: str | None = None
@@ -246,7 +257,12 @@ class UsageRecord(BaseModel):
         self.requests += other.requests
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
+        self.reasoning_tokens += other.reasoning_tokens
+        self.cache_read_tokens += other.cache_read_tokens
+        self.cache_write_tokens += other.cache_write_tokens
         self.tool_calls += other.tool_calls
+        self.cost_usd += other.cost_usd
+        self.unpriced += other.unpriced
         self.ms += other.ms
         self.ok = self.ok and other.ok
 

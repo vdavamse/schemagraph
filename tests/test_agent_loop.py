@@ -10,6 +10,7 @@ import asyncio
 import json
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -30,7 +31,11 @@ from typer.testing import CliRunner  # noqa: E402
 
 from schemagraph.agent import agents  # noqa: E402
 from schemagraph.agent import models as agent_models  # noqa: E402
-from schemagraph.agent.answer import Answerer  # noqa: E402
+from schemagraph.agent.answer import (  # noqa: E402
+    REASONING_MAX_TOKENS,
+    REASONING_TIMEOUT_S,
+    Answerer,
+)
 from schemagraph.agent.execute import AgentError, DuckDBExecutor, SQLiteExecutor  # noqa: E402
 from schemagraph.agent.models import AgentModels, model_names  # noqa: E402
 from schemagraph.agent.results import (  # noqa: E402
@@ -39,6 +44,7 @@ from schemagraph.agent.results import (  # noqa: E402
     CheckReport,
     ExecResult,
     Finding,
+    UsageRecord,
 )
 from schemagraph.agent.schema_client import SchemaClient  # noqa: E402
 from schemagraph.agent.search import _refine_action, run_search, select_final  # noqa: E402
@@ -218,6 +224,67 @@ def test_model_names_and_qwen_profile(monkeypatch):
     model = agent_models.resolve_model("alibaba:qwen3.8-max")
     assert model.model_name == "qwen3.8-max"
     assert model.profile["openai_supports_tool_choice_required"] is False  # pydantic-ai #1265
+
+
+def test_openrouter_models_reason_and_report_their_cost(monkeypatch):
+    pytest.importorskip("openai")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "x")
+    monkeypatch.delenv("SCHEMAGRAPH_REASONING", raising=False)
+    model = agent_models.resolve_model("openrouter:qwen/qwen3.8-max")
+    assert model.model_name == "qwen/qwen3.8-max"
+    assert model.settings["openrouter_reasoning"] == {"enabled": True, "effort": "medium"}
+    assert model.settings["openrouter_usage"] == {"include": True}
+    assert model.profile["openai_supports_tool_choice_required"] is False  # Qwen thinking
+    names = {"generator": "openrouter:qwen/qwen3.8-max", "judge": "typesafe:jev-1.13.0"}
+    models = AgentModels(None, None, None, None, names)
+    assert models.reasoning("generator") and not models.reasoning("judge")
+    widened = Answerer._limits(SimpleNamespace(models=models), "generator", 4096, 120.0)
+    assert widened == {"max_tokens": 4096 + REASONING_MAX_TOKENS, "timeout": REASONING_TIMEOUT_S}
+    assert Answerer._limits(SimpleNamespace(models=models), "judge", None, 30.0) == {
+        "timeout": 30.0
+    }
+
+    monkeypatch.setenv("SCHEMAGRAPH_REASONING", "off")
+    model = agent_models.resolve_model("openrouter:qwen/qwen3.8-max")
+    assert model.settings["openrouter_reasoning"] == {"enabled": False}
+    assert not models.reasoning("generator")
+    monkeypatch.setenv("SCHEMAGRAPH_REASONING", "max")
+    with pytest.raises(ValueError, match="SCHEMAGRAPH_REASONING"):
+        agent_models.resolve_model("openrouter:qwen/qwen3.8-max")
+
+
+def test_usage_records_billed_cost_reasoning_tokens_and_fallback_prices():
+    def priced(messages, info):
+        return ModelResponse(
+            parts=[TextPart("advice")],
+            usage=RequestUsage(input_tokens=100, output_tokens=50, details={"reasoning_tokens": 30}),
+            provider_details={"cost": 0.0021},
+        )
+
+    records: list[UsageRecord] = []
+    output, _, record = asyncio.run(
+        agents.run_agent(
+            "critic",
+            agents.critic(),
+            "p",
+            model=FunctionModel(priced),
+            model_name="openrouter:qwen/qwen3.8-max",
+            sink=records,
+        )
+    )
+    assert output == "advice" and records == [record]
+    assert record.cost_usd == pytest.approx(0.0021) and record.unpriced == 0
+    assert record.reasoning_tokens == 30
+
+    unpriced = UsageRecord(role="critic", model="openai:gpt-x")
+    agents._add_cost(unpriced, [ModelResponse(parts=[TextPart("a")])])
+    assert unpriced.cost_usd == 0.0 and unpriced.unpriced == 1
+    jev = UsageRecord(role="judge", model="typesafe:typesafe/jev-1.13")
+    usage = RequestUsage(input_tokens=1_000_000, output_tokens=10)
+    agents._add_cost(jev, [ModelResponse(parts=[TextPart("x")], usage=usage)])
+    assert jev.cost_usd == pytest.approx(0.042) and jev.unpriced == 0  # Jev: input only
+    jev.add(record)
+    assert jev.cost_usd == pytest.approx(0.0441) and jev.reasoning_tokens == 30
 
 
 def test_agents_build_without_keys(monkeypatch):

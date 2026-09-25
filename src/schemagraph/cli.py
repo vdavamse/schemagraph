@@ -14,7 +14,7 @@ from schemagraph.agent.results import Strategy
 from schemagraph.engine import Engine
 
 if TYPE_CHECKING:
-    from schemagraph.agent.results import AgentConfig, AnswerResult
+    from schemagraph.agent.results import AgentConfig, AnswerResult, UsageRecord
 
 app = typer.Typer(
     help="schemagraph: graph-native schema context engine for text-to-SQL.",
@@ -414,14 +414,22 @@ def _print_answer(result: AnswerResult) -> None:
     early = ", stopped early" if result.stopped_early else ""
     typer.echo(
         f"\nscore {result.score:.2f} ({result.chosen_by}), {result.nodes} nodes{early}, "
-        f"{result.ms / 1000:.1f}s"
+        f"{result.ms / 1000:.1f}s, {_cost(result.usage.total)}"
     )
     for role, usage in result.usage.by_role.items():
         errors = "" if usage.ok else " (errors)"
+        reasoning = f" reasoning={usage.reasoning_tokens}" if usage.reasoning_tokens else ""
         typer.echo(
             f"  {role:9} {usage.model:24} calls={usage.calls} requests={usage.requests} "
-            f"tokens={usage.input_tokens}/{usage.output_tokens} {usage.ms / 1000:.1f}s{errors}"
+            f"tokens={usage.input_tokens}/{usage.output_tokens}{reasoning} {_cost(usage)} "
+            f"{usage.ms / 1000:.1f}s{errors}"
         )
+
+
+def _cost(usage: UsageRecord) -> str:
+    """Format a usage record's cost, flagging responses that carried no price."""
+    unpriced = f" (+{usage.unpriced} unpriced)" if usage.unpriced else ""
+    return f"${usage.cost_usd:.4f}{unpriced}"
 
 
 StrategyOpt = Annotated[Strategy, typer.Option(help="abmcts | best_of_n | refine | single")]
