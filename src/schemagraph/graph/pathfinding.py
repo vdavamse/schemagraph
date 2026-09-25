@@ -26,40 +26,67 @@ import networkx as nx
 
 from schemagraph.graph.build import JOIN_KINDS, SchemaGraph, tnode
 
-MAX_PATHS_PER_PAIR = 64  # safety cap on paths enumerated (kept or not) between one anchor pair
+# Safety cap on paths enumerated (kept or not) between one anchor pair.
+MAX_PATHS_PER_PAIR = 64
+# Slack on the length comparison so float sums of equal edge costs count as ties.
+LENGTH_TOLERANCE = 1e-9
 
 
-def shortest_paths_between(tg: nx.Graph, a: str, b: str, max_extra: float = 0.0, cutoff: int = 6) -> list[list[str]]:
-    """All simple paths from a to b whose weighted length is within ``max_extra`` of the shortest.
+def _path_length(tg: nx.Graph, path: list[str]) -> float:
+    """Weighted length of a path: the sum of its edges' join costs."""
+    return sum(tg[u][v]["weight"] for u, v in zip(path, path[1:], strict=False))
+
+
+def shortest_paths_between(
+    tg: nx.Graph,
+    a: str,
+    b: str,
+    max_extra: float = 0.0,
+    cutoff: int = 6,
+) -> list[list[str]]:
+    """Find the simple paths from a to b within ``max_extra`` of the shortest weighted length.
 
     The shortest path is always returned; the tied or near-tied alternatives must also
-    have at most ``cutoff`` hops.
+    have at most ``cutoff`` hops. At most :data:`MAX_PATHS_PER_PAIR` paths are enumerated.
+
+    Args:
+        tg: Table graph (see ``SchemaGraph.table_graph``) whose edge ``weight`` is a join cost.
+        a: Start node id.
+        b: End node id.
+        max_extra: How much longer than the shortest path an alternative may be, in join cost.
+        cutoff: Maximum hops of an alternative path.
+
+    Returns:
+        The paths as node-id lists, in non-decreasing weighted length; ``[[a]]`` when
+        ``a == b``, empty when either node is missing or no path exists.
     """
     if a == b:
         return [[a]]
     if a not in tg or b not in tg:
         return []
-    out: list[list[str]] = []
+    paths: list[list[str]] = []
     best: float | None = None
     try:
         for i, path in enumerate(nx.shortest_simple_paths(tg, a, b, weight="weight")):
-            if i >= MAX_PATHS_PER_PAIR:  # counts enumerated paths: ties over the hop cutoff are not free
+            # counts enumerated paths: ties over the hop cutoff are not free
+            if i >= MAX_PATHS_PER_PAIR:
                 break
-            length = sum(tg[u][v]["weight"] for u, v in zip(path, path[1:], strict=False))
+            length = _path_length(tg, path)
             if best is None:
                 best = length
-                out.append(path)
+                paths.append(path)
                 continue
-            if length > best + max_extra + 1e-9:
+            if length > best + max_extra + LENGTH_TOLERANCE:
                 break
             if len(path) - 1 <= cutoff:
-                out.append(path)
+                paths.append(path)
     except nx.NetworkXNoPath:
         return []
-    return out
+    return paths
 
 
-def union_of_shortest_paths(schema_graph: SchemaGraph,
+def union_of_shortest_paths(
+    schema_graph: SchemaGraph,
     sources: list[str],
     destinations: list[str] | None = None,
     *,
@@ -67,39 +94,63 @@ def union_of_shortest_paths(schema_graph: SchemaGraph,
     cutoff: int = 6,
     kinds: frozenset[str] | set[str] | None = JOIN_KINDS,
 ) -> tuple[list[list[str]], set[str]]:
-    """Return (candidate paths, union of table fqns on those paths).
+    """Connect anchor tables through the union of their shortest join paths.
 
-    ``kinds`` selects the relation kinds walked (default: join-capable ones; ``None`` adds lineage).
+    Stage 5 of the linker (SchemaGraphSQL's union of shortest paths; see ``docs/DESIGN.md``):
+    this is what pulls bridge tables into the linked schema. If ``destinations`` is None,
+    pairs are formed among the sources themselves (the common case: "connect all anchor
+    tables"); otherwise every (source, destination) pair is connected. A path already found
+    in either direction is not repeated.
 
-    If ``destinations`` is None, pairs are formed among the sources themselves
-    (the common case: "connect all anchor tables").
+    Args:
+        schema_graph: The graph whose table projection is searched.
+        sources: Anchor table fqns; those not in the projection are ignored.
+        destinations: Optional second set of anchor table fqns.
+        max_extra: How much longer than the shortest path an alternative may be, in join cost.
+        cutoff: Maximum hops of an alternative path.
+        kinds: Relation kinds walked (default: join-capable ones; ``None`` adds lineage).
+
+    Returns:
+        ``(paths, tables)``: the candidate paths as table-node-id lists, and the fqns of every
+        table on those paths plus every anchor found in the projection.
     """
     tg = schema_graph.table_graph(kinds=kinds)
-    src = [tnode(s) for s in sources if tnode(s) in tg]
-    dst = [tnode(d) for d in destinations if tnode(d) in tg] if destinations else None
-    pairs = list(product(src, dst)) if dst else list(combinations(src, 2))
+    source_nodes = [tnode(s) for s in sources if tnode(s) in tg]
+    destination_nodes = (
+        [tnode(d) for d in destinations if tnode(d) in tg] if destinations else None
+    )
+    if destination_nodes:
+        pairs = list(product(source_nodes, destination_nodes))
+    else:
+        pairs = list(combinations(source_nodes, 2))
     paths: list[list[str]] = []
     seen: set[tuple[str, ...]] = set()
-    for a, b in pairs:
-        if a == b:
+    for start, end in pairs:
+        if start == end:
             continue
-        for p in shortest_paths_between(tg, a, b, max_extra=max_extra, cutoff=cutoff):
-            key = tuple(p)
-            if key in seen or tuple(reversed(p)) in seen:
+        for path in shortest_paths_between(tg, start, end, max_extra=max_extra, cutoff=cutoff):
+            key = tuple(path)
+            if key in seen or tuple(reversed(path)) in seen:
                 continue
             seen.add(key)
-            paths.append(p)
-    union = {schema_graph.graph.nodes[n]["fqn"] for p in paths for n in p}
-    union.update(schema_graph.graph.nodes[n]["fqn"] for n in src + (dst or []))
+            paths.append(path)
+    union = {schema_graph.graph.nodes[node]["fqn"] for path in paths for node in path}
+    union.update(
+        schema_graph.graph.nodes[node]["fqn"] for node in source_nodes + (destination_nodes or [])
+    )
     return paths, union
 
 
 def connected_components_of(schema_graph: SchemaGraph, fqns: list[str]) -> list[set[str]]:
+    """Group the given tables by the connected component of the join graph they fall in.
+
+    Tables missing from the join graph are dropped; components holding none of them are skipped.
+    """
     tg = schema_graph.table_graph()
-    nodes = [tnode(f) for f in fqns if tnode(f) in tg]
-    comps: list[set[str]] = []
-    for comp in nx.connected_components(tg):
-        hit = {tg.nodes[n]["fqn"] for n in nodes if n in comp}
+    nodes = [tnode(fqn) for fqn in fqns if tnode(fqn) in tg]
+    components: list[set[str]] = []
+    for component in nx.connected_components(tg):
+        hit = {tg.nodes[node]["fqn"] for node in nodes if node in component}
         if hit:
-            comps.append(hit)
-    return comps
+            components.append(hit)
+    return components
