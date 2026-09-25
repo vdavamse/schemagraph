@@ -2030,605 +2030,719 @@
   }
  },
  "cli": {
-  "add": [
-   [
-    "type_name",
+  "add": {
+   "help": "Register any connector from a JSON config.",
+   "params": [
     [
-     "type_name"
+     "type_name",
+     [
+      "type_name"
+     ],
+     "None",
+     "str",
+     "connector type: unity_catalog | aws_glue | collibra | ddl | dbt | duckdb"
     ],
-    "None",
-    "str"
-   ],
-   [
-    "name",
     [
-     "name"
+     "name",
+     [
+      "name"
+     ],
+     "None",
+     "str",
+     null
     ],
-    "None",
-    "str"
-   ],
-   [
-    "config",
     [
-     "--config",
-     "-c"
+     "config",
+     [
+      "--config",
+      "-c"
+     ],
+     "None",
+     "str",
+     "JSON config or @file.json; ${ENV} references allowed"
     ],
-    "None",
-    "str"
-   ],
-   [
-    "no_build",
     [
-     "--no-build"
+     "no_build",
+     [
+      "--no-build"
+     ],
+     "False",
+     "boolean",
+     null
     ],
-    "False",
-    "boolean"
-   ],
-   [
-    "priority",
     [
-     "--priority"
+     "priority",
+     [
+      "--priority"
+     ],
+     "None",
+     "int",
+     "merge order: lower merges first and wins conflicting fields (default: by source type, user > collibra > dbt > unity_catalog > duckdb > ddl > aws_glue); omitted on re-register keeps the stored one"
     ],
-    "None",
-    "int"
-   ],
-   [
-    "clear_priority",
     [
-     "--clear-priority"
+     "clear_priority",
+     [
+      "--clear-priority"
+     ],
+     "False",
+     "boolean",
+     "reset a stored priority to the source-type order"
     ],
-    "False",
-    "boolean"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "add-dbt": [
-   [
-    "project_dir",
+  },
+  "add-dbt": {
+   "help": "Register a dbt project (parsed without dbt) or a compiled manifest.",
+   "params": [
     [
-     "--project-dir"
+     "project_dir",
+     [
+      "--project-dir"
+     ],
+     "None",
+     "path",
+     "dbt project root"
     ],
-    "None",
-    "path"
-   ],
-   [
-    "manifest",
     [
-     "--manifest"
+     "manifest",
+     [
+      "--manifest"
+     ],
+     "None",
+     "path",
+     "target/manifest.json"
     ],
-    "None",
-    "path"
-   ],
-   [
-    "name",
     [
-     "--name",
-     "-n"
+     "name",
+     [
+      "--name",
+      "-n"
+     ],
+     "'dbt'",
+     "str",
+     null
     ],
-    "'dbt'",
-    "str"
-   ],
-   [
-    "schema",
     [
-     "--schema"
+     "schema",
+     [
+      "--schema"
+     ],
+     "None",
+     "str",
+     "default schema"
     ],
-    "None",
-    "str"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "add-ddl": [
-   [
-    "file",
+  },
+  "add-ddl": {
+   "help": "Register a DDL file as a connection and build it.",
+   "params": [
     [
-     "file"
+     "file",
+     [
+      "file"
+     ],
+     "None",
+     "path",
+     "SQL file with CREATE TABLE statements"
     ],
-    "None",
-    "path"
-   ],
-   [
-    "name",
     [
-     "--name",
-     "-n"
+     "name",
+     [
+      "--name",
+      "-n"
+     ],
+     "'ddl'",
+     "str",
+     null
     ],
-    "'ddl'",
-    "str"
-   ],
-   [
-    "dialect",
     [
-     "--dialect"
+     "dialect",
+     [
+      "--dialect"
+     ],
+     "None",
+     "str",
+     "sqlglot dialect"
     ],
-    "None",
-    "str"
-   ],
-   [
-    "schema",
     [
-     "--schema"
+     "schema",
+     [
+      "--schema"
+     ],
+     "None",
+     "str",
+     "default schema for unqualified tables"
     ],
-    "None",
-    "str"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "add-duckdb": [
-   [
-    "path",
+  },
+  "add-duckdb": {
+   "help": "Register a DuckDB database file.",
+   "params": [
     [
-     "path"
+     "path",
+     [
+      "path"
+     ],
+     "None",
+     "path",
+     null
     ],
-    "None",
-    "path"
-   ],
-   [
-    "name",
     [
-     "--name",
-     "-n"
+     "name",
+     [
+      "--name",
+      "-n"
+     ],
+     "'duckdb'",
+     "str",
+     null
     ],
-    "'duckdb'",
-    "str"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "bench-spider1": [
-   [
-    "tables_json",
+  },
+  "bench-spider1": {
+   "help": "Gold-table recall over a Spider-format dataset with real foreign keys (bridge tables, path union and pruning are measurable here).",
+   "params": [
     [
-     "tables_json"
+     "tables_json",
+     [
+      "tables_json"
+     ],
+     "None",
+     "path",
+     "Spider-format tables.json (declared FKs)"
     ],
-    "None",
-    "path"
-   ],
-   [
-    "questions_json",
     [
-     "questions_json"
+     "questions_json",
+     [
+      "questions_json"
+     ],
+     "None",
+     "path",
+     "questions [{db_id, question, query}]"
     ],
-    "None",
-    "path"
-   ],
-   [
-    "max_tables",
     [
-     "--max-tables"
+     "max_tables",
+     [
+      "--max-tables"
+     ],
+     "4",
+     "int",
+     null
     ],
-    "4",
-    "int"
-   ],
-   [
-    "anchor_k",
     [
-     "--anchor-k"
+     "anchor_k",
+     [
+      "--anchor-k"
+     ],
+     "2",
+     "int",
+     null
     ],
-    "2",
-    "int"
-   ],
-   [
-    "infer",
     [
-     "--infer"
+     "infer",
+     [
+      "--infer"
+     ],
+     "False",
+     "boolean",
+     "add name-based inferred edges on top of the declared FKs"
     ],
-    "False",
-    "boolean"
-   ],
-   [
-    "limit",
     [
-     "--limit"
+     "limit",
+     [
+      "--limit"
+     ],
+     "None",
+     "int",
+     null
     ],
-    "None",
-    "int"
-   ],
-   [
-    "dialect",
     [
-     "--dialect"
+     "dialect",
+     [
+      "--dialect"
+     ],
+     "'sqlite'",
+     "str",
+     null
     ],
-    "'sqlite'",
-    "str"
-   ],
-   [
-    "out",
     [
-     "--out"
+     "out",
+     [
+      "--out"
+     ],
+     "PosixPath('bench_results')",
+     "path",
+     null
     ],
-    "PosixPath('bench_results')",
-    "path"
-   ],
-   [
-    "tag",
     [
-     "--tag"
+     "tag",
+     [
+      "--tag"
+     ],
+     "None",
+     "str",
+     "output file tag"
     ],
-    "None",
-    "str"
-   ],
-   [
-    "opt",
     [
-     "--opt"
-    ],
-    "None",
-    "str"
+     "opt",
+     [
+      "--opt"
+     ],
+     "None",
+     "str",
+     "extra LinkOptions as key=value (repeatable)"
+    ]
    ]
-  ],
-  "bench-spider2-lite": [
-   [
-    "spider2_root",
+  },
+  "bench-spider2-lite": {
+   "help": "Gold-table recall of link_schema over the 547 Spider 2.0-Lite (or -Snow) tasks (no execution, no credentials).",
+   "params": [
     [
-     "spider2_root"
+     "spider2_root",
+     [
+      "spider2_root"
+     ],
+     "None",
+     "path",
+     "path to the xlang-ai/Spider2 clone"
     ],
-    "None",
-    "path"
-   ],
-   [
-    "max_tables",
     [
-     "--max-tables"
+     "max_tables",
+     [
+      "--max-tables"
+     ],
+     "20",
+     "int",
+     null
     ],
-    "20",
-    "int"
-   ],
-   [
-    "anchor_k",
     [
-     "--anchor-k"
+     "anchor_k",
+     [
+      "--anchor-k"
+     ],
+     "6",
+     "int",
+     null
     ],
-    "6",
-    "int"
-   ],
-   [
-    "docs",
     [
-     "--docs"
+     "docs",
+     [
+      "--docs"
+     ],
+     "True",
+     "boolean",
+     "append the task's external-knowledge document to the question"
     ],
-    "True",
-    "boolean"
-   ],
-   [
-    "doc_chars",
     [
-     "--doc-chars"
+     "doc_chars",
+     [
+      "--doc-chars"
+     ],
+     "4000",
+     "int",
+     null
     ],
-    "4000",
-    "int"
-   ],
-   [
-    "infer",
     [
-     "--infer"
+     "infer",
+     [
+      "--infer"
+     ],
+     "True",
+     "boolean",
+     "add name-based inferred edges (catalogs declare no FKs)"
     ],
-    "True",
-    "boolean"
-   ],
-   [
-    "families",
     [
-     "--families"
+     "families",
+     [
+      "--families"
+     ],
+     "True",
+     "boolean",
+     "collapse partition families (tables differing only in digit runs with the same columns)"
     ],
-    "True",
-    "boolean"
-   ],
-   [
-    "dialect",
     [
-     "--dialect"
+     "dialect",
+     [
+      "--dialect"
+     ],
+     "None",
+     "str",
+     "bigquery | snowflake | sqlite (repeatable)"
     ],
-    "None",
-    "str"
-   ],
-   [
-    "limit",
     [
-     "--limit"
+     "limit",
+     [
+      "--limit"
+     ],
+     "None",
+     "int",
+     null
     ],
-    "None",
-    "int"
-   ],
-   [
-    "min_db_tables",
     [
-     "--min-db-tables"
+     "min_db_tables",
+     [
+      "--min-db-tables"
+     ],
+     "0",
+     "int",
+     "only tasks whose database has at least this many tables"
     ],
-    "0",
-    "int"
-   ],
-   [
-    "llm",
     [
-     "--llm"
+     "llm",
+     [
+      "--llm"
+     ],
+     "False",
+     "boolean",
+     "use Claude to pick anchor tables"
     ],
-    "False",
-    "boolean"
-   ],
-   [
-    "out",
     [
-     "--out"
+     "out",
+     [
+      "--out"
+     ],
+     "PosixPath('bench_results')",
+     "path",
+     null
     ],
-    "PosixPath('bench_results')",
-    "path"
-   ],
-   [
-    "tag",
     [
-     "--tag"
+     "tag",
+     [
+      "--tag"
+     ],
+     "None",
+     "str",
+     "output file tag"
     ],
-    "None",
-    "str"
-   ],
-   [
-    "opt",
     [
-     "--opt"
+     "opt",
+     [
+      "--opt"
+     ],
+     "None",
+     "str",
+     "extra LinkOptions as key=value (repeatable)"
     ],
-    "None",
-    "str"
-   ],
-   [
-    "suite",
     [
-     "--suite"
+     "suite",
+     [
+      "--suite"
+     ],
+     "'lite'",
+     "str",
+     "lite (547 tasks, 3 dialects) | snow (547 tasks, all Snowflake, larger schemas)"
     ],
-    "'lite'",
-    "str"
-   ],
-   [
-    "desc_weight",
     [
-     "--desc-weight"
+     "desc_weight",
+     [
+      "--desc-weight"
+     ],
+     "0.35",
+     "float",
+     "index weight of a token found only in a table/column description"
     ],
-    "0.35",
-    "float"
-   ],
-   [
-    "only",
     [
-     "--only"
-    ],
-    "None",
-    "str"
+     "only",
+     [
+      "--only"
+     ],
+     "None",
+     "str",
+     "only these instance ids (repeatable)"
+    ]
    ]
-  ],
-  "build": [
-   [
-    "name",
+  },
+  "build": {
+   "help": "(Re)introspect one connection or all.",
+   "params": [
     [
-     "name"
+     "name",
+     [
+      "name"
+     ],
+     "None",
+     "str",
+     null
     ],
-    "None",
-    "str"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "connections": [
-   [
-    "home",
+  },
+  "connections": {
+   "help": "List connections.",
+   "params": [
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "explain": [
-   [
-    "question",
+  },
+  "explain": {
+   "help": "Show activation seeds and PPR scores for a question.",
+   "params": [
     [
-     "question"
+     "question",
+     [
+      "question"
+     ],
+     "None",
+     "str",
+     null
     ],
-    "None",
-    "str"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "link": [
-   [
-    "question",
+  },
+  "link": {
+   "help": "Link a question to a sub-schema and print annotated DDL.",
+   "params": [
     [
-     "question"
+     "question",
+     [
+      "question"
+     ],
+     "None",
+     "str",
+     null
     ],
-    "None",
-    "str"
-   ],
-   [
-    "max_tables",
     [
-     "--max-tables"
+     "max_tables",
+     [
+      "--max-tables"
+     ],
+     "20",
+     "int",
+     null
     ],
-    "20",
-    "int"
-   ],
-   [
-    "columns",
     [
-     "--columns"
+     "columns",
+     [
+      "--columns"
+     ],
+     "'relevant'",
+     "str",
+     null
     ],
-    "'relevant'",
-    "str"
-   ],
-   [
-    "llm",
     [
-     "--llm"
+     "llm",
+     [
+      "--llm"
+     ],
+     "False",
+     "boolean",
+     "use Claude to pick anchor tables"
     ],
-    "False",
-    "boolean"
-   ],
-   [
-    "as_json",
     [
-     "--json"
+     "as_json",
+     [
+      "--json"
+     ],
+     "False",
+     "boolean",
+     null
     ],
-    "False",
-    "boolean"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "mcp": [
-   [
-    "home",
+  },
+  "mcp": {
+   "help": "Run the MCP server (stdio by default).",
+   "params": [
     [
-     "--home",
-     "-H"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
     ],
-    "None",
-    "path"
-   ],
-   [
-    "transport",
     [
-     "--transport"
-    ],
-    "'stdio'",
-    "str"
+     "transport",
+     [
+      "--transport"
+     ],
+     "'stdio'",
+     "str",
+     null
+    ]
    ]
-  ],
-  "path": [
-   [
-    "a",
+  },
+  "path": {
+   "help": "Shortest join path(s) between two tables.",
+   "params": [
     [
-     "a"
+     "a",
+     [
+      "a"
+     ],
+     "None",
+     "str",
+     null
     ],
-    "None",
-    "str"
-   ],
-   [
-    "b",
     [
-     "b"
+     "b",
+     [
+      "b"
+     ],
+     "None",
+     "str",
+     null
     ],
-    "None",
-    "str"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "remove": [
-   [
-    "name",
+  },
+  "remove": {
+   "help": "Remove a connection and its snapshot.",
+   "params": [
     [
-     "name"
+     "name",
+     [
+      "name"
+     ],
+     "None",
+     "str",
+     null
     ],
-    "None",
-    "str"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "serve": [
-   [
-    "host",
+  },
+  "serve": {
+   "help": "Run the HTTP API + frontend.",
+   "params": [
     [
-     "--host"
+     "host",
+     [
+      "--host"
+     ],
+     "'127.0.0.1'",
+     "str",
+     null
     ],
-    "'127.0.0.1'",
-    "str"
-   ],
-   [
-    "port",
     [
-     "--port"
+     "port",
+     [
+      "--port"
+     ],
+     "8765",
+     "int",
+     null
     ],
-    "8765",
-    "int"
-   ],
-   [
-    "home",
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ],
-  "stats": [
-   [
-    "home",
+  },
+  "stats": {
+   "help": "Print graph statistics as JSON.",
+   "params": [
     [
-     "--home",
-     "-H"
-    ],
-    "None",
-    "path"
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
    ]
-  ]
+  }
  },
  "link_options": [
   [

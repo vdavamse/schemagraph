@@ -447,7 +447,13 @@ def test_golden_surfaces(tmp_path):
     tools = asyncio.run(create_server(engine).list_tools())
     command = get_command(cli_app)
     cli = {
-        name: [[p.name, list(getattr(p, "opts", [])), repr(p.default), getattr(p.type, "name", str(p.type))] for p in cmd.params]
+        name: {
+            "help": cmd.help,
+            "params": [
+                [p.name, list(getattr(p, "opts", [])), repr(p.default), getattr(p.type, "name", str(p.type)), getattr(p, "help", None)]
+                for p in cmd.params
+            ],
+        }
         for name, cmd in sorted(command.commands.items())
     }
     check_golden("surfaces", {
