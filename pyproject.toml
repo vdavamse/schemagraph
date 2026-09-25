@@ -57,7 +57,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "D", "C901"]
-ignore = ["E501", "D105", "D107"]
+ignore = [
+    "D105",  # magic methods
+    "D107",  # __init__: constructor arguments are documented in the class docstring
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -66,4 +69,4 @@ convention = "google"
 max-complexity = 12
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D"]
+"tests/**" = ["D", "E501"]
