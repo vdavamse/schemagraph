@@ -69,11 +69,4 @@ max-complexity = 12
 "tests/**" = ["D"]
 # TEMP (#8): removed as each module is refactored; empty at merge
 "src/schemagraph/**/__init__.py" = ["D"]
-"src/schemagraph/api/app.py" = ["D", "C901"]
-"src/schemagraph/cli.py" = ["D", "C901"]
 "src/schemagraph/connectors/**" = ["D", "C901"]
-"src/schemagraph/engine.py" = ["D", "C901"]
-"src/schemagraph/llm/**" = ["D", "C901"]
-"src/schemagraph/mcp/**" = ["D", "C901"]
-"src/schemagraph/model.py" = ["D", "C901"]
-"src/schemagraph/store.py" = ["D", "C901"]
