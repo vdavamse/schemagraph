@@ -34,7 +34,13 @@ from schemagraph.graph.ppr import (
 )
 from schemagraph.graph.pruning import prune_paths
 from schemagraph.linking.bm25 import BM25Index, bm25_scores, build_bm25, reciprocal_rank_fusion
-from schemagraph.linking.lexical import Activation, LexicalIndex, activate, build_index
+from schemagraph.linking.lexical import (
+    DEFAULT_MIN_NUMERIC_LEN,
+    Activation,
+    LexicalIndex,
+    activate,
+    build_index,
+)
 from schemagraph.linking.render import render_ddl
 from schemagraph.model import Column, JoinPath, LinkedColumn, LinkedTable, LinkResult, Table
 
@@ -150,7 +156,7 @@ class LinkOptions:
     ranking_limit: int = 60
     idf: bool = True
     agg: str = "top3"
-    min_numeric_len: int = 4
+    min_numeric_len: int = DEFAULT_MIN_NUMERIC_LEN
     adaptive_budget: bool = True
     large_threshold: int = 30
     max_tables_large: int = 20

@@ -11,6 +11,8 @@ MAX_LINEAGE_LISTED = 6
 MAX_SAMPLES_RENDERED = 5
 # Table kinds that come from dbt and are rendered as "dbt <kind>".
 DBT_KINDS = frozenset({"model", "source", "seed", "snapshot"})
+# Starts the header line with the linked-table count; the benchmark splits the DDL on it.
+LINKED_TABLES_MARKER = "-- Linked tables:"
 
 
 def _header_lines(result: LinkResult) -> list[str]:
@@ -18,7 +20,7 @@ def _header_lines(result: LinkResult) -> list[str]:
     anchors = ", ".join(result.anchors) or "none"
     lines = [
         f"-- Question: {result.question}",
-        f"-- Linked tables: {len(result.tables)} (anchors: {anchors})",
+        f"{LINKED_TABLES_MARKER} {len(result.tables)} (anchors: {anchors})",
     ]
     if result.glossary:
         lines.append("")

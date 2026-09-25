@@ -18,14 +18,12 @@ from functools import lru_cache
 import numpy as np
 
 from schemagraph.graph.build import SchemaGraph
-from schemagraph.linking.lexical import NGRAM_MAX, ngrams, tokenize
+from schemagraph.linking.lexical import DEFAULT_MIN_NUMERIC_LEN, NGRAM_MAX, ngrams, tokenize
 
 DEFAULT_MODEL = "minishlab/potion-base-8M"
 MAX_PHRASES = 80  # question phrases embedded per query
 # A text longer than this with a blank line is a question with an appended external document.
 QUESTION_PART_MIN_CHARS = 400
-# Digit-only question tokens shorter than this are not phrases (as in the lexical activator).
-MIN_NUMERIC_LEN = 4
 
 
 def _spaced_words(text: str | None) -> str:
@@ -42,7 +40,9 @@ def question_part(text: str) -> str:
 def phrases(text: str) -> list[str]:
     """The question's tokens, then its space-joined n-grams, deduplicated and capped."""
     tokens = [
-        t for t in tokenize(question_part(text)) if not (t.isdigit() and len(t) < MIN_NUMERIC_LEN)
+        token
+        for token in tokenize(question_part(text))
+        if not (token.isdigit() and len(token) < DEFAULT_MIN_NUMERIC_LEN)
     ]
     grams = [gram.replace("_", " ") for gram in ngrams(tokens, NGRAM_MAX)]
     out = list(dict.fromkeys(tokens + grams))

@@ -19,6 +19,7 @@ from schemagraph.linking.lexical import (
     ABBREV_REVERSE,
     ABBREVIATIONS,
     BUSINESS_NAME_PROPERTIES,
+    DEFAULT_MIN_NUMERIC_LEN,
     EXPANSION_WEIGHT,
     STOPWORDS,
     TOKEN_WEIGHT,
@@ -29,8 +30,6 @@ from schemagraph.linking.lexical import (
 
 # Per-field weight, mirroring the lexical index's posting weights.
 FIELD_WEIGHT = {"name": 1.0, "columns": 1.0, "business": 0.9, "tags": 0.5, "desc": 0.35}
-# Digit-only query tokens shorter than this are ignored (LinkOptions.min_numeric_len default).
-MIN_NUMERIC_LEN = 4
 
 
 @dataclass
@@ -94,7 +93,7 @@ def query_terms(question: str) -> dict[str, float]:
     """Question tokens with the activator's expansions; weight is the max over forms."""
     out: dict[str, float] = {}
     for token in tokenize(question):
-        if token in STOPWORDS or (token.isdigit() and len(token) < MIN_NUMERIC_LEN):
+        if token in STOPWORDS or (token.isdigit() and len(token) < DEFAULT_MIN_NUMERIC_LEN):
             continue
         forms = [(token, TOKEN_WEIGHT), (lemma(token), EXPANSION_WEIGHT)]
         if token in ABBREVIATIONS:

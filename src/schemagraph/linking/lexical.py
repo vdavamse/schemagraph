@@ -81,6 +81,10 @@ ABBREV_REVERSE: dict[str, list[str]] = _reverse_abbreviations(ABBREVIATIONS)
 _SPLIT_RE = re.compile(r"[^a-z0-9]+")
 _CAMEL_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 MAX_VALUE_TOKENS = 6  # sample values longer than this fall back to a regex scan
+# Digit-only question tokens shorter than this are ignored as single tokens (years and ids
+# survive, "3" or "10" do not). The default of ``LinkOptions.min_numeric_len``; BM25 and the
+# embedding activator always use this default.
+DEFAULT_MIN_NUMERIC_LEN = 4
 
 # Index-time posting weights: how strongly a token found in each place points at its object.
 NAME_WEIGHT = 1.0  # a token of the object's own name (or of a glossary term / synonym)
@@ -606,7 +610,7 @@ def activate(
     question: str,
     *,
     idf: bool = True,
-    min_numeric_len: int = 4,
+    min_numeric_len: int = DEFAULT_MIN_NUMERIC_LEN,
     ngram_stop: bool = True,
 ) -> Activation:
     """Activate schema objects from a question.
