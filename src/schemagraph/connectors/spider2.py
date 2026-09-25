@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -32,7 +33,7 @@ DIALECT_FOR_PREFIX = {"bq": "bigquery", "ga": "bigquery", "sf": "snowflake", "lo
 # Spider2Config.dialect -> sqlglot dialect used to parse ``DDL.csv``.
 _DDL_DIALECTS = {"bigquery": "bigquery", "snowflake": "snowflake", "sqlite": "sqlite"}
 # Sample values longer than this many characters are skipped.
-MAX_SAMPLE_CHARS = 80
+MAX_SAMPLE_VALUE_CHARS = 80
 
 
 def family_signature(name: str) -> str:
@@ -93,7 +94,8 @@ def _sample_values(rows: list[dict], col: str, limit: int) -> list[str]:
     out: list[str] = []
     for row in rows or []:
         value = row.get(col)
-        if isinstance(value, str) and 0 < len(value) <= MAX_SAMPLE_CHARS and value not in out:
+        is_short_text = isinstance(value, str) and 0 < len(value) <= MAX_SAMPLE_VALUE_CHARS
+        if is_short_text and value not in out:
             out.append(value)
         if len(out) >= limit:
             break
@@ -254,7 +256,7 @@ def _collapse_by_signature(tables: dict[str, Table], jaccard: float) -> dict[str
     return out
 
 
-def _resolver(tables: list[Table]):
+def _resolver(tables: list[Table]) -> Callable[[str], Table | None]:
     """Resolve a table name by fqn, else by bare name (first table with that name wins)."""
     by_name = {t.fqn.lower(): t for t in tables}
     by_bare: dict[str, Table] = {}
@@ -321,7 +323,7 @@ def _load_families(
 
 
 def _describe_families(tables: list[Table]) -> None:
-    """Append the member count and first/last member to each family's description."""
+    """Append the member count and first/last member to every family (date shard or digit run)."""
     for table in tables:
         if table.properties.get("family"):
             members = table.properties["members"].split(",")

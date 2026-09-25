@@ -11,12 +11,15 @@ Optional: Lake Formation LF-tags per table are attached as ``tags`` when
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
 
 from schemagraph.connectors.base import register
 from schemagraph.model import Column, SchemaSnapshot, Table
+
+if TYPE_CHECKING:
+    import boto3
 
 
 class GlueConfig(BaseModel):
@@ -44,21 +47,21 @@ class GlueConfig(BaseModel):
 
 
 # Glue table ``Parameters`` copied into ``Table.properties``.
-KEPT_TABLE_PARAMETERS: frozenset[str] = frozenset(
+_KEPT_TABLE_PARAMETERS: frozenset[str] = frozenset(
     {"classification", "comment", "EXTERNAL", "has_encrypted_data", "typeOfData", "table_type"}
 )
 # Databases requested by ``check()``.
-CHECK_MAX_DATABASES = 50
+_CHECK_MAX_DATABASES = 50
 
 
-def _session(cfg: GlueConfig):
+def _session(cfg: GlueConfig) -> boto3.Session:
     """A boto3 session for the configured profile and region (boto3 imported lazily)."""
     import boto3
 
     return boto3.Session(profile_name=cfg.profile, region_name=cfg.region)
 
 
-def _databases(glue_client, catalog_kw: dict[str, Any]) -> list[dict[str, Any]]:
+def _databases(glue_client: Any, catalog_kw: dict[str, Any]) -> list[dict[str, Any]]:
     """Every Glue database, all pages read up front."""
     databases: list[dict[str, Any]] = []
     for page in glue_client.get_paginator("get_databases").paginate(**catalog_kw):
@@ -85,7 +88,7 @@ def _table_from_glue(
     params = {
         k: str(v)
         for k, v in (raw.get("Parameters") or {}).items()
-        if k in KEPT_TABLE_PARAMETERS
+        if k in _KEPT_TABLE_PARAMETERS
     }
     if storage.get("Location"):
         params["location"] = storage["Location"]
@@ -121,39 +124,53 @@ def _table_from_glue(
     return table
 
 
+class _LakeFormation:
+    """Lake Formation client of one introspection, created on first use and then reused.
+
+    Creation is retried on the next ``client()`` call when it fails.
+    """
+
+    def __init__(
+        self,
+        cfg: GlueConfig,
+        session: boto3.Session | None,
+        lf_client: Any | None,
+    ):
+        self.cfg = cfg
+        self.session = session
+        self.lf_client = lf_client
+
+    def client(self) -> Any:
+        """The Lake Formation client, created from the session (or a new one) if not yet made."""
+        if self.lf_client is None:
+            self.lf_client = (self.session or _session(self.cfg)).client(
+                "lakeformation",
+                endpoint_url=self.cfg.endpoint_url,
+            )
+        return self.lf_client
+
+
 def _attach_lf_tags(
     table: Table,
     database_name: str,
-    cfg: GlueConfig,
     catalog_kw: dict[str, Any],
-    session,
-    lf_client,
+    lake_formation: _LakeFormation,
     snap: SchemaSnapshot,
-):
+) -> None:
     """Attach a table's Lake Formation LF-tags to it and its columns.
 
-    Any failure (permissions vary) becomes a snapshot warning; tags attached before the
-    failure stay.
+    Any failure (permissions vary), including creating the client, becomes a snapshot
+    warning; tags attached before the failure stay.
 
     Args:
         table: The table; mutated in place.
         database_name: Glue database of the table.
-        cfg: Connector config.
         catalog_kw: ``{"CatalogId": ...}`` or empty.
-        session: boto3 session reused to create the Lake Formation client, or None.
-        lf_client: Lake Formation client, or None to create one.
+        lake_formation: Lazy Lake Formation client holder.
         snap: Snapshot that receives warnings.
-
-    Returns:
-        The Lake Formation client to reuse for the next table (None if it could not be made).
     """
     try:
-        if lf_client is None:
-            lf_client = (session or _session(cfg)).client(
-                "lakeformation",
-                endpoint_url=cfg.endpoint_url,
-            )
-        response = lf_client.get_resource_lf_tags(
+        response = lake_formation.client().get_resource_lf_tags(
             Resource={"Table": {"DatabaseName": database_name, "Name": table.name, **catalog_kw}},
             ShowAssignedLFTags=True,
         )
@@ -166,16 +183,15 @@ def _attach_lf_tags(
                 for tag in column_tags.get("LFTags") or []:
                     for value in tag.get("TagValues") or []:
                         column.tags.append(f"{tag.get('TagKey')}={value}")
-    except Exception as e:  # noqa: BLE001 - permissions vary
+    except Exception as e:  # permissions vary
         snap.warnings.append(f"LF-tags unavailable for {database_name}.{table.name}: {e}")
-    return lf_client
 
 
 def introspect_glue(
     cfg: GlueConfig,
     source: str = "glue",
-    glue_client=None,
-    lf_client=None,
+    glue_client: Any | None = None,
+    lf_client: Any | None = None,
 ) -> SchemaSnapshot:
     """Read Glue databases and tables (and optionally LF-tags) into a stamped snapshot.
 
@@ -194,6 +210,7 @@ def introspect_glue(
         session = _session(cfg)
         glue_client = session.client("glue", endpoint_url=cfg.endpoint_url)
     catalog_kw = {"CatalogId": cfg.catalog_id} if cfg.catalog_id else {}
+    lake_formation = _LakeFormation(cfg, session, lf_client)
 
     for database in _databases(glue_client, catalog_kw):
         database_name = database["Name"]
@@ -204,15 +221,7 @@ def introspect_glue(
             for raw in page.get("TableList") or []:
                 table = _table_from_glue(raw, database_name, cfg, source)
                 if cfg.lf_tags:
-                    lf_client = _attach_lf_tags(
-                        table,
-                        database_name,
-                        cfg,
-                        catalog_kw,
-                        session,
-                        lf_client,
-                        snap,
-                    )
+                    _attach_lf_tags(table, database_name, catalog_kw, lake_formation, snap)
                 snap.tables.append(table)
     return snap.stamp()
 
@@ -232,7 +241,7 @@ class GlueConnector:
         """Count the databases visible to the configured credentials."""
         client = _session(self.config).client("glue", endpoint_url=self.config.endpoint_url)
         catalog_kw = {"CatalogId": self.config.catalog_id} if self.config.catalog_id else {}
-        response = client.get_databases(MaxResults=CHECK_MAX_DATABASES, **catalog_kw)
+        response = client.get_databases(MaxResults=_CHECK_MAX_DATABASES, **catalog_kw)
         databases = response.get("DatabaseList") or []
         return f"ok: {len(databases)} databases visible"
 

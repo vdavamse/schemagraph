@@ -44,16 +44,16 @@ _REF_ARG_RE = re.compile(
 
 
 # Resource type of a manifest node -> Table.kind (anything else becomes "table").
-NODE_KINDS: dict[str, str] = {
+_NODE_KINDS: dict[str, str] = {
     "model": "model",
     "source": "source",
     "seed": "seed",
     "snapshot": "snapshot",
 }
 # Manifest resource types that become tables.
-TABLE_RESOURCE_TYPES: frozenset[str] = frozenset({"model", "seed", "snapshot", "source"})
+_TABLE_RESOURCE_TYPES: frozenset[str] = frozenset({"model", "seed", "snapshot", "source"})
 # Manifest resource types a ``ref()`` can point at.
-REF_RESOURCE_TYPES: frozenset[str] = frozenset({"model", "seed", "snapshot"})
+_REF_RESOURCE_TYPES: frozenset[str] = frozenset({"model", "seed", "snapshot"})
 # An ``accepted_values`` test contributes at most this many sample values.
 MAX_ACCEPTED_VALUES = 20
 # Cap on the column names guessed from a model's final SELECT.
@@ -105,7 +105,7 @@ def _node_table(node: dict[str, Any], cfg: DbtConfig, source: str) -> Table:
         name=node.get("alias") or node.get("identifier") or node.get("name"),
         schema=schema,
         catalog=cfg.catalog,
-        kind=NODE_KINDS.get(node.get("resource_type"), "table"),
+        kind=_NODE_KINDS.get(node.get("resource_type"), "table"),
         description=node.get("description") or None,
         columns=columns,
         tags=list(node.get("tags") or []),
@@ -130,7 +130,7 @@ def _manifest_tables(
     """Tables for every table-like node, by unique_id, in manifest order."""
     uid_to_table: dict[str, Table] = {}
     for uid, node in nodes.items():
-        if node.get("resource_type") not in TABLE_RESOURCE_TYPES:
+        if node.get("resource_type") not in _TABLE_RESOURCE_TYPES:
             continue
         uid_to_table[uid] = _node_table(node, cfg, source)
     return uid_to_table
@@ -337,7 +337,7 @@ def _resolve_ref_expr(expr: str, nodes: dict[str, dict[str, Any]]) -> str | None
         return None
     name = b or a
     for uid, node in nodes.items():
-        if node.get("resource_type") in REF_RESOURCE_TYPES and node.get("name") == name:
+        if node.get("resource_type") in _REF_RESOURCE_TYPES and node.get("name") == name:
             return uid
     return None
 

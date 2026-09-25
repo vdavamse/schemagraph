@@ -31,9 +31,9 @@ class DuckDBConfig(BaseModel):
 # Schemas that describe the database itself, never introspected.
 _SYSTEM_SCHEMAS = {"information_schema", "pg_catalog", "main.information_schema"}
 # Data-type prefixes of the columns that get sample values.
-TEXT_TYPE_PREFIXES = ("VARCHAR", "TEXT", "STRING", "CHAR")
+_TEXT_TYPE_PREFIXES = ("VARCHAR", "TEXT", "STRING", "CHAR")
 # A sample value is truncated to this many characters.
-MAX_SAMPLE_CHARS = 80
+SAMPLE_TRUNCATE_CHARS = 80
 
 # Tables and views with a literal table type: duckdb_tables() has no table_type column
 # (DuckDB 1.5).
@@ -161,13 +161,15 @@ def _add_row_counts_and_samples(
                 snap.warnings.append(f"row count failed for {table.fqn}: {e}")
         if cfg.sample_values:
             for column in table.columns:
-                if column.data_type and column.data_type.upper().startswith(TEXT_TYPE_PREFIXES):
+                if column.data_type and column.data_type.upper().startswith(_TEXT_TYPE_PREFIXES):
                     try:
                         values = con.execute(
                             f'SELECT DISTINCT "{column.name}" FROM {quoted}'
                             f' WHERE "{column.name}" IS NOT NULL LIMIT {cfg.sample_values}'
                         ).fetchall()
-                        column.sample_values = [str(v[0])[:MAX_SAMPLE_CHARS] for v in values]
+                        column.sample_values = [
+                            str(v[0])[:SAMPLE_TRUNCATE_CHARS] for v in values
+                        ]
                     except duckdb.Error:  # pragma: no cover
                         pass
 

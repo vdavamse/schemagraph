@@ -14,6 +14,7 @@ Endpoints used (verify against your workspace's API version):
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any, ClassVar
 
 import httpx
@@ -52,15 +53,15 @@ class UnityConfig(BaseModel):
 
 
 # Catalogs that hold Databricks internals, never user tables.
-SKIPPED_CATALOGS: frozenset[str] = frozenset({"system", "__databricks_internal"})
+_SKIPPED_CATALOGS: frozenset[str] = frozenset({"system", "__databricks_internal"})
 # Schema present in every catalog that describes the catalog itself.
-SKIPPED_SCHEMA = "information_schema"
+_SKIPPED_SCHEMA = "information_schema"
 # Page size of the tables endpoint.
-TABLES_PAGE_SIZE = 50
+_TABLES_PAGE_SIZE = 50
 # Table property prefix of Delta internals, left out of ``Table.properties``.
-DELTA_PROPERTY_PREFIX = "delta."
+_DELTA_PROPERTY_PREFIX = "delta."
 # Catalogs listed by ``check()`` before eliding the rest.
-CHECK_LISTED_CATALOGS = 5
+_CHECK_LISTED_CATALOGS = 5
 
 
 class UnityClient:
@@ -83,7 +84,7 @@ class UnityClient:
         response.raise_for_status()
         return response.json()
 
-    def paged(self, path: str, key: str, **params: Any):
+    def paged(self, path: str, key: str, **params: Any) -> Iterator[dict[str, Any]]:
         """Yield every item under ``key`` of a paged endpoint, following ``next_page_token``."""
         token = None
         while True:
@@ -109,7 +110,7 @@ class UnityClient:
                 "tables",
                 catalog_name=catalog,
                 schema_name=schema,
-                max_results=TABLES_PAGE_SIZE,
+                max_results=_TABLES_PAGE_SIZE,
             )
         )
 
@@ -132,19 +133,22 @@ def _kind(table_type: str | None) -> str:
     return "table"
 
 
-def _iter_tables(client: UnityClient, cfg: UnityConfig):
+def _iter_tables(
+    client: UnityClient,
+    cfg: UnityConfig,
+) -> Iterator[tuple[str, str, dict[str, Any]]]:
     """Yield (catalog, schema, raw table) for every table the config selects, lazily."""
     for catalog in client.catalogs():
         catalog_name = catalog.get("name")
         if not catalog_name or (cfg.catalogs and catalog_name not in cfg.catalogs):
             continue
-        if catalog_name in SKIPPED_CATALOGS:
+        if catalog_name in _SKIPPED_CATALOGS:
             continue
         for schema in client.schemas(catalog_name):
             schema_name = schema.get("name")
             if (
                 not schema_name
-                or schema_name == SKIPPED_SCHEMA
+                or schema_name == _SKIPPED_SCHEMA
                 or (cfg.schemas and schema_name not in cfg.schemas)
             ):
                 continue
@@ -170,7 +174,7 @@ def _table_from_unity(
         properties={
             k: str(v)
             for k, v in (raw.get("properties") or {}).items()
-            if not k.startswith(DELTA_PROPERTY_PREFIX)
+            if not k.startswith(_DELTA_PROPERTY_PREFIX)
         },
         source=source,
     )
@@ -186,8 +190,8 @@ def _table_from_unity(
     return table
 
 
-def _constraint_edges(table: Table, raw: dict[str, Any], source: str) -> list[Edge]:
-    """Apply ``table_constraints``: set the primary key, return the foreign-key edges.
+def _apply_constraints(table: Table, raw: dict[str, Any], source: str) -> list[Edge]:
+    """Apply ``table_constraints`` to a table: set its primary key, return its foreign-key edges.
 
     Mutates ``table`` in place (a later primary-key constraint replaces an earlier one).
     """
@@ -265,7 +269,7 @@ def introspect_unity(
         if kind == "view" and not cfg.include_views:
             continue
         table = _table_from_unity(raw, catalog_name, schema_name, kind, source)
-        snap.edges.extend(_constraint_edges(table, raw, source))
+        snap.edges.extend(_apply_constraints(table, raw, source))
         snap.tables.append(table)
         known[table.fqn.lower()] = table
     if cfg.lineage:
@@ -290,8 +294,8 @@ class UnityConnector:
         """List the visible catalogs."""
         client = UnityClient(self.config)
         catalog_names = [c.get("name") for c in client.catalogs()]
-        listed = ", ".join(catalog_names[:CHECK_LISTED_CATALOGS])
-        more = "..." if len(catalog_names) > CHECK_LISTED_CATALOGS else ""
+        listed = ", ".join(catalog_names[:_CHECK_LISTED_CATALOGS])
+        more = "..." if len(catalog_names) > _CHECK_LISTED_CATALOGS else ""
         return f"ok: {len(catalog_names)} catalogs ({listed}{more})"
 
     def introspect(self) -> SchemaSnapshot:

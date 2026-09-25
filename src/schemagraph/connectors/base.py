@@ -63,6 +63,7 @@ def make_connector(type_name: str, name: str, config: dict[str, Any]):
 
     Raises:
         KeyError: If ``type_name`` is not registered.
+        pydantic.ValidationError: If ``config`` is invalid for the connector's ``Config``.
     """
     if type_name not in _REGISTRY:
         raise KeyError(f"unknown connector type {type_name!r}; known: {connector_types()}")

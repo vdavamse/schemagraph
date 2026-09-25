@@ -28,6 +28,7 @@ Endpoints used:
 from __future__ import annotations
 
 import base64
+from collections.abc import Iterator
 from typing import Any, ClassVar
 
 import httpx
@@ -96,9 +97,9 @@ class CollibraConfig(BaseModel):
 # Confidence of an edge imported from a curated table -> table relation.
 CATALOG_RELATION_CONFIDENCE = 0.8
 # Attribute types read as a column's data type.
-DATA_TYPE_ATTRIBUTES: frozenset[str] = frozenset({"Data Type", "Technical Data Type"})
+_DATA_TYPE_ATTRIBUTES: frozenset[str] = frozenset({"Data Type", "Technical Data Type"})
 # Column -> table relation roles that mean "the column belongs to the table".
-COLUMN_OF_TABLE_ROLES: frozenset[str] = frozenset({"is part of", "belongs to"})
+_COLUMN_OF_TABLE_ROLES: frozenset[str] = frozenset({"is part of", "belongs to"})
 # Attribute values that never become a tag.
 _EMPTY_TAG_VALUES = (None, "", False)
 
@@ -128,7 +129,7 @@ class CollibraClient:
         response.raise_for_status()
         return response.json()
 
-    def paged(self, path: str, **params: Any):
+    def paged(self, path: str, **params: Any) -> Iterator[dict[str, Any]]:
         """Yield every ``results`` item of a paged endpoint, page by page."""
         offset = 0
         while True:
@@ -200,291 +201,268 @@ def _short_name(asset: dict[str, Any]) -> str:
     return name.strip()
 
 
-def _asset_type_ids(client: CollibraClient, cfg: CollibraConfig) -> dict[str, str | None]:
-    """Asset type id per role (table, column, schema, term), looked up in that order."""
-    names = {
-        "table": cfg.table_type,
-        "column": cfg.column_type,
-        "schema": cfg.schema_type,
-        "term": cfg.term_type,
-    }
-    return {k: client.asset_type_id(v) for k, v in names.items()}
-
-
-def _attributes(client: CollibraClient, asset_id: str) -> list[tuple[str, Any]]:
-    """(stripped attribute type name, value) of every attribute of an asset."""
-    pairs = []
-    for attr in client.attributes(asset_id):
-        attr_name = ((attr.get("type") or {}).get("name") or "").strip()
-        pairs.append((attr_name, attr.get("value")))
-    return pairs
-
-
 def _in_domains(asset: dict[str, Any], allowed: set[str]) -> bool:
     """Whether an asset's domain name (lowercased) is in ``allowed``."""
     return ((asset.get("domain") or {}).get("name") or "").lower() in allowed
 
 
-def _table_from_asset(
-    asset: dict[str, Any],
-    client: CollibraClient,
-    cfg: CollibraConfig,
-    source: str,
-) -> Table:
-    """Build a table from a Table asset: status tag, description and tag attributes."""
-    table = Table(
-        name=_short_name(asset),
-        kind="table",
-        source=source,
-        properties={
-            "collibra_id": asset["id"],
-            "domain": (asset.get("domain") or {}).get("name", ""),
-        },
-    )
-    if asset.get("status"):
-        status = asset["status"]
-        status_name = status.get("name") if isinstance(status, dict) else status
-        table.tags.append(f"status={status_name}")
-    # attributes: description + tag-like
-    for attr_name, value in _attributes(client, asset["id"]):
-        if attr_name == cfg.description_attribute and value:
-            table.description = str(value)
-        elif attr_name in cfg.tag_attributes and value not in _EMPTY_TAG_VALUES:
-            table.tags.append(f"{attr_name}={value}")
-    return table
+class _CollibraReader:
+    """One Collibra introspection: the client, config and id maps shared by its phases.
 
+    The phases run in a fixed order (asset types, assets, tables, columns, edges, terms)
+    and each appends to ``snap`` or the id maps; the order of the HTTP requests and of
+    every append is part of the snapshot and must not change.
 
-def _build_tables(
-    tables_raw: list[dict[str, Any]],
-    client: CollibraClient,
-    cfg: CollibraConfig,
-    roles: _RelationRoles,
-    schema_by_id: dict[str, str],
-    column_name: dict[str, str],
-    source: str,
-) -> tuple[dict[str, Table], dict[str, str]]:
-    """Build every table with its parent schema and find the columns it contains.
-
-    Per table: attributes, relations to it (parent schema), relations from it (columns).
-
-    Args:
-        tables_raw: Table assets.
+    Attributes:
+        cfg: Connector config.
+        source: Snapshot source name stamped on tables, edges and terms.
         client: Collibra client.
-        cfg: Connector config (roles, attribute names).
-        roles: Relation role classifier.
+        snap: The snapshot being filled.
+        type_ids: Asset type id per role (table, column, schema, term).
+        roles: Relation role classifier, set by ``read_assets``.
+        tables_raw: Table assets (domain-filtered).
+        terms_raw: Business Term assets.
         schema_by_id: Schema short name by asset id.
         column_name: Column short name by asset id.
-        source: Snapshot source name stamped on the tables.
-
-    Returns:
-        (tables by asset id, owning table asset id by column asset id).
-    """
-    contains_role = cfg.contains_role.lower()
-    tables: dict[str, Table] = {}
-    column_owner: dict[str, str] = {}  # column asset id -> table asset id
-    for asset in tables_raw:
-        table = _table_from_asset(asset, client, cfg, source)
-        # relations: parent schema, child columns
-        for rel in client.relations_to(asset["id"]):
-            role, _corole = roles.of(rel)
-            rel_source = rel.get("source") or {}
-            if role == contains_role and rel_source.get("id") in schema_by_id:
-                table.schema_name = schema_by_id[rel_source["id"]]
-        for rel in client.relations_from(asset["id"]):
-            role, _corole = roles.of(rel)
-            rel_target = rel.get("target") or {}
-            if role == contains_role and rel_target.get("id") in column_name:
-                column_owner[rel_target["id"]] = asset["id"]
-        tables[asset["id"]] = table
-    return tables, column_owner
-
-
-def _owner_from_column(
-    column_id: str,
-    client: CollibraClient,
-    cfg: CollibraConfig,
-    roles: _RelationRoles,
-    tables: dict[str, Table],
-) -> str | None:
-    """Owning table of a column via a Column -> Table relation (``is part of`` direction)."""
-    for rel in client.relations_from(column_id):
-        role, corole = roles.of(rel)
-        rel_target = rel.get("target") or {}
-        is_column_of = corole == cfg.contains_role.lower() or role in COLUMN_OF_TABLE_ROLES
-        if rel_target.get("id") in tables and is_column_of:
-            return rel_target["id"]
-    return None
-
-
-def _attach_columns(
-    column_asset: dict[str, dict[str, Any]],
-    column_name: dict[str, str],
-    column_owner: dict[str, str],
-    tables: dict[str, Table],
-    client: CollibraClient,
-    cfg: CollibraConfig,
-    roles: _RelationRoles,
-) -> None:
-    """Attach every column with a known owner to its table, in column-asset order.
-
-    Mutates ``tables`` (columns appended) and ``column_owner`` (owners found from the
-    column side added) in place.
-
-    Args:
         column_asset: Column assets by id.
-        column_name: Column short name by asset id.
-        column_owner: Owning table asset id by column asset id.
         tables: Tables by asset id.
-        client: Collibra client.
-        cfg: Connector config.
-        roles: Relation role classifier.
-    """
-    for column_id in column_asset:
-        owner = column_owner.get(column_id)
-        if owner is None:
-            owner = _owner_from_column(column_id, client, cfg, roles, tables)
-        if owner is None or owner not in tables:
-            continue
-        column = Column(name=column_name[column_id], properties={"collibra_id": column_id})
-        for attr_name, value in _attributes(client, column_id):
-            if attr_name == cfg.description_attribute and value:
-                column.description = str(value)
-            elif attr_name in DATA_TYPE_ATTRIBUTES and value:
-                column.data_type = str(value)
-            elif attr_name in cfg.tag_attributes and value not in _EMPTY_TAG_VALUES:
-                column.tags.append(f"{attr_name}={value}")
-        tables[owner].columns.append(column)
-        column_owner[column_id] = owner
-
-
-def _column_fk_edges(
-    column_owner: dict[str, str],
-    column_name: dict[str, str],
-    tables: dict[str, Table],
-    client: CollibraClient,
-    cfg: CollibraConfig,
-    roles: _RelationRoles,
-    source: str,
-) -> list[Edge]:
-    """Foreign-key edges from column -> column relations with an FK role.
-
-    Args:
         column_owner: Owning table asset id by column asset id.
-        column_name: Column short name by asset id.
-        tables: Tables by asset id.
-        client: Collibra client.
-        cfg: Connector config (``fk_roles``).
-        roles: Relation role classifier.
-        source: Snapshot source name stamped on the edges.
-
-    Returns:
-        The edges, per column in ``column_owner`` order.
     """
-    fk_roles = {r.lower() for r in cfg.fk_roles}
-    edges: list[Edge] = []
-    for column_id, owner in column_owner.items():
-        for rel in client.relations_from(column_id):
-            role, _ = roles.of(rel)
+
+    def __init__(self, cfg: CollibraConfig, source: str, client: CollibraClient):
+        self.cfg = cfg
+        self.source = source
+        self.client = client
+        self.snap = SchemaSnapshot(source=source, source_type="collibra")
+        self.type_ids: dict[str, str | None] = {}
+        self.roles: _RelationRoles | None = None
+        self.tables_raw: list[dict[str, Any]] = []
+        self.terms_raw: list[dict[str, Any]] = []
+        self.schema_by_id: dict[str, str] = {}
+        self.column_name: dict[str, str] = {}
+        self.column_asset: dict[str, dict[str, Any]] = {}
+        self.tables: dict[str, Table] = {}
+        self.column_owner: dict[str, str] = {}
+
+    def read_asset_types(self) -> bool:
+        """Look up the asset type ids (table, column, schema, term, in that order).
+
+        Adds a warning per missing type.
+
+        Returns:
+            False when the Table asset type is missing and nothing can be imported.
+        """
+        cfg = self.cfg
+        names = {
+            "table": cfg.table_type,
+            "column": cfg.column_type,
+            "schema": cfg.schema_type,
+            "term": cfg.term_type,
+        }
+        self.type_ids = {k: self.client.asset_type_id(v) for k, v in names.items()}
+        missing = [k for k, v in self.type_ids.items() if not v]
+        if "table" in missing:
+            self.snap.warnings.append(f"asset type {cfg.table_type!r} not found; nothing imported")
+            return False
+        for k in missing:
+            self.snap.warnings.append(f"asset type for {k!r} not found; skipped")
+        return True
+
+    def read_assets(self) -> None:
+        """Fetch the relation types and the assets of every found type; build the id maps."""
+        client = self.client
+        type_ids = self.type_ids
+        self.roles = _RelationRoles(client.relation_types())
+
+        tables_raw = client.assets_of_type(type_ids["table"])
+        columns_raw = client.assets_of_type(type_ids["column"]) if type_ids.get("column") else []
+        schemas_raw = client.assets_of_type(type_ids["schema"]) if type_ids.get("schema") else []
+        self.terms_raw = client.assets_of_type(type_ids["term"]) if type_ids.get("term") else []
+
+        if self.cfg.domains:
+            allowed = {d.lower() for d in self.cfg.domains}
+            tables_raw = [a for a in tables_raw if _in_domains(a, allowed)]
+        self.tables_raw = tables_raw
+
+        self.schema_by_id = {a["id"]: _short_name(a) for a in schemas_raw}
+        self.column_name = {a["id"]: _short_name(a) for a in columns_raw}
+        self.column_asset = {a["id"]: a for a in columns_raw}
+
+    def _attributes(self, asset_id: str) -> list[tuple[str, Any]]:
+        """(stripped attribute type name, value) of every attribute of an asset."""
+        pairs = []
+        for attr in self.client.attributes(asset_id):
+            attr_name = ((attr.get("type") or {}).get("name") or "").strip()
+            pairs.append((attr_name, attr.get("value")))
+        return pairs
+
+    def _table_from_asset(self, asset: dict[str, Any]) -> Table:
+        """Build a table from a Table asset: status tag, description and tag attributes."""
+        table = Table(
+            name=_short_name(asset),
+            kind="table",
+            source=self.source,
+            properties={
+                "collibra_id": asset["id"],
+                "domain": (asset.get("domain") or {}).get("name", ""),
+            },
+        )
+        if asset.get("status"):
+            status = asset["status"]
+            status_name = status.get("name") if isinstance(status, dict) else status
+            table.tags.append(f"status={status_name}")
+        # attributes: description + tag-like
+        for attr_name, value in self._attributes(asset["id"]):
+            if attr_name == self.cfg.description_attribute and value:
+                table.description = str(value)
+            elif attr_name in self.cfg.tag_attributes and value not in _EMPTY_TAG_VALUES:
+                table.tags.append(f"{attr_name}={value}")
+        return table
+
+    def build_tables(self) -> None:
+        """Build every table with its parent schema and find the columns it contains.
+
+        Per table: attributes, relations to it (parent schema), relations from it (columns).
+        Fills ``tables`` and ``column_owner``.
+        """
+        contains_role = self.cfg.contains_role.lower()
+        for asset in self.tables_raw:
+            table = self._table_from_asset(asset)
+            # relations: parent schema, child columns
+            for rel in self.client.relations_to(asset["id"]):
+                role, _corole = self.roles.of(rel)
+                rel_source = rel.get("source") or {}
+                if role == contains_role and rel_source.get("id") in self.schema_by_id:
+                    table.schema_name = self.schema_by_id[rel_source["id"]]
+            for rel in self.client.relations_from(asset["id"]):
+                role, _corole = self.roles.of(rel)
+                rel_target = rel.get("target") or {}
+                if role == contains_role and rel_target.get("id") in self.column_name:
+                    self.column_owner[rel_target["id"]] = asset["id"]
+            self.tables[asset["id"]] = table
+
+    def _owner_from_column(self, column_id: str) -> str | None:
+        """Owning table of a column via a Column -> Table relation (``is part of`` direction)."""
+        for rel in self.client.relations_from(column_id):
+            role, corole = self.roles.of(rel)
             rel_target = rel.get("target") or {}
-            if role in fk_roles and rel_target.get("id") in column_owner:
-                to_owner = column_owner[rel_target["id"]]
-                edges.append(
-                    Edge(
-                        kind="foreign_key",
-                        from_table=tables[owner].fqn,
-                        to_table=tables[to_owner].fqn,
-                        from_columns=[column_name[column_id]],
-                        to_columns=[column_name[rel_target["id"]]],
-                        description=f"Collibra: {role}",
-                        source=source,
+            is_column_of = (
+                corole == self.cfg.contains_role.lower() or role in _COLUMN_OF_TABLE_ROLES
+            )
+            if rel_target.get("id") in self.tables and is_column_of:
+                return rel_target["id"]
+        return None
+
+    def attach_columns(self) -> None:
+        """Attach every column with a known owner to its table, in column-asset order.
+
+        Appends to the tables' columns and adds owners found from the column side to
+        ``column_owner``.
+        """
+        cfg = self.cfg
+        for column_id in self.column_asset:
+            owner = self.column_owner.get(column_id)
+            if owner is None:
+                owner = self._owner_from_column(column_id)
+            if owner is None or owner not in self.tables:
+                continue
+            column = Column(name=self.column_name[column_id], properties={"collibra_id": column_id})
+            for attr_name, value in self._attributes(column_id):
+                if attr_name == cfg.description_attribute and value:
+                    column.description = str(value)
+                elif attr_name in _DATA_TYPE_ATTRIBUTES and value:
+                    column.data_type = str(value)
+                elif attr_name in cfg.tag_attributes and value not in _EMPTY_TAG_VALUES:
+                    column.tags.append(f"{attr_name}={value}")
+            self.tables[owner].columns.append(column)
+            self.column_owner[column_id] = owner
+
+    def add_column_fk_edges(self) -> None:
+        """Add foreign-key edges from column -> column relations with an FK role.
+
+        Edges follow ``column_owner`` order.
+        """
+        fk_roles = {r.lower() for r in self.cfg.fk_roles}
+        column_owner = self.column_owner
+        for column_id, owner in column_owner.items():
+            for rel in self.client.relations_from(column_id):
+                role, _ = self.roles.of(rel)
+                rel_target = rel.get("target") or {}
+                if role in fk_roles and rel_target.get("id") in column_owner:
+                    to_owner = column_owner[rel_target["id"]]
+                    self.snap.edges.append(
+                        Edge(
+                            kind="foreign_key",
+                            from_table=self.tables[owner].fqn,
+                            to_table=self.tables[to_owner].fqn,
+                            from_columns=[self.column_name[column_id]],
+                            to_columns=[self.column_name[rel_target["id"]]],
+                            description=f"Collibra: {role}",
+                            source=self.source,
+                        )
                     )
-                )
-    return edges
 
-
-def _table_relation_edges(
-    tables: dict[str, Table],
-    client: CollibraClient,
-    cfg: CollibraConfig,
-    roles: _RelationRoles,
-    source: str,
-) -> list[Edge]:
-    """``catalog_relation`` edges from curated table -> table relations."""
-    table_roles = {r.lower() for r in cfg.table_relation_roles}
-    edges: list[Edge] = []
-    for table_id, table in tables.items():
-        for rel in client.relations_from(table_id):
-            role, _ = roles.of(rel)
-            rel_target = rel.get("target") or {}
-            if role in table_roles and rel_target.get("id") in tables:
-                edges.append(
-                    Edge(
-                        kind="catalog_relation",
-                        from_table=table.fqn,
-                        to_table=tables[rel_target["id"]].fqn,
-                        description=f"Collibra: {role}",
-                        confidence=CATALOG_RELATION_CONFIDENCE,
-                        source=source,
+    def add_table_relation_edges(self) -> None:
+        """Add ``catalog_relation`` edges from curated table -> table relations."""
+        table_roles = {r.lower() for r in self.cfg.table_relation_roles}
+        tables = self.tables
+        for table_id, table in tables.items():
+            for rel in self.client.relations_from(table_id):
+                role, _ = self.roles.of(rel)
+                rel_target = rel.get("target") or {}
+                if role in table_roles and rel_target.get("id") in tables:
+                    self.snap.edges.append(
+                        Edge(
+                            kind="catalog_relation",
+                            from_table=table.fqn,
+                            to_table=tables[rel_target["id"]].fqn,
+                            description=f"Collibra: {role}",
+                            confidence=CATALOG_RELATION_CONFIDENCE,
+                            source=self.source,
+                        )
                     )
-                )
-    return edges
 
+    def add_business_terms(self) -> None:
+        """Add glossary terms with their table/column targets and synonyms.
 
-def _business_terms(
-    terms_raw: list[dict[str, Any]],
-    tables: dict[str, Table],
-    column_owner: dict[str, str],
-    column_name: dict[str, str],
-    client: CollibraClient,
-    cfg: CollibraConfig,
-    roles: _RelationRoles,
-    source: str,
-) -> list[BusinessTerm]:
-    """Glossary terms with their table/column targets and synonyms.
+        Per term: attributes, then relations from it followed by relations to it. Terms
+        with an empty name are dropped; the rest keep asset order.
+        """
+        cfg = self.cfg
+        tables = self.tables
+        term_roles = {r.lower() for r in cfg.term_roles}
+        synonym_roles = {r.lower() for r in cfg.synonym_relation_roles}
+        term_name = {
+            a["id"]: (a.get("displayName") or a.get("name") or "").strip() for a in self.terms_raw
+        }
+        for asset in self.terms_raw:
+            term = BusinessTerm(name=term_name[asset["id"]], source=self.source)
+            for attr_name, value in self._attributes(asset["id"]):
+                if attr_name == cfg.description_attribute and value:
+                    term.description = str(value)
+            relations = (
+                self.client.relations_from(asset["id"]) + self.client.relations_to(asset["id"])
+            )
+            for rel in relations:
+                role, corole = self.roles.of(rel)
+                is_outgoing = (rel.get("source") or {}).get("id") == asset["id"]
+                other = rel.get("target") if is_outgoing else rel.get("source")
+                other_id = (other or {}).get("id")
+                if role in term_roles or corole in term_roles:
+                    if other_id in tables:
+                        term.targets.append(tables[other_id].fqn)
+                    elif other_id in self.column_owner:
+                        owner_fqn = tables[self.column_owner[other_id]].fqn
+                        term.targets.append(f"{owner_fqn}.{self.column_name[other_id]}")
+                if (role in synonym_roles or corole in synonym_roles) and other_id in term_name:
+                    term.synonyms.append(term_name[other_id])
+            if term.name:
+                self.snap.terms.append(term)
 
-    Per term: attributes, then relations from it followed by relations to it.
-
-    Args:
-        terms_raw: Business Term assets.
-        tables: Tables by asset id.
-        column_owner: Owning table asset id by column asset id.
-        column_name: Column short name by asset id.
-        client: Collibra client.
-        cfg: Connector config (term and synonym roles).
-        roles: Relation role classifier.
-        source: Snapshot source name stamped on the terms.
-
-    Returns:
-        Every term with a non-empty name, in asset order.
-    """
-    term_roles = {r.lower() for r in cfg.term_roles}
-    synonym_roles = {r.lower() for r in cfg.synonym_relation_roles}
-    term_name = {
-        a["id"]: (a.get("displayName") or a.get("name") or "").strip() for a in terms_raw
-    }
-    terms: list[BusinessTerm] = []
-    for asset in terms_raw:
-        term = BusinessTerm(name=term_name[asset["id"]], source=source)
-        for attr_name, value in _attributes(client, asset["id"]):
-            if attr_name == cfg.description_attribute and value:
-                term.description = str(value)
-        relations = client.relations_from(asset["id"]) + client.relations_to(asset["id"])
-        for rel in relations:
-            role, corole = roles.of(rel)
-            is_outgoing = (rel.get("source") or {}).get("id") == asset["id"]
-            other = rel.get("target") if is_outgoing else rel.get("source")
-            other_id = (other or {}).get("id")
-            if role in term_roles or corole in term_roles:
-                if other_id in tables:
-                    term.targets.append(tables[other_id].fqn)
-                elif other_id in column_owner:
-                    owner_fqn = tables[column_owner[other_id]].fqn
-                    term.targets.append(f"{owner_fqn}.{column_name[other_id]}")
-            if (role in synonym_roles or corole in synonym_roles) and other_id in term_name:
-                term.synonyms.append(term_name[other_id])
-        if term.name:
-            terms.append(term)
-    return terms
+    def finish(self) -> SchemaSnapshot:
+        """Store the tables (asset order) in the snapshot and return it stamped."""
+        self.snap.tables = list(self.tables.values())
+        return self.snap.stamp()
 
 
 def introspect_collibra(
@@ -505,51 +483,16 @@ def introspect_collibra(
     Returns:
         The snapshot.
     """
-    snap = SchemaSnapshot(source=source, source_type="collibra")
-    client = client or CollibraClient(cfg)
-
-    type_ids = _asset_type_ids(client, cfg)
-    missing = [k for k, v in type_ids.items() if not v]
-    if "table" in missing:
-        snap.warnings.append(f"asset type {cfg.table_type!r} not found; nothing imported")
-        return snap
-    for k in missing:
-        snap.warnings.append(f"asset type for {k!r} not found; skipped")
-
-    roles = _RelationRoles(client.relation_types())
-
-    tables_raw = client.assets_of_type(type_ids["table"])
-    columns_raw = client.assets_of_type(type_ids["column"]) if type_ids.get("column") else []
-    schemas_raw = client.assets_of_type(type_ids["schema"]) if type_ids.get("schema") else []
-    terms_raw = client.assets_of_type(type_ids["term"]) if type_ids.get("term") else []
-
-    if cfg.domains:
-        allowed = {d.lower() for d in cfg.domains}
-        tables_raw = [a for a in tables_raw if _in_domains(a, allowed)]
-
-    schema_by_id = {a["id"]: _short_name(a) for a in schemas_raw}
-    column_name: dict[str, str] = {a["id"]: _short_name(a) for a in columns_raw}
-    column_asset: dict[str, dict[str, Any]] = {a["id"]: a for a in columns_raw}
-
-    tables, column_owner = _build_tables(
-        tables_raw,
-        client,
-        cfg,
-        roles,
-        schema_by_id,
-        column_name,
-        source,
-    )
-    _attach_columns(column_asset, column_name, column_owner, tables, client, cfg, roles)
-    snap.edges.extend(
-        _column_fk_edges(column_owner, column_name, tables, client, cfg, roles, source)
-    )
-    snap.edges.extend(_table_relation_edges(tables, client, cfg, roles, source))
-    snap.terms.extend(
-        _business_terms(terms_raw, tables, column_owner, column_name, client, cfg, roles, source)
-    )
-    snap.tables = list(tables.values())
-    return snap.stamp()
+    reader = _CollibraReader(cfg, source, client or CollibraClient(cfg))
+    if not reader.read_asset_types():
+        return reader.snap
+    reader.read_assets()
+    reader.build_tables()
+    reader.attach_columns()
+    reader.add_column_fk_edges()
+    reader.add_table_relation_edges()
+    reader.add_business_terms()
+    return reader.finish()
 
 
 @register
