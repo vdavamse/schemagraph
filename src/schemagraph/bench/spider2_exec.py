@@ -20,6 +20,7 @@ import asyncio
 import csv
 import hashlib
 import json
+import math
 import statistics
 import threading
 import time
@@ -57,16 +58,23 @@ TASK_ERROR_CHARS = 500
 # Columns of the per-task CSV, and of the summary table.
 _CSV_COLUMNS = [
     "instance_id", "db", "ex", "ex_by_score", "oracle", "chosen_by", "score", "nodes",
-    "stopped_early", "table_recall", "tokens_in", "tokens_out", "ms", "error",
+    "stopped_early", "table_recall", "tokens_in", "tokens_out", "tokens_reasoning", "cost_usd",
+    "ms", "error",
 ]  # fmt: skip
 _SUMMARY_COLUMNS = [
     "n", "ex", "ex_by_score", "oracle", "table_recall", "avg_nodes", "avg_refinements",
-    "early_stop", "avg_tokens_in", "avg_tokens_out", "p50_s", "errors",
+    "early_stop", "avg_tokens_in", "avg_tokens_out", "avg_cost_usd", "p90_cost_usd", "p50_s",
+    "errors",
 ]  # fmt: skip
 # Per-database summary keys.
 _DB_SUMMARY_KEYS = {"n", "ex", "oracle"}
 # Usage fields a row keeps per role.
-_ROW_USAGE_FIELDS = {"calls", "requests", "input_tokens", "output_tokens", "tool_calls", "ms"}
+_ROW_USAGE_FIELDS = {
+    "calls", "requests", "input_tokens", "output_tokens", "reasoning_tokens", "cache_read_tokens",
+    "tool_calls", "cost_usd", "unpriced", "ms",
+}  # fmt: skip
+# Decimals of a USD cost in rows and summaries.
+COST_DECIMALS = 6
 
 TaskProgress = Callable[[int, int, dict], None]
 
@@ -388,6 +396,12 @@ def _run_config(
         "agent_config": agent_config,
         "weights": asdict(cfg.weights),
     }
+    from schemagraph.agent.models import reasoning_level
+
+    if any(name.startswith("openrouter:") for name in models.names.values()):
+        # the reasoning effort changes the answers; recorded only when a model reads it, so the
+        # hash of runs on other providers is unchanged
+        config["reasoning"] = reasoning_level()
     config["config_hash"] = config_hash(config)
     return config
 
@@ -656,6 +670,9 @@ def _score_task(runner: Runner, task: Instance, result: AnswerResult, standard: 
         "table_recall": round(len(gold & used) / len(gold), 4) if gold else None,
         "tokens_in": result.usage.total.input_tokens,
         "tokens_out": result.usage.total.output_tokens,
+        "tokens_reasoning": result.usage.total.reasoning_tokens,
+        "cost_usd": round(result.usage.total.cost_usd, COST_DECIMALS),
+        "unpriced": result.usage.total.unpriced,
         "usage": usage,
         "candidate_ex": candidate_ex,
         "sql": result.sql,
@@ -679,8 +696,37 @@ def _per_task_by_role(rows: list[dict]) -> dict[str, dict[str, float]]:
             for name, value in usage.items():
                 totals[role][name] += value
     return {
-        role: {name: round(value / len(rows), 1) for name, value in usage.items()}
+        role: {
+            name: round(value / len(rows), COST_DECIMALS if name == "cost_usd" else 1)
+            for name, value in usage.items()
+        }
         for role, usage in totals.items()
+    }
+
+
+def _quantile(values: list[float], q: float) -> float:
+    """Return the nearest-rank ``q`` quantile of ``values`` (0 for none)."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, max(0, math.ceil(q * len(ordered)) - 1))]
+
+
+def _costs(rows: list[dict]) -> dict:
+    """Return the cost per task (mean, p50, p90, max), the total and the unpriced responses.
+
+    Rows written before costs were recorded count as zero; ``unpriced`` says how many model
+    responses carried neither a reported cost nor a fallback price.
+    """
+    costs = [row.get("cost_usd") or 0.0 for row in rows]
+    return {
+        "avg_cost_usd": round(statistics.mean(costs), COST_DECIMALS),
+        "p50_cost_usd": round(_quantile(costs, 0.5), COST_DECIMALS),
+        "p90_cost_usd": round(_quantile(costs, 0.9), COST_DECIMALS),
+        "max_cost_usd": round(max(costs), COST_DECIMALS),
+        "total_cost_usd": round(sum(costs), COST_DECIMALS),
+        "avg_tokens_reasoning": int(_mean(rows, "tokens_reasoning")),
+        "unpriced": sum(row.get("unpriced") or 0 for row in rows),
     }
 
 
@@ -702,6 +748,7 @@ def _aggregate(rows: list[dict]) -> dict:
         "avg_tokens_in": int(_mean(rows, "tokens_in")),
         "avg_tokens_out": int(_mean(rows, "tokens_out")),
         "p50_s": round(statistics.median(row.get("ms") or 0 for row in rows) / 1000, 1),
+        **_costs(rows),
     }
     summary["per_task_by_role"] = _per_task_by_role(rows)
     return summary

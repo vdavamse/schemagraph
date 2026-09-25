@@ -175,6 +175,7 @@ def test_run_scores_with_the_official_comparison_and_resumes(tmp_path):
     assert rows["local901"]["candidate_ex"] == {"n0": 1, "n1": 0}
     assert rows["local901"]["ex"] == 1 and rows["local901"]["ex_by_score"] == 1  # judge: filtered
     assert rows["local902"]["ex"] == 1 and rows["local902"]["table_recall"] == 1.0
+    assert rows["local902"]["cost_usd"] == 0.0 and rows["local902"]["unpriced"] > 0  # scripted
     assert result["summary"]["overall"]["ex"] == 100.0 and result["summary"]["overall"]["n"] == 2
     assert "mcp_url" not in result["config"]["agent_config"]
     assert (out / "spider2_exec_t.json").exists() and (out / "spider2_exec_t.csv").exists()
@@ -204,6 +205,44 @@ def test_config_hash_ignores_the_mcp_url_and_concurrency():
         AgentConfig(mcp_url="http://127.0.0.1:1/mcp"), models, seed=0, use_docs=True, concurrency=4
     )
     assert plain["config_hash"] == served["config_hash"] == PRE_REFACTOR_DEFAULT_HASH
+
+
+def test_config_records_the_reasoning_effort_only_for_openrouter_models(monkeypatch):
+    from schemagraph.agent.results import AgentConfig
+    from schemagraph.bench.spider2_exec import _run_config
+
+    models = _Models().agent_models()
+    monkeypatch.setenv("SCHEMAGRAPH_REASONING", "high")
+    plain = _run_config(AgentConfig(), models, seed=0, use_docs=True, concurrency=1)
+    assert "reasoning" not in plain and plain["config_hash"] == PRE_REFACTOR_DEFAULT_HASH
+    models.names = {**models.names, "generator": "openrouter:qwen/qwen3.8-max"}
+    high = _run_config(AgentConfig(), models, seed=0, use_docs=True, concurrency=1)
+    monkeypatch.setenv("SCHEMAGRAPH_REASONING", "low")
+    low = _run_config(AgentConfig(), models, seed=0, use_docs=True, concurrency=1)
+    assert high["reasoning"] == "high" and high["config_hash"] != low["config_hash"]
+
+
+def test_summary_reports_the_cost_per_task():
+    from schemagraph.bench.spider2_exec import summarize
+
+    rows = [
+        {
+            "instance_id": f"t{i}",
+            "db": "d",
+            "ex": 1,
+            "cost_usd": cost,
+            "unpriced": i % 2,
+            "tokens_reasoning": 100,
+            "usage": {"generator": {"cost_usd": cost, "input_tokens": 10}},
+        }
+        for i, cost in enumerate([0.001, 0.002, 0.003, 0.010])
+    ]
+    overall = summarize(rows)["overall"]
+    assert overall["avg_cost_usd"] == 0.004 and overall["total_cost_usd"] == 0.016
+    assert overall["p50_cost_usd"] == 0.002 and overall["p90_cost_usd"] == 0.01
+    assert overall["max_cost_usd"] == 0.01 and overall["unpriced"] == 2
+    assert overall["avg_tokens_reasoning"] == 100
+    assert overall["per_task_by_role"]["generator"] == {"cost_usd": 0.004, "input_tokens": 10.0}
 
 
 def test_failed_tasks_are_error_rows_and_are_retried(tmp_path):
