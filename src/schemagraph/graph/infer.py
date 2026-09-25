@@ -2,12 +2,16 @@
 
 Two conservative rules, both emitting ``inferred`` edges (lowest trust weight):
 
-1. **Reference-by-name**: a column ``<x>_id`` / ``<x>id`` / ``<x>_key`` in table A and a
-   table named ``x`` / ``xs`` / ``x_*`` in the same schema that has a column
-   ``id`` / ``<x>_id`` / ``<x>id``  ->  A.<x>_id -> X.id.
-2. **Shared key column**: a key-looking column name (``*_id``, ``*_key``, ``*_code``,
-   ``*_number``, ``id``) present in two or more tables of the same schema. Columns
-   shared by more than ``max_fanout`` tables are skipped (they're hubs, not keys).
+1. **Reference-by-name**: a column ``<x>_id`` / ``<x>id`` (also ``_key``, ``_code``,
+   ``_number``, ``_no``, ``_num``) in table A, with ``x`` at least three characters and not a
+   generic word, and a table named ``x`` / ``xs`` / ``x`` with ``ies`` / ``x_*`` in the same
+   schema. The target column is the first of ``id``, A's column name, ``<x>_id``, ``<x>id`` or
+   any primary-key column  ->  A.<x>_id -> X.<target>.
+2. **Shared key column**: a key-looking column name (the suffixes above) or a primary-key
+   column, present in two or more tables of the same schema. Generic names (``id``, ``code``,
+   ``name``, ...) and names shared by more than ``max_fanout`` tables are skipped (they're hubs,
+   not keys). If one holder has it as primary key, the others link to that table; otherwise
+   every pair links.
 
 Meant for Glue / BigQuery / Snowflake public datasets. Turn on per source; never
 mixed with declared FKs on the same pair (declared evidence already wins by weight).

@@ -15,7 +15,7 @@ from schemagraph.engine import Engine
 from schemagraph.model import Table
 
 # Instructions the MCP client shows the agent.
-INSTRUCTIONS = (
+_INSTRUCTIONS = (
     "Schema context for text-to-SQL. Call link_schema first; it returns the tables, columns and "
     "join paths needed for a question as annotated DDL."
 )
@@ -32,11 +32,11 @@ def _matches_query(table: Table, lower_query: str) -> bool:
     )
 
 
-def _search_tables(eng: Engine, query: str, limit: int) -> list[dict[str, Any]]:
+def _search_tables(engine: Engine, query: str, limit: int) -> list[dict[str, Any]]:
     """Up to ``limit`` tables matching ``query`` (case-insensitive substring), in FQN order."""
     lower_query = query.lower()
     out = []
-    for table in eng.tables():
+    for table in engine.tables():
         if _matches_query(table, lower_query):
             out.append(
                 {
@@ -52,15 +52,15 @@ def _search_tables(eng: Engine, query: str, limit: int) -> list[dict[str, Any]]:
     return out
 
 
-def _table_detail(eng: Engine, fqn: str) -> dict[str, Any]:
+def _table_detail(engine: Engine, fqn: str) -> dict[str, Any]:
     """One table as JSON plus every relation touching it, or an ``error`` entry when unknown."""
-    table = eng.table(fqn)
+    table = engine.table(fqn)
     if not table:
         return {"error": f"unknown table {fqn}"}
     lower_fqn = table.fqn.lower()
     relations = [
         edge.model_dump()
-        for edge in eng.edges()
+        for edge in engine.edges()
         if lower_fqn in (edge.from_table.lower(), edge.to_table.lower())
     ]
     return {
@@ -70,17 +70,17 @@ def _table_detail(eng: Engine, fqn: str) -> dict[str, Any]:
     }
 
 
-def _join_path_detail(eng: Engine, from_table: str, to_table: str) -> dict[str, Any]:
+def _join_path_detail(engine: Engine, from_table: str, to_table: str) -> dict[str, Any]:
     """Join paths with every relation of each hop, or an ``error`` entry for an unknown table."""
     try:
-        paths = eng.join_path(from_table, to_table)
+        paths = engine.join_path(from_table, to_table)
     except KeyError as e:
         return {"error": f"unknown table {e}"}
     detailed = []
     for path in paths:
         steps = []
         for a, b in zip(path, path[1:], strict=False):
-            relations = eng.graph.relations(a, b)
+            relations = engine.graph.relations(a, b)
             steps.append([relation.model_dump() for relation in relations])
         detailed.append({"tables": path, "steps": steps})
     return {"paths": detailed}
@@ -92,8 +92,8 @@ def create_server(engine: Engine | None = None) -> FastMCP:
     Tool names, parameters and docstrings are what agents see; they are part of the public
     surface.
     """
-    eng = engine or Engine()
-    mcp = FastMCP("schemagraph", instructions=INSTRUCTIONS)
+    engine = engine or Engine()
+    mcp = FastMCP("schemagraph", instructions=_INSTRUCTIONS)
 
     @mcp.tool()
     def link_schema(
@@ -110,38 +110,38 @@ def create_server(engine: Engine | None = None) -> FastMCP:
             columns: "relevant" (pruned) or "all".
             use_llm: Let a Claude call choose anchor tables (needs ANTHROPIC_API_KEY).
         """  # noqa: E501
-        return eng.link(question, max_tables=max_tables, columns=columns, use_llm=use_llm).ddl
+        return engine.link(question, max_tables=max_tables, columns=columns, use_llm=use_llm).ddl
 
     @mcp.tool()
     def link_schema_json(question: str, max_tables: int = 20) -> dict[str, Any]:
         """Same as link_schema but structured: tables with scores, columns with reasons, join paths, matched glossary terms."""  # noqa: E501
-        r = eng.link(question, max_tables=max_tables, render=False)
+        r = engine.link(question, max_tables=max_tables, render=False)
         return r.model_dump()
 
     @mcp.tool()
     def search_tables(query: str, limit: int = 20) -> list[dict[str, Any]]:
         """Find tables by name or description substring."""
-        return _search_tables(eng, query, limit)
+        return _search_tables(engine, query, limit)
 
     @mcp.tool()
     def get_table(fqn: str) -> dict[str, Any]:
         """Full detail for one table: columns (types, descriptions, samples), primary key, and every relation with provenance."""  # noqa: E501
-        return _table_detail(eng, fqn)
+        return _table_detail(engine, fqn)
 
     @mcp.tool()
     def find_join_path(from_table: str, to_table: str) -> dict[str, Any]:
         """Shortest join path(s) between two tables over foreign keys, catalog relations, dbt relationship tests, join hints and inferred keys; when none exists, the dbt lineage route (provenance, no declared join keys)."""  # noqa: E501
-        return _join_path_detail(eng, from_table, to_table)
+        return _join_path_detail(engine, from_table, to_table)
 
     @mcp.tool()
     def list_glossary() -> list[dict[str, Any]]:
         """Business terms with the tables/columns they map to."""
-        return [t.model_dump() for t in eng.graph.terms.values()]
+        return [t.model_dump() for t in engine.graph.terms.values()]
 
     @mcp.tool()
     def graph_stats() -> dict[str, Any]:
         """Counts of tables, columns, relations, terms and sources in the loaded graph."""
-        return eng.stats()
+        return engine.stats()
 
     return mcp
 

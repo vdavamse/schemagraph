@@ -29,7 +29,7 @@ from schemagraph.graph.build import JOIN_KINDS, SchemaGraph, tnode
 # Safety cap on paths enumerated (kept or not) between one anchor pair.
 MAX_PATHS_PER_PAIR = 64
 # Slack on the length comparison so float sums of equal edge costs count as ties.
-LENGTH_TOLERANCE = 1e-9
+_LENGTH_TOLERANCE = 1e-9
 
 
 def _path_length(tg: nx.Graph, path: list[str]) -> float:
@@ -76,7 +76,7 @@ def shortest_paths_between(
                 best = length
                 paths.append(path)
                 continue
-            if length > best + max_extra + LENGTH_TOLERANCE:
+            if length > best + max_extra + _LENGTH_TOLERANCE:
                 break
             if len(path) - 1 <= cutoff:
                 paths.append(path)
@@ -114,10 +114,10 @@ def union_of_shortest_paths(
         ``(paths, tables)``: the candidate paths as table-node-id lists, and the fqns of every
         table on those paths plus every anchor found in the projection.
     """
-    tg = schema_graph.table_graph(kinds=kinds)
-    source_nodes = [tnode(s) for s in sources if tnode(s) in tg]
+    table_graph = schema_graph.table_graph(kinds=kinds)
+    source_nodes = [tnode(s) for s in sources if tnode(s) in table_graph]
     destination_nodes = (
-        [tnode(d) for d in destinations if tnode(d) in tg] if destinations else None
+        [tnode(d) for d in destinations if tnode(d) in table_graph] if destinations else None
     )
     if destination_nodes:
         pairs = list(product(source_nodes, destination_nodes))
@@ -128,7 +128,10 @@ def union_of_shortest_paths(
     for start, end in pairs:
         if start == end:
             continue
-        for path in shortest_paths_between(tg, start, end, max_extra=max_extra, cutoff=cutoff):
+        candidates = shortest_paths_between(
+            table_graph, start, end, max_extra=max_extra, cutoff=cutoff
+        )
+        for path in candidates:
             key = tuple(path)
             if key in seen or tuple(reversed(path)) in seen:
                 continue
@@ -146,11 +149,11 @@ def connected_components_of(schema_graph: SchemaGraph, fqns: list[str]) -> list[
 
     Tables missing from the join graph are dropped; components holding none of them are skipped.
     """
-    tg = schema_graph.table_graph()
-    nodes = [tnode(fqn) for fqn in fqns if tnode(fqn) in tg]
+    table_graph = schema_graph.table_graph()
+    nodes = [tnode(fqn) for fqn in fqns if tnode(fqn) in table_graph]
     components: list[set[str]] = []
-    for component in nx.connected_components(tg):
-        hit = {tg.nodes[node]["fqn"] for node in nodes if node in component}
+    for component in nx.connected_components(table_graph):
+        hit = {table_graph.nodes[node]["fqn"] for node in nodes if node in component}
         if hit:
             components.append(hit)
     return components

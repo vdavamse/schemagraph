@@ -87,30 +87,30 @@ def create_app(engine: Engine | None = None, *, web_dist: str | Path | None = No
     Returns:
         The app, with the engine at ``app.state.engine``.
     """
-    eng = engine or Engine()
+    engine = engine or Engine()
     app = FastAPI(title="schemagraph", version="0.1.0")
-    app.state.engine = eng
-    _add_health_route(app, eng)
-    _add_connection_routes(app, eng)
-    _add_graph_routes(app, eng)
-    _add_linking_routes(app, eng)
-    _add_glossary_routes(app, eng)
+    app.state.engine = engine
+    _add_health_route(app, engine)
+    _add_connection_routes(app, engine)
+    _add_graph_routes(app, engine)
+    _add_linking_routes(app, engine)
+    _add_glossary_routes(app, engine)
     _mount_frontend(app, _resolve_web_dist(web_dist))
     return app
 
 
-def _add_health_route(app: FastAPI, eng: Engine) -> None:
+def _add_health_route(app: FastAPI, engine: Engine) -> None:
     """Register ``GET /api/health``: status plus the engine's stats."""
 
     @app.get("/api/health")
     def health() -> dict[str, Any]:
-        return {"status": "ok", **eng.stats()}
+        return {"status": "ok", **engine.stats()}
 
 
-def _register_connection(eng: Engine, body: ConnectionIn) -> dict[str, Any]:
+def _register_connection(engine: Engine, body: ConnectionIn) -> dict[str, Any]:
     """Register (and optionally build) a connection; failures are HTTP 400."""
     try:
-        snap = eng.add_connection(
+        snap = engine.add_connection(
             body.name,
             body.type,
             body.config,
@@ -132,20 +132,20 @@ def _register_connection(eng: Engine, body: ConnectionIn) -> dict[str, Any]:
     }
 
 
-def _check_connection(eng: Engine, name: str) -> dict[str, str]:
+def _check_connection(engine: Engine, name: str) -> dict[str, str]:
     """Run a connection's check; unknown is HTTP 404, a failing check HTTP 400."""
     try:
-        return {"status": eng.check_connection(name)}
+        return {"status": engine.check_connection(name)}
     except KeyError as e:
         raise HTTPException(404, f"unknown connection {name}") from e
     except Exception as e:
         raise HTTPException(400, f"{type(e).__name__}: {e}") from e
 
 
-def _build_connection(eng: Engine, name: str) -> dict[str, Any]:
+def _build_connection(engine: Engine, name: str) -> dict[str, Any]:
     """Build one connection and return its counts; unknown is HTTP 404, a failure HTTP 400."""
     try:
-        snap = eng.build(name)
+        snap = engine.build(name)
     except KeyError as e:
         raise HTTPException(404, f"unknown connection {name}") from e
     except Exception as e:
@@ -160,7 +160,7 @@ def _build_connection(eng: Engine, name: str) -> dict[str, Any]:
     }
 
 
-def _add_connection_routes(app: FastAPI, eng: Engine) -> None:
+def _add_connection_routes(app: FastAPI, engine: Engine) -> None:
     """Register connector types, connection CRUD, checks and builds.
 
     Connector and config failures become HTTP 400; unknown connections 404 where looked up.
@@ -168,15 +168,15 @@ def _add_connection_routes(app: FastAPI, eng: Engine) -> None:
 
     @app.get("/api/connector-types")
     def connector_types() -> list[dict[str, Any]]:
-        return [{"type": t, "schema": eng.connector_schema(t)} for t in eng.connector_types()]
+        return [{"type": t, "schema": engine.connector_schema(t)} for t in engine.connector_types()]
 
     @app.get("/api/connections")
     def list_connections() -> list[dict[str, Any]]:
-        return eng.connections()
+        return engine.connections()
 
     @app.post("/api/connections")
     def add_connection(body: ConnectionIn) -> dict[str, Any]:
-        return _register_connection(eng, body)
+        return _register_connection(engine, body)
 
     @app.post("/api/ddl")
     def add_ddl(body: DDLIn) -> dict[str, Any]:
@@ -187,7 +187,7 @@ def _add_connection_routes(app: FastAPI, eng: Engine) -> None:
             "default_catalog": body.default_catalog,
         }
         try:
-            snap = eng.add_connection(body.name, "ddl", cfg, build=body.build)
+            snap = engine.add_connection(body.name, "ddl", cfg, build=body.build)
         except Exception as e:
             raise HTTPException(400, f"{type(e).__name__}: {e}") from e
         return {
@@ -199,21 +199,21 @@ def _add_connection_routes(app: FastAPI, eng: Engine) -> None:
 
     @app.delete("/api/connections/{name}")
     def delete_connection(name: str) -> dict[str, str]:
-        eng.remove_connection(name)
+        engine.remove_connection(name)
         return {"deleted": name}
 
     @app.post("/api/connections/{name}/check")
     def check_connection(name: str) -> dict[str, str]:
-        return _check_connection(eng, name)
+        return _check_connection(engine, name)
 
     @app.post("/api/connections/{name}/build")
     def build_connection(name: str) -> dict[str, Any]:
-        return _build_connection(eng, name)
+        return _build_connection(engine, name)
 
     @app.post("/api/build")
     def build_all() -> dict[str, Any]:
-        snaps = eng.build()
-        return {"built": [s.source for s in snaps], **eng.stats()}
+        snaps = engine.build()
+        return {"built": [s.source for s in snaps], **engine.stats()}
 
 
 def _table_matches(table: Table, query: str | None) -> bool:
@@ -251,7 +251,7 @@ def _export_edge(edge: Edge) -> dict[str, Any]:
     }
 
 
-def _add_graph_routes(app: FastAPI, eng: Engine) -> None:
+def _add_graph_routes(app: FastAPI, engine: Engine) -> None:
     """Register graph browsing: stats, tables, one table with its relations, edges, paths, export.
 
     Unknown tables are HTTP 404.
@@ -259,33 +259,33 @@ def _add_graph_routes(app: FastAPI, eng: Engine) -> None:
 
     @app.get("/api/graph/stats")
     def graph_stats() -> dict[str, Any]:
-        return eng.stats()
+        return engine.stats()
 
     @app.get("/api/graph/tables")
     def graph_tables(q: str | None = None) -> list[dict[str, Any]]:
-        return [_table_summary(table) for table in eng.tables() if _table_matches(table, q)]
+        return [_table_summary(table) for table in engine.tables() if _table_matches(table, q)]
 
     @app.get("/api/graph/tables/{fqn}")
     def graph_table(fqn: str) -> dict[str, Any]:
-        table = eng.table(fqn)
+        table = engine.table(fqn)
         if not table:
             raise HTTPException(404, f"unknown table {fqn}")
         lower_fqn = table.fqn.lower()
         relations = [
             edge.model_dump()
-            for edge in eng.edges()
+            for edge in engine.edges()
             if edge.from_table.lower() == lower_fqn or edge.to_table.lower() == lower_fqn
         ]
         return {**table.model_dump(by_alias=True), "fqn": table.fqn, "relations": relations}
 
     @app.get("/api/graph/edges")
     def graph_edges() -> list[dict[str, Any]]:
-        return [e.model_dump() for e in eng.edges()]
+        return [e.model_dump() for e in engine.edges()]
 
     @app.get("/api/graph/path")
     def graph_path(a: str, b: str) -> dict[str, Any]:
         try:
-            return {"paths": eng.join_path(a, b)}
+            return {"paths": engine.join_path(a, b)}
         except KeyError as e:
             raise HTTPException(404, f"unknown table {e}") from e
 
@@ -293,19 +293,24 @@ def _add_graph_routes(app: FastAPI, eng: Engine) -> None:
     def graph_export() -> dict[str, Any]:
         """Table-level graph for visualisation: nodes + relation edges."""
         nodes = [
-            {"id": t.fqn, "kind": t.kind, "columns": len(t.columns), "source": t.source}
-            for t in eng.tables()
+            {
+                "id": table.fqn,
+                "kind": table.kind,
+                "columns": len(table.columns),
+                "source": table.source,
+            }
+            for table in engine.tables()
         ]
-        edges = [_export_edge(edge) for edge in eng.edges()]
+        edges = [_export_edge(edge) for edge in engine.edges()]
         return {"nodes": nodes, "edges": edges}
 
 
-def _add_linking_routes(app: FastAPI, eng: Engine) -> None:
+def _add_linking_routes(app: FastAPI, engine: Engine) -> None:
     """Register ``POST /api/link`` (a :class:`LinkResult`) and ``GET /api/explain``."""
 
     @app.post("/api/link", response_model=LinkResult)
     def link(body: LinkIn) -> LinkResult:
-        return eng.link(
+        return engine.link(
             body.question,
             max_tables=body.max_tables,
             anchor_k=body.anchor_k,
@@ -317,19 +322,19 @@ def _add_linking_routes(app: FastAPI, eng: Engine) -> None:
 
     @app.get("/api/explain")
     def explain(question: str) -> dict[str, Any]:
-        return eng.explain(question)
+        return engine.explain(question)
 
 
-def _add_glossary_routes(app: FastAPI, eng: Engine) -> None:
+def _add_glossary_routes(app: FastAPI, engine: Engine) -> None:
     """Register the glossary (merged terms; user terms CRUD) and user join-hint routes."""
 
     @app.get("/api/glossary")
     def glossary() -> list[dict[str, Any]]:
-        return [t.model_dump() for t in eng.graph.terms.values()]
+        return [t.model_dump() for t in engine.graph.terms.values()]
 
     @app.post("/api/glossary")
     def upsert_term(body: TermIn) -> dict[str, str]:
-        eng.upsert_term(
+        engine.upsert_term(
             BusinessTerm(
                 name=body.name,
                 description=body.description,
@@ -342,16 +347,16 @@ def _add_glossary_routes(app: FastAPI, eng: Engine) -> None:
 
     @app.delete("/api/glossary/{name}")
     def delete_term(name: str) -> dict[str, str]:
-        eng.delete_term(name)
+        engine.delete_term(name)
         return {"deleted": name}
 
     @app.get("/api/join-hints")
     def join_hints() -> list[dict[str, Any]]:
-        return [{"id": i, **e.model_dump()} for i, e in eng.store.join_hints()]
+        return [{"id": i, **e.model_dump()} for i, e in engine.store.join_hints()]
 
     @app.post("/api/join-hints")
     def add_join_hint(body: JoinHintIn) -> dict[str, int]:
-        hint_id = eng.add_join_hint(
+        hint_id = engine.add_join_hint(
             Edge(
                 kind="join_hint",
                 from_table=body.from_table,
@@ -366,7 +371,7 @@ def _add_glossary_routes(app: FastAPI, eng: Engine) -> None:
 
     @app.delete("/api/join-hints/{hid}")
     def delete_join_hint(hid: int) -> dict[str, int]:
-        eng.delete_join_hint(hid)
+        engine.delete_join_hint(hid)
         return {"deleted": hid}
 
 

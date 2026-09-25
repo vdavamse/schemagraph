@@ -62,9 +62,9 @@ def add_ddl(
     home: HomeOpt = None,
 ):
     """Register a DDL file as a connection and build it."""
-    eng = _engine(home)
+    engine = _engine(home)
     cfg = {"ddl": file.read_text(encoding="utf-8"), "dialect": dialect, "default_schema": schema}
-    snap = eng.add_connection(name, "ddl", cfg)
+    snap = engine.add_connection(name, "ddl", cfg)
     warnings = f", warnings: {snap.warnings}" if snap.warnings else ""
     typer.echo(f"{name}: {len(snap.tables)} tables, {len(snap.edges)} edges" + warnings)
 
@@ -78,13 +78,13 @@ def add_dbt(
     home: HomeOpt = None,
 ):
     """Register a dbt project (parsed without dbt) or a compiled manifest."""
-    eng = _engine(home)
+    engine = _engine(home)
     cfg = {
         "project_dir": str(project_dir) if project_dir else None,
         "manifest_path": str(manifest) if manifest else None,
         "default_schema": schema,
     }
-    snap = eng.add_connection(name, "dbt", cfg)
+    snap = engine.add_connection(name, "dbt", cfg)
     counts = f"{len(snap.tables)} tables, {len(snap.edges)} edges, {len(snap.terms)} terms"
     warnings = f", warnings: {len(snap.warnings)}" if snap.warnings else ""
     typer.echo(f"{name}: {counts}" + warnings)
@@ -97,8 +97,8 @@ def add_duckdb(
     home: HomeOpt = None,
 ):
     """Register a DuckDB database file."""
-    eng = _engine(home)
-    snap = eng.add_connection(name, "duckdb", {"path": str(path)})
+    engine = _engine(home)
+    snap = engine.add_connection(name, "duckdb", {"path": str(path)})
     typer.echo(f"{name}: {len(snap.tables)} tables, {len(snap.edges)} edges")
 
 
@@ -134,12 +134,12 @@ def add(
     home: HomeOpt = None,
 ):
     """Register any connector from a JSON config."""
-    eng = _engine(home)
+    engine = _engine(home)
     if config.startswith("@"):
         cfg = json.loads(Path(config[1:]).read_text(encoding="utf-8"))
     else:
         cfg = json.loads(config)
-    snap = eng.add_connection(
+    snap = engine.add_connection(
         name,
         type_name,
         cfg,
@@ -158,22 +158,22 @@ def add(
 @app.command()
 def build(name: Annotated[str | None, typer.Argument()] = None, home: HomeOpt = None):
     """(Re)introspect one connection or all."""
-    eng = _engine(home)
-    res = eng.build(name)
-    snaps = res if isinstance(res, list) else [res]
+    engine = _engine(home)
+    result = engine.build(name)
+    snaps = result if isinstance(result, list) else [result]
     for snap in snaps:
         typer.echo(
             f"{snap.source}: {len(snap.tables)} tables, {len(snap.edges)} edges, "
             f"{len(snap.terms)} terms"
         )
-    typer.echo(json.dumps(eng.stats()))
+    typer.echo(json.dumps(engine.stats()))
 
 
 @app.command()
 def connections(home: HomeOpt = None):
     """List connections."""
-    eng = _engine(home)
-    for connection in eng.connections():
+    engine = _engine(home)
+    for connection in engine.connections():
         typer.echo(
             f"{connection['name']:<20} {connection['type']:<14} "
             f"tables={connection['n_tables']:<5} edges={connection['n_edges']:<5} "
@@ -198,8 +198,8 @@ def link(
     home: HomeOpt = None,
 ):
     """Link a question to a sub-schema and print annotated DDL."""
-    eng = _engine(home)
-    result = eng.link(question, max_tables=max_tables, columns=columns, use_llm=llm)
+    engine = _engine(home)
+    result = engine.link(question, max_tables=max_tables, columns=columns, use_llm=llm)
     typer.echo(result.model_dump_json(indent=2) if as_json else result.ddl)
 
 
@@ -252,7 +252,7 @@ def bench_spider1(
     """Gold-table recall over a Spider-format dataset with real foreign keys (bridge tables, path union and pruning are measurable here)."""  # noqa: E501
     from schemagraph.bench.spider1 import format_table, run
 
-    res = run(
+    result = run(
         tables_json,
         questions_json,
         max_tables=max_tables,
@@ -264,8 +264,8 @@ def bench_spider1(
         tag=tag,
         **_parse_opts(opt),
     )
-    typer.echo(format_table(res["summary"]))
-    typer.echo(f"skipped (unknown db or no gold table): {res['summary']['config']['skipped']}")
+    typer.echo(format_table(result["summary"]))
+    typer.echo(f"skipped (unknown db or no gold table): {result['summary']['config']['skipped']}")
 
 
 @app.command()
@@ -325,7 +325,7 @@ def bench_spider2_lite(
                 err=True,
             )
 
-    res = run(
+    result = run(
         spider2_root,
         max_tables=max_tables,
         anchor_k=anchor_k,
@@ -346,7 +346,7 @@ def bench_spider2_lite(
         only=set(only) if only else None,
         **_parse_opts(opt),
     )
-    typer.echo(format_table(res["summary"]))
+    typer.echo(format_table(result["summary"]))
     typer.echo(f"\nresults written to {out}/")
 
 

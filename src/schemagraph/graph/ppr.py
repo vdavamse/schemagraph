@@ -29,7 +29,7 @@ from schemagraph.graph.build import SchemaGraph
 log = logging.getLogger("schemagraph")
 
 # Node types whose shared names make a seed less specific (HippoRAG node specificity).
-SPECIFIC_NTYPES = {"column", "table"}
+_SPECIFIC_NTYPES = {"column", "table"}
 
 
 def specificity_weights(schema_graph: SchemaGraph) -> dict[str, float]:
@@ -41,15 +41,15 @@ def specificity_weights(schema_graph: SchemaGraph) -> dict[str, float]:
     name_counts = Counter(
         attrs.get("name")
         for _, attrs in schema_graph.graph.nodes(data=True)
-        if attrs.get("ntype") in SPECIFIC_NTYPES
+        if attrs.get("ntype") in _SPECIFIC_NTYPES
     )
     weights: dict[str, float] = {}
     for node, attrs in schema_graph.graph.nodes(data=True):
-        if attrs.get("ntype") in SPECIFIC_NTYPES:
+        if attrs.get("ntype") in _SPECIFIC_NTYPES:
             count = name_counts.get(attrs.get("name"), 1)
         else:
             count = 1
-        weights[node] = 1.0 / math.log(2 + count - 1) if count > 1 else 1.0
+        weights[node] = 1.0 / math.log(1 + count) if count > 1 else 1.0
     return weights
 
 
@@ -128,24 +128,24 @@ class PPRMatrix:
         if total <= 0:
             return {}
         p /= total
-        # start from the teleport vector: mass never enters components the seeds do not touch,
-        # so those nodes stay exactly zero (what restricting to the touched components achieved)
-        # tolerance is per node (L1 change < n * tol), as in networkx, but 1e-12 instead of 1e-6:
-        # at 1e-6 a 7,000-node schema stopped with an L1 error near 1e-2, enough to reorder
-        # near-tied tables at rank 1
-        # the L1 error contracts by alpha per step from at most 2, so derive the budget from
-        # alpha: a public ppr_alpha of 0.95 needs ~540 steps where 0.85 needs ~170
+        # The L1 error contracts by alpha per step from at most 2, so derive the budget from
+        # alpha: a public ppr_alpha of 0.95 needs ~540 steps where 0.85 needs ~170.
         if 0.0 < alpha < 1.0:
             max_iter = max(
                 max_iter,
                 math.ceil(math.log(node_count * tol / 2.0) / math.log(alpha)) + 1,
             )
+        # Start from the teleport vector: mass never enters components the seeds do not touch,
+        # so those nodes stay exactly zero (what restricting to the touched components achieved).
         x = p.copy()
         err = float("inf")
         for _ in range(max_iter):
             xlast = x
             x = alpha * (x @ self.transition + x[self.dangling].sum() * p) + (1.0 - alpha) * p
             err = float(np.abs(x - xlast).sum())
+            # Tolerance is per node (L1 change < n * tol), as in networkx, but 1e-12 instead of
+            # 1e-6: at 1e-6 a 7,000-node schema stopped with an L1 error near 1e-2, enough to
+            # reorder near-tied tables at rank 1.
             if err < node_count * tol:
                 break
         else:

@@ -1,17 +1,19 @@
 """Golden regression oracle for the readability refactor (issue #8).
 
-Pins, byte for byte, what the unmodified code (origin/main @ 1db6bfe) produces on offline fixtures:
-every connector's snapshot, the merged graph (node/edge insertion order and attributes), the lexical
-index, ``LinkResult`` + DDL for a question set under a dozen ``LinkOptions`` variants, ``explain()``,
+Pins, byte for byte, what the code produced before the refactor (origin/main 1db6bfe plus the DuckDB
+1.5 introspection fix, b4ad70d) on offline fixtures: every connector's snapshot, the merged graph
+(node/edge insertion order and attributes), the lexical index, ``LinkResult`` + DDL for a question
+set under 16 ``LinkOptions`` variants, ``explain()``,
 and the frozen public surfaces (OpenAPI, MCP tools, connector config schemas, CLI, LinkOptions and
 bench Row fields). Floats are compared through ``json.dumps`` (``repr``, exact round trip), so a
 reordered floating-point sum shows up.
 
 Regenerate only on purpose: ``SCHEMAGRAPH_UPDATE_GOLDEN=1 uv run pytest -q tests/test_golden.py``.
-The golden files were generated before the refactor; a refactoring commit must never regenerate them
-(except ``surfaces_*`` description-only changes, which the test already ignores).
+A refactoring commit must never regenerate them. The one text that may change freely is a
+component schema's root ``description`` in ``surfaces.json`` (a pydantic class docstring), which
+the test strips before comparing.
 
-Callers pass renamed parameters positionally (``schema_graph`` -> ``schema_graph``) so this file survives the rename.
+Callers pass parameters positionally, so the file survived the ``sg`` -> ``schema_graph`` rename.
 """
 
 from __future__ import annotations
@@ -38,6 +40,8 @@ from schemagraph.graph.infer import with_inferred_edges
 from schemagraph.linking.linker import Linker, LinkOptions
 from schemagraph.linking.render import render_ddl
 from schemagraph.model import BusinessTerm, Column, Edge, SchemaSnapshot, Table
+
+# Fixtures shared with other test modules: editing them changes these goldens too.
 from tests.test_catalog_connectors import collibra_handler, unity_handler
 from tests.test_spider2_and_infer import _write_table
 
@@ -348,12 +352,9 @@ def link_payload(linker: Linker, graph_name: str) -> dict:
     linker.llm = None
     out["explain"] = [linker.explain(q) for q in QUESTIONS[graph_name] + COMMON_QUESTIONS]
     first = linker.link(QUESTIONS[graph_name][0], LinkOptions(render=False))
-    out["ddl_no_samples"] = render_ddl(linker_graph(linker), first, samples=False)
+    out["ddl_no_samples"] = render_ddl(linker.schema_graph, first, samples=False)
     return out
 
-
-def linker_graph(linker: Linker) -> SchemaGraph:
-    return linker.schema_graph
 
 
 def index_dump(linker: Linker) -> dict:
@@ -462,9 +463,14 @@ def test_golden_surfaces(tmp_path):
     engine.close()
 
 
-def test_golden_llm_request():
+def test_golden_llm_request(monkeypatch):
     """The Claude anchor-picker request (system prompt, compact schema, output schema) is LLM-visible: frozen."""
-    from types import SimpleNamespace
+    import sys
+    from types import ModuleType, SimpleNamespace
+
+    # the picker imports anthropic even with a client injected; the request doesn't depend on it,
+    # and importing the real SDK takes seconds (much more on a Windows mount)
+    monkeypatch.setitem(sys.modules, "anthropic", ModuleType("anthropic"))
 
     from schemagraph.llm.anchors import ClaudeAnchorPicker
 

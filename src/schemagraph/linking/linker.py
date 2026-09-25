@@ -61,12 +61,12 @@ MIN_ANCHOR_CANDIDATES = 8
 ANCHOR_CANDIDATE_FACTOR = 3
 # Column cap of a table ranked at or above ``columns_top_uncapped``, and the rank assumed for
 # an unranked table (so it is never uncapped).
-UNCAPPED = 10**9
+_UNCAPPED = 10**9
 # ``explain`` lists this many seeds and PPR nodes, and this many tables.
 EXPLAIN_TOP = 40
 EXPLAIN_TABLES = 20
 # Column reasons that exempt a column from the width cap.
-KEY_REASONS = frozenset({"primary key", "join key"})
+_KEY_REASONS = frozenset({"primary key", "join key"})
 
 
 @dataclass
@@ -78,7 +78,7 @@ class LinkOptions:
     Attributes:
         max_tables: Table budget. 12 -> 20 after the Spider2-Lite loop: +5 strict recall for
             ~2 extra tables.
-        anchor_k: Top tables by PPR treated as anchors when there is no LLM pass.
+        anchor_k: Top-ranked tables (by ``ranker``) treated as anchors when there is no LLM pass.
         min_anchor_ratio: Anchors must score >= ratio * best (relative evidence).
         fill_ratio: Non-path tables need >= ratio * best evidence to be included.
         bypass_if_fits: If the whole schema fits ``max_tables``, return all of it ("Death of
@@ -301,9 +301,9 @@ def _cap_columns(columns: list[LinkedColumn], cap: int) -> list[LinkedColumn]:
     """Keep every key column plus the best-scored others, up to ``cap`` columns in all."""
     if len(columns) <= cap:
         return columns
-    keys = [column for column in columns if column.reason in KEY_REASONS]
+    keys = [column for column in columns if column.reason in _KEY_REASONS]
     rest = sorted(
-        [column for column in columns if column.reason not in KEY_REASONS],
+        [column for column in columns if column.reason not in _KEY_REASONS],
         key=lambda column: -column.score,
     )
     return keys + rest[: max(0, cap - len(keys))]
@@ -760,8 +760,8 @@ class Linker:
                 activation=activation,
                 opts=opts,
             )
-            uncapped = rank.get(fqn, UNCAPPED) <= opts.columns_top_uncapped
-            columns = _cap_columns(columns, UNCAPPED if uncapped else opts.max_columns_per_table)
+            uncapped = rank.get(fqn, _UNCAPPED) <= opts.columns_top_uncapped
+            columns = _cap_columns(columns, _UNCAPPED if uncapped else opts.max_columns_per_table)
             columns = _declaration_order(columns, table)
             if not columns and table.columns:
                 columns = _plain_columns(table.columns[: opts.max_columns_per_table])

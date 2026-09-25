@@ -112,9 +112,9 @@ def prune_paths(
     """
     if not paths:
         return []
-    tg = schema_graph.table_graph()
+    table_graph = schema_graph.table_graph()
     nodes = {node for path in paths for node in path}
-    sub = tg.subgraph(nodes).copy()
+    sub = table_graph.subgraph(nodes).copy()
     resources = flow_resources(sub, anchors, alpha=alpha, theta=theta, node_prior=node_prior)
     scored: list[tuple[float, list[str]]] = []
     for path in paths:
@@ -134,7 +134,6 @@ def prune_paths(
                 reliability=round(reliability, 4),
             )
         )
-    # PathRAG serializes ascending by reliability (most reliable last, closest to the question)
     return join_paths
 
 

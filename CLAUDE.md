@@ -12,7 +12,7 @@ schemagraph is a schema context engine for text-to-SQL: catalog metadata in (pas
 
 ```bash
 uv sync --all-extras                       # Python 3.11+, installs anthropic + boto3 + model2vec (embed) extras and dev deps
-uv run pytest -q                           # whole suite, ~6 s, no network
+uv run pytest -q                           # whole suite, ~20 s on the Windows mount, no network
 uv run pytest -q tests/test_linking.py     # one file
 uv run pytest -q tests/test_linking.py -k bypass   # one test by keyword
 uv run pytest -q tests/test_golden.py      # byte-exact regression oracle (see "Golden files" below)
@@ -95,4 +95,4 @@ Ruff enforces Google-style docstrings (`D`, except `D105`/`D107`), complexity (`
 * **Docstrings**: every module, public class and public function; private helpers too when the name doesn't say everything, when they mutate an argument, or when they are longer than ~10 lines. One-line imperative summary. Add `Args:`/`Returns:`/`Raises:` when there are ≥ 3 parameters, a parameter with units or a tuning meaning, a non-obvious return shape, a mutation, or an intentional raise. Dataclasses document fields in `Attributes:` rather than trailing comments.
 * **User- and agent-visible text is not free**: a pydantic model's docstring becomes its JSON-schema/OpenAPI description, a FastAPI handler's docstring its operation description, an MCP tool's docstring what agents read, a Typer command's docstring its `--help`. Don't add `Field(description=...)` to connector configs (the UI masks secrets by description).
 * **Names**: descriptive names (`table`, `column`, `edge`, `relation`, `node`, `schema_graph`, `activation`). Accepted abbreviations: `fqn`, `snap`, `cfg`, `opts`, `db`, `pk`, `fk`, `ddl`, `sql`, `uid`, `idf`, `ppr`, `rrf`, and conventional math names (`u`/`v`, `k1`, `b`, `tf`, `df`, `alpha`). Single letters only inside a one-line comprehension.
-* **Structure**: split long functions into named helpers; tuned numbers become module-level `UPPER_SNAKE` constants with a comment. When moving linker or graph code, keep insertion order, float operand grouping and sort tie-breaks exactly as they were, since they feed PPR and the rankings.
+* **Structure**: split long functions into named helpers; tuned numbers become module-level `UPPER_SNAKE` constants with a comment. Tuned numbers and policy constants are public; implementation details (SQL text, regexes, markers and lookup sets used only inside the module, CSV headers) are `_PRIVATE`. Don't give two constants the same name with different meanings; import a shared value instead of copying it. When moving linker or graph code, keep insertion order, float operand grouping and sort tie-breaks exactly as they were, since they feed PPR and the rankings.

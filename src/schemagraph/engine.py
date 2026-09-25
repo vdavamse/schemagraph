@@ -26,7 +26,7 @@ DEFAULT_HOME = Path(os.environ.get("SCHEMAGRAPH_HOME", ".schemagraph"))
 
 
 # Values of ``SCHEMAGRAPH_EMBED`` that turn embeddings on (anything else but ``auto`` is off).
-EMBED_TRUE_VALUES = {"1", "true", "yes", "on"}
+_EMBED_TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
 class Engine:
@@ -79,7 +79,7 @@ class Engine:
         if embed is None:
             embed = os.environ.get("SCHEMAGRAPH_EMBED", "auto").strip().lower()
             if embed != "auto":
-                embed = embed in EMBED_TRUE_VALUES
+                embed = embed in _EMBED_TRUE_VALUES
         if embed != "auto":
             return bool(embed)
         try:

@@ -31,7 +31,7 @@ stub created for a referenced-only table is replaced when the real table arrives
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections import Counter
 
 import networkx as nx
 
@@ -83,7 +83,7 @@ JOIN_KINDS: frozenset[str] = frozenset(
     {"foreign_key", "relationship_test", "join_hint", "catalog_relation", "inferred"}
 )
 
-# Join cost of a relation kind missing from RELATION_WEIGHT (between catalog and inferred).
+# Join cost of a relation kind missing from RELATION_WEIGHT (between lineage 1.6 and inferred 2.5).
 UNKNOWN_RELATION_WEIGHT = 2.0
 # PPR affinity of a relation kind missing from PPR_AFFINITY.
 DEFAULT_AFFINITY = 1.0
@@ -94,7 +94,7 @@ GLOSSARY_WEIGHT = 0.7
 # A merged column keeps at most this many sample values across all sources.
 MAX_SAMPLE_VALUES = 20
 # Property that marks a placeholder table created for an edge endpoint nobody introspected.
-STUB_PROPERTY = "stub"
+_STUB_PROPERTY = "stub"
 
 
 def snapshot_priority(snap: SchemaSnapshot) -> int:
@@ -158,16 +158,18 @@ def _without_stub_marker(table: Table) -> Table:
 
     Only the graph marks stubs, so a snapshot that round-tripped a stub must not keep the marker.
     """
-    if STUB_PROPERTY not in table.properties:
+    if _STUB_PROPERTY not in table.properties:
         return table
-    properties = {k: v for k, v in table.properties.items() if k != STUB_PROPERTY}
+    properties = {k: v for k, v in table.properties.items() if k != _STUB_PROPERTY}
     return table.model_copy(update={"properties": properties})
 
 
 def _stub_table(fqn: str, source: str) -> Table:
     """Placeholder for a table an edge references but no snapshot introspected.
 
-    ``fqn`` is split as ``[catalog.]schema.name``; a two-part fqn has no catalog.
+    The last dotted part is the name. The catalog is the first part only when there are three or
+    more; the schema is whatever lies between catalog and name. So a two-part ``schema.name``
+    keeps only its name: the stub's ``fqn`` is ``name`` while it is stored under ``schema.name``.
     """
     parts = fqn.split(".")
     return Table(
@@ -175,7 +177,7 @@ def _stub_table(fqn: str, source: str) -> Table:
         schema=".".join(parts[1:-1]) or None,
         catalog=parts[0] if fqn.count(".") >= 2 else None,
         source=source,
-        properties={STUB_PROPERTY: "true"},
+        properties={_STUB_PROPERTY: "true"},
     )
 
 
@@ -217,14 +219,6 @@ def _merge_table_fields(existing: Table, incoming: Table) -> None:
         else:
             _merge_column_fields(existing_column, column)
     _append_missing(existing.primary_key, incoming.primary_key)
-
-
-def _count_by(values: Iterable[str]) -> dict[str, int]:
-    """Count occurrences of each value."""
-    counts: dict[str, int] = {}
-    for value in values:
-        counts[value] = counts.get(value, 0) + 1
-    return counts
 
 
 class SchemaGraph:
@@ -533,8 +527,8 @@ class SchemaGraph:
 
     def stats(self) -> dict[str, int]:
         """Node, relation and source counts (served by the API and shown in the UI)."""
-        node_types = _count_by(attrs.get("ntype", "?") for _, attrs in self.graph.nodes(data=True))
-        edge_types = _count_by(
+        node_types = Counter(attrs.get("ntype", "?") for _, attrs in self.graph.nodes(data=True))
+        edge_types = Counter(
             attrs.get("etype", "?") for _, _, attrs in self.graph.edges(data=True)
         )
         return {

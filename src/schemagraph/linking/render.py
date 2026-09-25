@@ -10,7 +10,7 @@ MAX_LINEAGE_LISTED = 6
 # Sample values listed per column.
 MAX_SAMPLES_RENDERED = 5
 # Table kinds that come from dbt and are rendered as "dbt <kind>".
-DBT_KINDS = frozenset({"model", "source", "seed", "snapshot"})
+_DBT_KINDS = frozenset({"model", "source", "seed", "snapshot"})
 # Starts the header line with the linked-table count; the benchmark splits the DDL on it.
 LINKED_TABLES_MARKER = "-- Linked tables:"
 
@@ -57,7 +57,7 @@ def _table_notes(schema_graph: SchemaGraph, linked: LinkedTable, table: Table | 
     if table and table.row_count is not None:
         notes.append(f"{table.row_count:,} rows")
     if table and table.kind != "table":
-        notes.append(f"dbt {table.kind}" if table.kind in DBT_KINDS else table.kind)
+        notes.append(f"dbt {table.kind}" if table.kind in _DBT_KINDS else table.kind)
     if table:
         upstream, downstream = schema_graph.lineage(table.fqn)
         if upstream:
@@ -87,6 +87,7 @@ def _join_path_lines(join_paths: list[JoinPath]) -> list[str]:
     """The join paths, least reliable first, each with its steps."""
     if not join_paths:
         return []
+    # PathRAG serializes ascending by reliability: most reliable last, closest to the question
     lines = ["", "-- === Join paths (most reliable last) ==="]
     for join_path in sorted(join_paths, key=lambda p: p.reliability):
         lines.append(f"-- path [{join_path.reliability:.2f}]: {' -> '.join(join_path.tables)}")

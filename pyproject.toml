@@ -59,7 +59,7 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "D", "C901"]
 ignore = [
     "D105",  # magic methods
-    "D107",  # __init__: constructor arguments are documented in the class docstring
+    "D107",  # __init__ docstrings are optional: document constructor args there or on the class
 ]
 
 [tool.ruff.lint.pydocstyle]

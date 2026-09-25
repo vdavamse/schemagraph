@@ -14,10 +14,14 @@ from __future__ import annotations
 
 import json
 import os
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 from schemagraph.model import Column, Table
+
+if TYPE_CHECKING:
+    import anthropic
 
 DEFAULT_MODEL = os.environ.get("SCHEMAGRAPH_LLM_MODEL", "claude-opus-5")
 
@@ -52,7 +56,7 @@ _OUTPUT_SCHEMA = {
 }
 
 # Beta flag for server-side refusal fallbacks (``fallbacks=True``).
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
+_FALLBACK_BETA = "server-side-fallback-2026-07-01"
 # Response budget of the anchor call; the JSON answer is short.
 MAX_TOKENS = 1024
 # Column and table descriptions are cut to these lengths in the compact schema.
@@ -112,7 +116,13 @@ class ClaudeAnchorPicker:
     ``last_usage`` holds the token usage and model of the latest call.
     """
 
-    def __init__(self, model: str = DEFAULT_MODEL, *, fallbacks: bool = True, client=None):
+    def __init__(
+        self,
+        model: str = DEFAULT_MODEL,
+        *,
+        fallbacks: bool = True,
+        client: anthropic.Anthropic | None = None,
+    ):
         """Create the picker.
 
         Args:
@@ -156,7 +166,7 @@ class ClaudeAnchorPicker:
         )
         if self.fallbacks:
             resp = self.client.beta.messages.create(
-                betas=[FALLBACK_BETA],
+                betas=[_FALLBACK_BETA],
                 fallbacks="default",
                 **kwargs,
             )
