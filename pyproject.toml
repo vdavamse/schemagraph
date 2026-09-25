@@ -67,6 +67,3 @@ max-complexity = 12
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"]
-# TEMP (#8): removed as each module is refactored; empty at merge
-"src/schemagraph/**/__init__.py" = ["D"]
-"src/schemagraph/connectors/**" = ["D", "C901"]
