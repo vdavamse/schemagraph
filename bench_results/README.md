@@ -91,6 +91,36 @@ Ranker and mechanics ablations, 2026-09-17, relative to the 95.85 default (`spid
 | ppr, `ppr_edge_attr=affinity` | `ppr_affinity` | 95.66 | -0.19 | 66.04 | 65.9 | uniform PPR flow per relation kind instead of the join cost (inferred 2.5): worse at tight budgets |
 | rrf, `rrf_k=20` / `rrf_k=120` | scratch only | 96.04 / 95.85 | | 71.89 / 71.7 | 70.6 / 70.6 | fusion constant: insensitive between 20 and 60, slightly worse at 120 |
 
+Sparse backend ablations, 2026-09-25 (issue #10): `bm25_backend=bm25s` swaps the hand-rolled BM25F
+for the [bm25s](https://github.com/xhluca/bm25s) library (extra `bm25s`, `linking/bm25s_backend.py`):
+one document per table with name, column and business tokens repeated 3x and tags and descriptions
+once, k1 1.2, b 0.75, float64, query expansions scored at 0.8 in a second `get_scores` call. Result
+files were not committed; run with `--opt bm25_backend=bm25s --opt bm25_method=<method>`. The
+default was rerun on the same code and is identical to a fresh `origin/main` run on every non-timing
+column (the committed `spider2_lite_default.*` predate later DDL changes: `ddl_tokens` differs in 55
+tasks, table metrics are identical).
+Under `rrf` the deltas are against the default (508 / 530 strict, 228 / 323 @7), and under
+`ranker=bm25` against `ranker_bm25` (503, 218).
+
+| variant | strict_recall | Δ | anchor_hit | precise strict@7 | Δ tasks @7 | gold_in_top20 | avg tables | precision |
+|---|---|---|---|---|---|---|---|---|
+| **default: rrf, BM25F** | **95.85** | | 70.38 | **70.6** | | 95.47 | 11.89 | 30.47 |
+| rrf, bm25s `lucene` | 95.85 | 0 (+1 −1) | 70.75 | 70.3 | −1 | 95.47 | 11.88 | 30.48 |
+| rrf, bm25s `bm25+` | 96.04 | +0.19 | 71.13 | 70.0 | −2 | 95.47 | 12.07 | 30.30 |
+| rrf, bm25s `lucene`, no field repetition (scratch only) | 95.85 | 0 | 70.38 | 69.7 | −3 | 95.47 | 11.89 | 30.47 |
+| `ranker=bm25`, BM25F (`ranker_bm25`) | 94.91 | | 68.30 | 67.5 | | 88.30 | 11.42 | 30.98 |
+| `ranker=bm25`, bm25s `lucene` | 94.91 | 0 (+3 −3) | 67.17 | 65.6 | −6 | 88.49 | 11.38 | 31.01 |
+| `ranker=bm25`, bm25s `bm25+` | 95.47 | +0.56 | 68.49 | 65.9 | −5 | 88.49 | 11.91 | 30.42 |
+
+Verdict: BM25F stays the default. Under `rrf`, bm25s `lucene` is exactly on the parity bar set for
+deleting BM25F (strict ≥ 95.66 and @7 ≥ 70.3, i.e. within one task), but it is not a gain, and on its
+own it ranks worse: under `ranker=bm25` it loses 6 of 218 head hits (+3 −9 paired), because one
+length normalisation over the whole document dilutes a name hit on a wide table, and repeated
+tokens saturate through a single k1. The fusion hides most of that because PPR carries the head
+too. `bm25+` buys strict recall on the tail (its per-term floor lifts weakly matching tables past
+the fill gate: +0.18 tables returned, −0.17 precision) and costs @7. Plain concatenation without
+repetition is worse again (−3 @7). The backend stays as an ablation.
+
 
 ## The iteration log (large-schema problem)
 
@@ -112,6 +142,13 @@ outside the top 20. Dissecting activations gave four mechanisms, each fixed and 
 | 8 | ranking = reciprocal-rank fusion of the PPR table ranking with BM25F over one document per table (`ranker=rrf`), anchor and fill gates on per-ranker relative evidence; stopword-tolerant name n-grams (`ngram_stop`) | 95.85 | 91.57 |
 | 9 | rank-tiered column cap (`columns_top_uncapped=1`, `max_columns_per_table=40`): col_strict 81.17 → 91.21 at −0.5 % tokens; table metrics unchanged. Same day, benchmark-neutral by construction: snapshots merge in explicit source-priority order with edges and glossary targets resolved after all tables load (`fixA_merge`, identical), and lineage edges leave path-finding (`fixB_lineage`, identical) | **95.85** | **91.57** |
 | 10 | optional seed-side embedding activator (`embed=true`, extra `embed`, `spider2_lite_embed.*`): question phrases seed the closest objects by static-embedding cosine. Strict 96.23, anchor_hit 72.64, precise strict@7 73.7 (from 70.6), gold_in_top20 96.23, p50 51 ms. Off in the benchmark defaults; the Engine turns it on when the extra is installed | (96.23) | |
+
+Kept as an ablation, not adopted: the **bm25s library as the sparse backend** (2026-09-25, issue #10,
+`bm25_backend=bm25s`; table above). The goal was less custom code. bm25s has no fields, field weights
+or weighted query terms, so the adapter approximates BM25F by repeating field tokens. Under `rrf`,
+`lucene` meets the one-task parity bar (95.85 strict, 70.3 @7) but gains nothing, and alone it is 1.9 @7
+below BM25F. Deleting `linking/bm25.py` would give up that sparse-ranking quality, so the module
+stays.
 
 Tried and rejected: **SPRIG seed-side fusion** (2026-09-23, `seed_bm25=true`; `docs/SPRIG_RECOMMENDATIONS.md`).
 The top `seed_k` BM25F tables join the PPR personalization with weight `seed_w / (rank + 1)`

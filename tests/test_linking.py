@@ -1,3 +1,8 @@
+import sys
+from dataclasses import replace
+
+import pytest
+
 from schemagraph.graph import build_graph
 from schemagraph.linking import Linker, LinkOptions
 from schemagraph.linking.lexical import activate, build_index, tokenize
@@ -148,6 +153,97 @@ def test_bm25_and_rrf_rankers(store_graph):
         r = lk.link(q, LinkOptions(ranker=ranker, debug=True, ranking_limit=0, bypass_if_fits=False))
         assert r.ranking[0][0] == "public.shipment", ranker
         assert "public.shipment" in r.anchors and any(t.fqn == "public.customer" for t in r.tables)
+
+
+def test_bm25_backend_default_is_bm25f(store_graph):
+    from schemagraph.linking.bm25 import bm25_scores, build_bm25
+
+    q = "shipped date and carrier for each customer"
+    lk = Linker(store_graph)
+    assert lk._sparse_scores(q, LinkOptions()) == bm25_scores(build_bm25(store_graph), q)
+    lk.link(q, LinkOptions(ranker="rrf", seed_bm25=True))
+    assert lk._bm25 is not None and lk._bm25s == {}  # bm25s is never built unless asked for
+
+
+@pytest.mark.parametrize("method", ["lucene", "bm25+"])
+def test_bm25s_backend_ranks_tables(store_graph, method):
+    pytest.importorskip("bm25s")
+    from schemagraph.linking.bm25 import query_terms
+    from schemagraph.linking.bm25s_backend import FIELD_REPEAT, BM25SIndex
+
+    assert FIELD_REPEAT == {"name": 3, "columns": 3, "business": 3, "tags": 1, "desc": 1}
+    q = "shipped date and carrier for each customer"
+    idx = BM25SIndex(store_graph, method)
+    scores = idx.scores(q)
+    assert max(scores, key=scores.get) == "public.shipment"
+    assert all(score > 0 for score in scores.values())
+    # only tables holding some query term are scored (bm25+ gives every table a floor)
+    held = {fqn for t in query_terms(q) for fqn in (idx.fqns[i] for i in idx.postings.get(t, []))}
+    assert set(scores) <= held and len(scores) < len(idx.fqns)
+    assert BM25SIndex(store_graph, method).scores(q) == scores  # deterministic
+    assert idx.scores("zzzz qqqq") == {} and idx.scores("the of") == {}  # OOV / empty query
+    # each weight group (surface forms 1.0, expansions such as the lemma "customer" 0.8) is one
+    # get_scores call, summed with its weight
+    q2 = "carrier for customers"
+    groups: dict[float, list[str]] = {}
+    for token, weight in query_terms(q2).items():
+        if token in idx.postings:
+            groups.setdefault(weight, []).append(token)
+    assert set(groups) == {1.0, 0.8}
+    for fqn, score in idx.scores(q2).items():
+        i = idx.fqns.index(fqn)
+        expected = sum(w * idx.retriever.get_scores(toks)[i] for w, toks in groups.items())
+        assert score == pytest.approx(expected), fqn
+    opts = LinkOptions(bm25_backend="bm25s", bm25_method=method, debug=True, ranking_limit=0,
+                       bypass_if_fits=False)
+    lk = Linker(store_graph)
+    for ranker in ("bm25", "rrf"):
+        r = lk.link(q, replace(opts, ranker=ranker))
+        assert r.ranking[0][0] == "public.shipment", (method, ranker)
+    assert list(lk._bm25s) == [method]  # one cached index per method
+    assert lk._bm25 is None  # the ranking came from bm25s, BM25F was never built
+
+
+@pytest.mark.parametrize("method", ["lucene", "bm25+"])
+def test_bm25s_backend_scores_common_terms(method):
+    pytest.importorskip("bm25s")
+    from schemagraph.linking.bm25s_backend import BM25SIndex
+
+    # "customer" and "amount" sit in 3 of 4 tables: robertson's (clamped) IDF is 0 here, which
+    # used to empty the ranking; the kept methods score every holder positively, like BM25F
+    tables = [
+        Table(name=f"orders_{side}", columns=[Column(name="customer_id"), Column(name="amount")])
+        for side in ("east", "west", "north")
+    ] + [Table(name="region", columns=[Column(name="region_name")])]
+    schema_graph = build_graph([SchemaSnapshot(source="x", source_type="ddl", tables=tables)])
+    scores = BM25SIndex(schema_graph, method).scores("customer amount")
+    assert set(scores) == {"orders_east", "orders_west", "orders_north"}
+    assert all(score > 0 for score in scores.values())
+
+
+def test_bm25s_backend_empty_vocabulary():
+    pytest.importorskip("bm25s")
+    from schemagraph.linking.bm25s_backend import BM25SIndex
+
+    # one-letter names give no tokens at all; bm25s cannot index an empty vocabulary
+    table = Table(name="t", columns=[Column(name="a"), Column(name="b")])
+    schema_graph = build_graph([SchemaSnapshot(source="x", source_type="ddl", tables=[table])])
+    assert BM25SIndex(schema_graph).scores("t a") == {}
+    Linker(schema_graph).link("t a", LinkOptions(bm25_backend="bm25s"))  # no crash
+
+
+def test_bm25_backend_errors(store_graph, monkeypatch):
+    with pytest.raises(ValueError, match="bm25_backend"):
+        Linker(store_graph).link("carrier", LinkOptions(bm25_backend="tantivy"))
+    with pytest.raises(ValueError, match="bm25_method"):
+        Linker(store_graph).link("carrier", LinkOptions(bm25_backend="bm25s", bm25_method="nope"))
+    with pytest.raises(ValueError, match="bm25_method"):  # zero IDF, see METHODS
+        Linker(store_graph).link(
+            "carrier", LinkOptions(bm25_backend="bm25s", bm25_method="robertson")
+        )
+    monkeypatch.setitem(sys.modules, "bm25s", None)
+    with pytest.raises(ImportError, match="uv sync --extra bm25s"):
+        Linker(store_graph).link("carrier", LinkOptions(bm25_backend="bm25s"))
 
 
 def test_lineage_is_context_not_a_join_path(store_snapshot):

@@ -2874,6 +2874,14 @@
    "60"
   ],
   [
+   "bm25_backend",
+   "'bm25f'"
+  ],
+  [
+   "bm25_method",
+   "'lucene'"
+  ],
+  [
    "seed_bm25",
    "False"
   ],
