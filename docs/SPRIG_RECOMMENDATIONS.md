@@ -61,14 +61,14 @@ passed to PPR:
 seeds = act.seeds
 if opts.ranker in {"seedrrf", "seedrrf_fuse"}:
     if self._bm25 is None:
-        self._bm25 = build_bm25(sg)
+        self._bm25 = build_bm25(schema_graph)
     sparse = bm25_scores(self._bm25, question)
     ranked = sorted(sparse.items(), key=lambda x: (-x[1], x[0]))[: opts.seed_k]
     seeds = dict(act.seeds)
     for rank, (fqn, _) in enumerate(ranked):
         n = tnode(fqn)
         seeds[n] = seeds.get(n, 0.0) + opts.seed_w / (rank + 1)
-node_scores = personalized_pagerank(sg, seeds, ...)
+node_scores = personalized_pagerank(schema_graph, seeds, ...)
 # the lexical bonus loop below keeps iterating act.seeds, not seeds
 ```
 

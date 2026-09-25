@@ -1,0 +1,2918 @@
+{
+ "ddl_store": {
+  "source": "store",
+  "source_type": "ddl",
+  "tables": [
+   {
+    "name": "customer",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": "One row per customer account",
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "name",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "email",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "state",
+      "data_type": "VARCHAR",
+      "description": "US state, e.g. California",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "California",
+       "Texas",
+       "New York",
+       "U.S."
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "city",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "store"
+   },
+   {
+    "name": "orders",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "customer_id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "store_id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "total_amount",
+      "data_type": "DECIMAL",
+      "description": "order revenue in USD",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "order_date",
+      "data_type": "TIMESTAMP",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "status",
+      "data_type": "VARCHAR",
+      "description": "current order status: paid, refunded, pending",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "paid",
+       "refunded",
+       "awaiting confirmation from the payment provider today",
+       "10%",
+       "A++"
+      ],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "store"
+   },
+   {
+    "name": "product_category",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "name",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "segment",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "store"
+   },
+   {
+    "name": "products",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": "Product catalog: items by category and price",
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "name",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "category_id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "price",
+      "data_type": "DECIMAL",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "store"
+   },
+   {
+    "name": "order_items",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "order_id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "product_id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "quantity",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "line_total",
+      "data_type": "DECIMAL",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "store"
+   },
+   {
+    "name": "shipment",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "order_item_id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "shipped_date",
+      "data_type": "DATE",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "carrier",
+      "data_type": "VARCHAR",
+      "description": "UPS, FedEx, DHL",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "UPS",
+       "FedEx",
+       "DHL"
+      ],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "store"
+   },
+   {
+    "name": "audit_log",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "actor",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "action",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "at",
+      "data_type": "TIMESTAMP",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "store"
+   }
+  ],
+  "edges": [
+   {
+    "kind": "foreign_key",
+    "from_table": "public.orders",
+    "to_table": "public.customer",
+    "from_columns": [
+     "customer_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "store"
+   },
+   {
+    "kind": "foreign_key",
+    "from_table": "public.products",
+    "to_table": "public.product_category",
+    "from_columns": [
+     "category_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "store"
+   },
+   {
+    "kind": "foreign_key",
+    "from_table": "public.order_items",
+    "to_table": "public.orders",
+    "from_columns": [
+     "order_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "store"
+   },
+   {
+    "kind": "foreign_key",
+    "from_table": "public.order_items",
+    "to_table": "public.products",
+    "from_columns": [
+     "product_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "store"
+   },
+   {
+    "kind": "foreign_key",
+    "from_table": "public.shipment",
+    "to_table": "public.order_items",
+    "from_columns": [
+     "order_item_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "store"
+   }
+  ],
+  "terms": [],
+  "warnings": [],
+  "priority": null
+ },
+ "ddl_extra": {
+  "source": "ops_ddl",
+  "source_type": "ddl",
+  "tables": [
+   {
+    "name": "warehouse",
+    "schema": "ops",
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "code",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": false,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "region",
+      "data_type": "VARCHAR",
+      "description": "sales region of the warehouse",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "ops_ddl"
+   },
+   {
+    "name": "stock",
+    "schema": "ops",
+    "catalog": null,
+    "kind": "table",
+    "description": "On-hand stock per warehouse and product",
+    "columns": [
+     {
+      "name": "warehouse_id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "product_id",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "qty",
+      "data_type": "INT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "warehouse_id",
+     "product_id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "ops_ddl"
+   }
+  ],
+  "edges": [
+   {
+    "kind": "foreign_key",
+    "from_table": "ops.stock",
+    "to_table": "ops.warehouse",
+    "from_columns": [
+     "warehouse_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "ops_ddl"
+   },
+   {
+    "kind": "foreign_key",
+    "from_table": "ops.stock",
+    "to_table": "public.products",
+    "from_columns": [
+     "product_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "ops_ddl"
+   }
+  ],
+  "terms": [],
+  "warnings": [],
+  "priority": null
+ },
+ "dbt_project": {
+  "source": "airbnb",
+  "source_type": "dbt",
+  "tables": [
+   {
+    "name": "daily_agg_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": "This model aggregates the total number of reviews and their sentiment for each day. It is an incremental model that processes new data daily. \nA surrogate key is generated based on the review sentiment and review date to ensure uniqueness. The model only processes reviews from the current date when running incrementally.\n",
+    "columns": [
+     {
+      "name": "REVIEW_TOTALS",
+      "data_type": null,
+      "description": "The total count of reviews for a specific sentiment on a given date.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": "The sentiment of the review (e.g., positive, neutral, or negative).",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_DATE",
+      "data_type": null,
+      "description": "The date on which the review was submitted.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "DATE_SENTIMENT_ID",
+      "data_type": null,
+      "description": "A surrogate key generated from the review sentiment and the review date, ensuring uniqueness for each date-sentiment combination.",
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "DATE_SENTIMENT_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "daily_agg_reviews"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "mom_agg_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": "This model calculates the total number of reviews and their sentiment over a rolling 30-day window, providing month-over-month (MoM) comparison metrics. \nThe model aggregates review data over the past 30 days and calculates the percentage change in review totals compared to the previous month. \nIt uses a surrogate key generated from the aggregation date and review sentiment to ensure uniqueness.\n",
+    "columns": [
+     {
+      "name": "REVIEW_TOTALS",
+      "data_type": null,
+      "description": "The total count of reviews for a specific sentiment during the 30-day aggregation window.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": "The sentiment of the review (e.g., positive, neutral, or negative).",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "AGGREGATION_DATE",
+      "data_type": null,
+      "description": "The aggregation date representing the date on which the 30-day rolling aggregation was calculated.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "MOM",
+      "data_type": null,
+      "description": "The month-over-month (MoM) percentage change in review totals compared to the previous 30 days.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "DATE_SENTIMENT_ID",
+      "data_type": null,
+      "description": "A surrogate key generated from the aggregation date and review sentiment, ensuring uniqueness for each date-sentiment combination.",
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "DATE_SENTIMENT_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "mom_agg_reviews"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "dim_listings_hosts",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": "This model combines listing information with host details by joining the `dim_listings` and `dim_hosts` tables.\nIt merges the data based on `HOST_ID`, ensuring the most recent `UPDATED_AT` timestamp between the two tables is captured.\nA surrogate key is generated for each unique combination of `LISTING_ID` and `HOST_ID`.\n",
+    "columns": [
+     {
+      "name": "CREATED_AT",
+      "data_type": null,
+      "description": "The date and time when the listing was created.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "UPDATED_AT",
+      "data_type": null,
+      "description": "The most recent update time between the listing and the host. \nIt takes the greater value of `listings_cte.UPDATED_AT` and `hosts_cte.UPDATED_AT`.\n",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": "The unique identifier for the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_NAME",
+      "data_type": null,
+      "description": "The name of the listing, typically used to describe the property.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "ROOM_TYPE",
+      "data_type": null,
+      "description": "The type of room being offered (e.g., entire home, private room, etc.).",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "minimum_nights",
+      "data_type": null,
+      "description": "The minimum number of nights required to book the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "PRICE",
+      "data_type": null,
+      "description": "The price per night for the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "HOST_ID",
+      "data_type": null,
+      "description": "The unique identifier for the host of the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "HOST_NAME",
+      "data_type": null,
+      "description": "The name of the host managing the listing.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "IS_SUPERHOST",
+      "data_type": null,
+      "description": "Indicates whether the host is a 'Superhost', a status awarded for high ratings and performance.",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_HOST_ID",
+      "data_type": null,
+      "description": "A surrogate key generated for each unique combination of `LISTING_ID` and `HOST_ID`.\nThis key is used to uniquely identify the relationship between a listing and its host.\n",
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "LISTING_HOST_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "dim_listings_hosts"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "monthly_agg_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "DATE_SENTIMENT_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "DATE_SENTIMENT_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "monthly_agg_reviews",
+     "sql_path": "models/agg/monthly_agg_reviews.sql"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "wow_agg_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "DATE_SENTIMENT_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "DATE_SENTIMENT_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "wow_agg_reviews",
+     "sql_path": "models/agg/wow_agg_reviews.sql"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "dim_hosts",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "HOST_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "HOST_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "dim_hosts",
+     "sql_path": "models/dim/dim_hosts.sql"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "dim_listings",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "MINIMUM_NIGHTS",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "LISTING_ID"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "dim_listings",
+     "sql_path": "models/dim/dim_listings.sql"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "fct_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "positive",
+       "negative",
+       "neutral"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "fct_reviews",
+     "sql_path": "models/fact/fct_reviews.sql"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "raw_hosts",
+    "schema": "main",
+    "catalog": null,
+    "kind": "source",
+    "description": null,
+    "columns": [],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "hosts",
+     "source_name": "airbnb"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "raw_listings",
+    "schema": "main",
+    "catalog": null,
+    "kind": "source",
+    "description": null,
+    "columns": [],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "listings",
+     "source_name": "airbnb"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "raw_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "source",
+    "description": null,
+    "columns": [],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "reviews",
+     "source_name": "airbnb"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "dim_dates",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "dim_dates",
+     "sql_path": "models/dim/dim_dates.sql"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "src_hosts",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "HOST_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "HOST_NAME",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "IS_SUPERHOST",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "CREATED_AT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "UPDATED_AT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "src_hosts",
+     "sql_path": "models/source/src_hosts.sql"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "src_listings",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_NAME",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "LISTING_URL",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "ROOM_TYPE",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "MINIMUM_NIGHTS",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "HOST_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "PRICE_STR",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "CREATED_AT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "UPDATED_AT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "src_listings",
+     "sql_path": "models/source/src_listings.sql"
+    },
+    "source": "airbnb"
+   },
+   {
+    "name": "src_reviews",
+    "schema": "main",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "LISTING_ID",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_DATE",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEWER_NAME",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_TEXT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "REVIEW_SENTIMENT",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "dbt_name": "src_reviews",
+     "sql_path": "models/source/src_reviews.sql"
+    },
+    "source": "airbnb"
+   }
+  ],
+  "edges": [
+   {
+    "kind": "lineage",
+    "from_table": "main.fct_reviews",
+    "to_table": "main.monthly_agg_reviews",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "main.fct_reviews",
+    "to_table": "main.wow_agg_reviews",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "main.src_hosts",
+    "to_table": "main.dim_hosts",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "main.src_listings",
+    "to_table": "main.dim_listings",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "main.src_reviews",
+    "to_table": "main.fct_reviews",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "main.raw_hosts",
+    "to_table": "main.src_hosts",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "main.raw_listings",
+    "to_table": "main.src_listings",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "main.raw_reviews",
+    "to_table": "main.src_reviews",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "relationship_test",
+    "from_table": "main.dim_listings_hosts",
+    "to_table": "main.dim_hosts",
+    "from_columns": [
+     "HOST_ID"
+    ],
+    "to_columns": [
+     "HOST_ID"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "relationship_test",
+    "from_table": "main.dim_listings_hosts",
+    "to_table": "main.dim_listings",
+    "from_columns": [
+     "LISTING_ID"
+    ],
+    "to_columns": [
+     "LISTING_ID"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "relationship_test",
+    "from_table": "main.fct_reviews",
+    "to_table": "main.dim_listings",
+    "from_columns": [
+     "LISTING_ID"
+    ],
+    "to_columns": [
+     "LISTING_ID"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   },
+   {
+    "kind": "relationship_test",
+    "from_table": "main.fct_reviews",
+    "to_table": "main.dim_listings_hosts",
+    "from_columns": [
+     "LISTING_ID"
+    ],
+    "to_columns": [
+     "LISTING_ID"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "airbnb"
+   }
+  ],
+  "terms": [],
+  "warnings": [],
+  "priority": null
+ },
+ "dbt_manifest": {
+  "source": "dbt_manifest",
+  "source_type": "dbt",
+  "tables": [
+   {
+    "name": "orders",
+    "schema": "analytics",
+    "catalog": null,
+    "kind": "model",
+    "description": "orders model",
+    "columns": [
+     {
+      "name": "id",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "customer_id",
+      "data_type": null,
+      "description": "buyer",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [
+     "core"
+    ],
+    "properties": {
+     "unique_id": "",
+     "dbt_name": "orders"
+    },
+    "source": "dbt_manifest"
+   },
+   {
+    "name": "dim_customers",
+    "schema": "analytics",
+    "catalog": null,
+    "kind": "model",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "int",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "unique_id": "",
+     "dbt_name": "customers"
+    },
+    "source": "dbt_manifest"
+   },
+   {
+    "name": "country_codes",
+    "schema": "analytics",
+    "catalog": null,
+    "kind": "seed",
+    "description": null,
+    "columns": [
+     {
+      "name": "code",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "code"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "unique_id": "",
+     "dbt_name": "country_codes"
+    },
+    "source": "dbt_manifest"
+   },
+   {
+    "name": "raw_orders",
+    "schema": "raw",
+    "catalog": null,
+    "kind": "source",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "unique_id": "",
+     "dbt_name": "raw_orders"
+    },
+    "source": "dbt_manifest"
+   }
+  ],
+  "edges": [
+   {
+    "kind": "lineage",
+    "from_table": "raw.raw_orders",
+    "to_table": "analytics.orders",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "dbt_manifest"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "analytics.dim_customers",
+    "to_table": "analytics.orders",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "dbt_manifest"
+   },
+   {
+    "kind": "foreign_key",
+    "from_table": "analytics.orders",
+    "to_table": "analytics.dim_customers",
+    "from_columns": [
+     "customer_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "dbt_manifest"
+   },
+   {
+    "kind": "foreign_key",
+    "from_table": "analytics.orders",
+    "to_table": "analytics.dim_customers",
+    "from_columns": [
+     "customer_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "dbt_manifest"
+   },
+   {
+    "kind": "relationship_test",
+    "from_table": "analytics.orders",
+    "to_table": "analytics.dim_customers",
+    "from_columns": [
+     "customer_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "dbt_manifest"
+   },
+   {
+    "kind": "relationship_test",
+    "from_table": "analytics.orders",
+    "to_table": "raw.raw_orders",
+    "from_columns": [
+     "id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "dbt_manifest"
+   }
+  ],
+  "terms": [
+   {
+    "name": "order",
+    "description": "primary entity of semantic model orders_sm",
+    "synonyms": [],
+    "targets": [
+     "analytics.orders.id"
+    ],
+    "source": "dbt_manifest"
+   },
+   {
+    "name": "order_total",
+    "description": "sum measure",
+    "synonyms": [],
+    "targets": [
+     "analytics.orders.total"
+    ],
+    "source": "dbt_manifest"
+   },
+   {
+    "name": "order_count",
+    "description": "number of orders",
+    "synonyms": [],
+    "targets": [
+     "analytics.orders.order_count"
+    ],
+    "source": "dbt_manifest"
+   }
+  ],
+  "warnings": [],
+  "priority": null
+ },
+ "duckdb": {
+  "source": "warehouse_db",
+  "source_type": "duckdb",
+  "tables": [
+   {
+    "name": "customer",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": "customers from the operational db",
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": false,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "name",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [
+       "n0",
+       "n1",
+       "n10",
+       "n11",
+       "n12",
+       "n13",
+       "n14",
+       "n15",
+       "n16",
+       "n17",
+       "n18",
+       "n19",
+       "n2",
+       "n20",
+       "n21",
+       "n22",
+       "n3",
+       "n4",
+       "n5",
+       "n6",
+       "n7",
+       "n8",
+       "n9"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "state",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [
+       "State 0",
+       "State 1",
+       "State 2",
+       "State 3",
+       "State 4",
+       "State 5",
+       "State 6"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "loyalty_tier",
+      "data_type": "VARCHAR",
+      "description": "bronze, silver or gold",
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [
+       "bronze",
+       "gold",
+       "silver"
+      ],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": 60,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "warehouse_db"
+   },
+   {
+    "name": "stores",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": false,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "city",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [
+       "Austin",
+       "Boston"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "manager",
+      "data_type": "VARCHAR",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [
+       "Ann",
+       "Bob"
+      ],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": 2,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "warehouse_db"
+   },
+   {
+    "name": "visits",
+    "schema": "public",
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "store_id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "customer_id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": 0,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "warehouse_db"
+   },
+   {
+    "name": "v_visits",
+    "schema": "public",
+    "catalog": null,
+    "kind": "view",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "store_id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "customer_id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": true,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": 0,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "warehouse_db"
+   }
+  ],
+  "edges": [
+   {
+    "kind": "foreign_key",
+    "from_table": "public.visits",
+    "to_table": "public.stores",
+    "from_columns": [
+     "store_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "warehouse_db"
+   },
+   {
+    "kind": "foreign_key",
+    "from_table": "public.visits",
+    "to_table": "public.customer",
+    "from_columns": [
+     "customer_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "warehouse_db"
+   }
+  ],
+  "terms": [],
+  "warnings": [],
+  "priority": null
+ },
+ "collibra": {
+  "source": "collibra",
+  "source_type": "collibra",
+  "tables": [
+   {
+    "name": "orders",
+    "schema": "sales",
+    "catalog": null,
+    "kind": "table",
+    "description": "Customer orders",
+    "columns": [
+     {
+      "name": "customer_id",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {
+       "collibra_id": "c1"
+      }
+     },
+     {
+      "name": "amount",
+      "data_type": "DECIMAL",
+      "description": "Order amount in EUR",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {
+       "collibra_id": "c3"
+      }
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [
+     "Data Classification=Internal"
+    ],
+    "properties": {
+     "collibra_id": "tb1",
+     "domain": "Sales"
+    },
+    "source": "collibra"
+   },
+   {
+    "name": "customers",
+    "schema": "sales",
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": null,
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {
+       "collibra_id": "c2"
+      }
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "collibra_id": "tb2",
+     "domain": "Sales"
+    },
+    "source": "collibra"
+   }
+  ],
+  "edges": [
+   {
+    "kind": "foreign_key",
+    "from_table": "sales.orders",
+    "to_table": "sales.customers",
+    "from_columns": [
+     "customer_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": "Collibra: references",
+    "confidence": 1.0,
+    "source": "collibra"
+   }
+  ],
+  "terms": [
+   {
+    "name": "Revenue",
+    "description": "Money we made",
+    "synonyms": [],
+    "targets": [
+     "sales.orders.amount"
+    ],
+    "source": "collibra"
+   }
+  ],
+  "warnings": [],
+  "priority": null
+ },
+ "unity": {
+  "source": "unity",
+  "source_type": "unity",
+  "tables": [
+   {
+    "name": "orders",
+    "schema": "core",
+    "catalog": "sales",
+    "kind": "table",
+    "description": "Orders fact",
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "bigint",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "customer_id",
+      "data_type": "bigint",
+      "description": "FK to customers",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": "data-eng",
+    "tags": [],
+    "properties": {},
+    "source": "unity"
+   },
+   {
+    "name": "customers",
+    "schema": "core",
+    "catalog": "sales",
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "bigint",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "unity"
+   },
+   {
+    "name": "v_orders",
+    "schema": "core",
+    "catalog": "sales",
+    "kind": "view",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "bigint",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {},
+    "source": "unity"
+   }
+  ],
+  "edges": [
+   {
+    "kind": "foreign_key",
+    "from_table": "sales.core.orders",
+    "to_table": "sales.core.customers",
+    "from_columns": [
+     "customer_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": "fk_c",
+    "confidence": 1.0,
+    "source": "unity"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "sales.core.customers",
+    "to_table": "sales.core.orders",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "unity"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "sales.core.customers",
+    "to_table": "sales.core.customers",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "unity"
+   },
+   {
+    "kind": "lineage",
+    "from_table": "sales.core.customers",
+    "to_table": "sales.core.v_orders",
+    "from_columns": [],
+    "to_columns": [],
+    "description": null,
+    "confidence": 1.0,
+    "source": "unity"
+   }
+  ],
+  "terms": [],
+  "warnings": [],
+  "priority": null
+ },
+ "glue": {
+  "source": "glue",
+  "source_type": "glue",
+  "tables": [
+   {
+    "name": "events",
+    "schema": "lake",
+    "catalog": null,
+    "kind": "external",
+    "description": "clickstream",
+    "columns": [
+     {
+      "name": "user_id",
+      "data_type": "bigint",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [
+       "pii=low"
+      ],
+      "properties": {
+       "pii": "no"
+      }
+     },
+     {
+      "name": "url",
+      "data_type": "string",
+      "description": "page",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "dt",
+      "data_type": "string",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [
+       "partition_key"
+      ],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": "web",
+    "tags": [
+     "domain=web"
+    ],
+    "properties": {
+     "classification": "parquet",
+     "location": "s3://b/events"
+    },
+    "source": "glue"
+   },
+   {
+    "name": "v_daily",
+    "schema": "lake",
+    "catalog": null,
+    "kind": "view",
+    "description": "daily view",
+    "columns": [
+     {
+      "name": "dt",
+      "data_type": "string",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "comment": "daily view"
+    },
+    "source": "glue"
+   }
+  ],
+  "edges": [],
+  "terms": [],
+  "warnings": [
+   "LF-tags unavailable for lake.v_daily: AccessDenied"
+  ],
+  "priority": null
+ },
+ "spider2_bq": {
+  "source": "spider2:shop",
+  "source_type": "spider2",
+  "tables": [
+   {
+    "name": "events_*",
+    "schema": "shop",
+    "catalog": "proj",
+    "kind": "table",
+    "description": "(date-sharded family of 3 tables, events_20210101 … events_20210103)",
+    "columns": [
+     {
+      "name": "event_name",
+      "data_type": "STRING",
+      "description": "name of the event",
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "purchase",
+       "view_item"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "user_id",
+      "data_type": "INT64",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "page",
+      "data_type": "STRING",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "/cart",
+       "/p"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "params.key",
+      "data_type": "STRING",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [
+       "nested"
+      ],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "family": "true",
+     "members": "proj.shop.events_20210101,proj.shop.events_20210102,proj.shop.events_20210103",
+     "business_name": "shop events"
+    },
+    "source": "spider2:shop"
+   },
+   {
+    "name": "orders",
+    "schema": "shop",
+    "catalog": "proj",
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "order_id",
+      "data_type": "INT64",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "user_id",
+      "data_type": "INT64",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "product_code",
+      "data_type": "STRING",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "amount",
+      "data_type": "NUMERIC",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "fullname": "proj.shop.orders"
+    },
+    "source": "spider2:shop"
+   },
+   {
+    "name": "products",
+    "schema": "shop",
+    "catalog": "proj",
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "product_code",
+      "data_type": "STRING",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "title",
+      "data_type": "STRING",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "fullname": "proj.shop.products"
+    },
+    "source": "spider2:shop"
+   },
+   {
+    "name": "users",
+    "schema": "shop",
+    "catalog": "proj",
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "user_id",
+      "data_type": "INT64",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "country",
+      "data_type": "STRING",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [
+       "Portugal",
+       "Czech Republic"
+      ],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "signup_date",
+      "data_type": "DATE",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "fullname": "proj.shop.users"
+    },
+    "source": "spider2:shop"
+   },
+   {
+    "name": "county_*_1yr",
+    "schema": "shop",
+    "catalog": "proj",
+    "kind": "table",
+    "description": "(date-sharded family of 2 tables, county_2018_1yr … county_2019_1yr)",
+    "columns": [
+     {
+      "name": "geo_id",
+      "data_type": "STRING",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "median_income",
+      "data_type": "FLOAT64",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "population",
+      "data_type": "INT64",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "family": "true",
+     "members": "proj.shop.county_2018_1yr,proj.shop.county_2019_1yr",
+     "business_name": "shop county 1yr"
+    },
+    "source": "spider2:shop"
+   },
+   {
+    "name": "imaging_level*_metadata_r*",
+    "schema": "shop",
+    "catalog": "proj",
+    "kind": "table",
+    "description": "(date-sharded family of 4 tables, imaging_level2_metadata_r1 … imaging_level4_metadata_r2)",
+    "columns": [
+     {
+      "name": "series_id",
+      "data_type": "STRING",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "modality",
+      "data_type": "STRING",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "family": "true",
+     "members": "proj.shop.imaging_level2_metadata_r1,proj.shop.imaging_level2_metadata_r2,proj.shop.imaging_level4_metadata_r1,proj.shop.imaging_level4_metadata_r2",
+     "business_name": "shop imaging level metadata r"
+    },
+    "source": "spider2:shop"
+   }
+  ],
+  "edges": [
+   {
+    "kind": "inferred",
+    "from_table": "proj.shop.events_*",
+    "to_table": "proj.shop.users",
+    "from_columns": [
+     "user_id"
+    ],
+    "to_columns": [
+     "user_id"
+    ],
+    "description": "name match user_id -> users.user_id",
+    "confidence": 0.6,
+    "source": "spider2:shop"
+   },
+   {
+    "kind": "inferred",
+    "from_table": "proj.shop.orders",
+    "to_table": "proj.shop.users",
+    "from_columns": [
+     "user_id"
+    ],
+    "to_columns": [
+     "user_id"
+    ],
+    "description": "name match user_id -> users.user_id",
+    "confidence": 0.6,
+    "source": "spider2:shop"
+   },
+   {
+    "kind": "inferred",
+    "from_table": "proj.shop.orders",
+    "to_table": "proj.shop.products",
+    "from_columns": [
+     "product_code"
+    ],
+    "to_columns": [
+     "product_code"
+    ],
+    "description": "name match product_code -> products.product_code",
+    "confidence": 0.6,
+    "source": "spider2:shop"
+   },
+   {
+    "kind": "inferred",
+    "from_table": "proj.shop.events_*",
+    "to_table": "proj.shop.orders",
+    "from_columns": [
+     "user_id"
+    ],
+    "to_columns": [
+     "user_id"
+    ],
+    "description": "shared key user_id",
+    "confidence": 0.4,
+    "source": "spider2:shop"
+   }
+  ],
+  "terms": [],
+  "warnings": [],
+  "priority": null
+ },
+ "spider2_sqlite": {
+  "source": "spider2:Shop",
+  "source_type": "spider2",
+  "tables": [
+   {
+    "name": "customers",
+    "schema": null,
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "name",
+      "data_type": "TEXT",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "fullname": "customers"
+    },
+    "source": "spider2:Shop"
+   },
+   {
+    "name": "orders",
+    "schema": null,
+    "catalog": null,
+    "kind": "table",
+    "description": null,
+    "columns": [
+     {
+      "name": "id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": true,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     },
+     {
+      "name": "customer_id",
+      "data_type": "INTEGER",
+      "description": null,
+      "nullable": null,
+      "is_primary_key": false,
+      "sample_values": [],
+      "tags": [],
+      "properties": {}
+     }
+    ],
+    "primary_key": [
+     "id"
+    ],
+    "row_count": null,
+    "owner": null,
+    "tags": [],
+    "properties": {
+     "fullname": "orders"
+    },
+    "source": "spider2:Shop"
+   }
+  ],
+  "edges": [
+   {
+    "kind": "foreign_key",
+    "from_table": "orders",
+    "to_table": "customers",
+    "from_columns": [
+     "customer_id"
+    ],
+    "to_columns": [
+     "id"
+    ],
+    "description": null,
+    "confidence": 1.0,
+    "source": "spider2:Shop"
+   }
+  ],
+  "terms": [],
+  "warnings": [],
+  "priority": null
+ }
+}

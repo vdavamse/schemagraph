@@ -22,8 +22,8 @@ def test_snapshot_from_spider_and_gold_tables():
     assert {(e.from_table, e.to_table) for e in snap.edges} == {("orders", "customer"), ("order_items", "orders"), ("order_items", "products")}
     assert gold_tables("WITH c AS (SELECT * FROM customer) SELECT T1.name FROM c AS T1 JOIN orders AS T2 ON T1.id = T2.customer_id") == {"customer", "orders"}
     assert gold_tables("SELECT count(*) FROM products EXCEPT SELECT id FROM order_items") == {"products", "order_items"}
-    sg = build_graph([snap])
-    assert sg.relations("order_items", "products")[0].kind == "foreign_key"
+    schema_graph = build_graph([snap])
+    assert schema_graph.relations("order_items", "products")[0].kind == "foreign_key"
 
 
 def test_run_scores_bridge_tables(tmp_path):

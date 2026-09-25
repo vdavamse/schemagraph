@@ -1,0 +1,2968 @@
+{
+ "openapi": {
+  "openapi": "3.1.0",
+  "info": {
+   "title": "schemagraph",
+   "version": "0.1.0"
+  },
+  "paths": {
+   "/api/health": {
+    "get": {
+     "summary": "Health",
+     "operationId": "health_api_health_get",
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "additionalProperties": true,
+          "type": "object",
+          "title": "Response Health Api Health Get"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/connector-types": {
+    "get": {
+     "summary": "Connector Types",
+     "operationId": "connector_types_api_connector_types_get",
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "items": {
+           "additionalProperties": true,
+           "type": "object"
+          },
+          "type": "array",
+          "title": "Response Connector Types Api Connector Types Get"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/connections": {
+    "get": {
+     "summary": "List Connections",
+     "operationId": "list_connections_api_connections_get",
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "items": {
+           "additionalProperties": true,
+           "type": "object"
+          },
+          "type": "array",
+          "title": "Response List Connections Api Connections Get"
+         }
+        }
+       }
+      }
+     }
+    },
+    "post": {
+     "summary": "Add Connection",
+     "operationId": "add_connection_api_connections_post",
+     "requestBody": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ConnectionIn"
+        }
+       }
+      },
+      "required": true
+     },
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "additionalProperties": true,
+          "type": "object",
+          "title": "Response Add Connection Api Connections Post"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/ddl": {
+    "post": {
+     "summary": "Add Ddl",
+     "operationId": "add_ddl_api_ddl_post",
+     "requestBody": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DDLIn"
+        }
+       }
+      },
+      "required": true
+     },
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "additionalProperties": true,
+          "type": "object",
+          "title": "Response Add Ddl Api Ddl Post"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/connections/{name}": {
+    "delete": {
+     "summary": "Delete Connection",
+     "operationId": "delete_connection_api_connections__name__delete",
+     "parameters": [
+      {
+       "name": "name",
+       "in": "path",
+       "required": true,
+       "schema": {
+        "type": "string",
+        "title": "Name"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string"
+          },
+          "title": "Response Delete Connection Api Connections  Name  Delete"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/connections/{name}/check": {
+    "post": {
+     "summary": "Check Connection",
+     "operationId": "check_connection_api_connections__name__check_post",
+     "parameters": [
+      {
+       "name": "name",
+       "in": "path",
+       "required": true,
+       "schema": {
+        "type": "string",
+        "title": "Name"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string"
+          },
+          "title": "Response Check Connection Api Connections  Name  Check Post"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/connections/{name}/build": {
+    "post": {
+     "summary": "Build Connection",
+     "operationId": "build_connection_api_connections__name__build_post",
+     "parameters": [
+      {
+       "name": "name",
+       "in": "path",
+       "required": true,
+       "schema": {
+        "type": "string",
+        "title": "Name"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "title": "Response Build Connection Api Connections  Name  Build Post"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/build": {
+    "post": {
+     "summary": "Build All",
+     "operationId": "build_all_api_build_post",
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "additionalProperties": true,
+          "type": "object",
+          "title": "Response Build All Api Build Post"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/graph/stats": {
+    "get": {
+     "summary": "Graph Stats",
+     "operationId": "graph_stats_api_graph_stats_get",
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "additionalProperties": true,
+          "type": "object",
+          "title": "Response Graph Stats Api Graph Stats Get"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/graph/tables": {
+    "get": {
+     "summary": "Graph Tables",
+     "operationId": "graph_tables_api_graph_tables_get",
+     "parameters": [
+      {
+       "name": "q",
+       "in": "query",
+       "required": false,
+       "schema": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Q"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "type": "array",
+          "items": {
+           "type": "object",
+           "additionalProperties": true
+          },
+          "title": "Response Graph Tables Api Graph Tables Get"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/graph/tables/{fqn}": {
+    "get": {
+     "summary": "Graph Table",
+     "operationId": "graph_table_api_graph_tables__fqn__get",
+     "parameters": [
+      {
+       "name": "fqn",
+       "in": "path",
+       "required": true,
+       "schema": {
+        "type": "string",
+        "title": "Fqn"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "title": "Response Graph Table Api Graph Tables  Fqn  Get"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/graph/edges": {
+    "get": {
+     "summary": "Graph Edges",
+     "operationId": "graph_edges_api_graph_edges_get",
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "items": {
+           "additionalProperties": true,
+           "type": "object"
+          },
+          "type": "array",
+          "title": "Response Graph Edges Api Graph Edges Get"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/graph/path": {
+    "get": {
+     "summary": "Graph Path",
+     "operationId": "graph_path_api_graph_path_get",
+     "parameters": [
+      {
+       "name": "a",
+       "in": "query",
+       "required": true,
+       "schema": {
+        "type": "string",
+        "title": "A"
+       }
+      },
+      {
+       "name": "b",
+       "in": "query",
+       "required": true,
+       "schema": {
+        "type": "string",
+        "title": "B"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "title": "Response Graph Path Api Graph Path Get"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/graph/export": {
+    "get": {
+     "summary": "Graph Export",
+     "description": "Table-level graph for visualisation: nodes + relation edges.",
+     "operationId": "graph_export_api_graph_export_get",
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "additionalProperties": true,
+          "type": "object",
+          "title": "Response Graph Export Api Graph Export Get"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/link": {
+    "post": {
+     "summary": "Link",
+     "operationId": "link_api_link_post",
+     "requestBody": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LinkIn"
+        }
+       }
+      },
+      "required": true
+     },
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/LinkResult"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/explain": {
+    "get": {
+     "summary": "Explain",
+     "operationId": "explain_api_explain_get",
+     "parameters": [
+      {
+       "name": "question",
+       "in": "query",
+       "required": true,
+       "schema": {
+        "type": "string",
+        "title": "Question"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "type": "object",
+          "additionalProperties": true,
+          "title": "Response Explain Api Explain Get"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/glossary": {
+    "get": {
+     "summary": "Glossary",
+     "operationId": "glossary_api_glossary_get",
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "items": {
+           "additionalProperties": true,
+           "type": "object"
+          },
+          "type": "array",
+          "title": "Response Glossary Api Glossary Get"
+         }
+        }
+       }
+      }
+     }
+    },
+    "post": {
+     "summary": "Upsert Term",
+     "operationId": "upsert_term_api_glossary_post",
+     "requestBody": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TermIn"
+        }
+       }
+      },
+      "required": true
+     },
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "additionalProperties": {
+           "type": "string"
+          },
+          "type": "object",
+          "title": "Response Upsert Term Api Glossary Post"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/glossary/{name}": {
+    "delete": {
+     "summary": "Delete Term",
+     "operationId": "delete_term_api_glossary__name__delete",
+     "parameters": [
+      {
+       "name": "name",
+       "in": "path",
+       "required": true,
+       "schema": {
+        "type": "string",
+        "title": "Name"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "string"
+          },
+          "title": "Response Delete Term Api Glossary  Name  Delete"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/join-hints": {
+    "get": {
+     "summary": "Join Hints",
+     "operationId": "join_hints_api_join_hints_get",
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "items": {
+           "additionalProperties": true,
+           "type": "object"
+          },
+          "type": "array",
+          "title": "Response Join Hints Api Join Hints Get"
+         }
+        }
+       }
+      }
+     }
+    },
+    "post": {
+     "summary": "Add Join Hint",
+     "operationId": "add_join_hint_api_join_hints_post",
+     "requestBody": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JoinHintIn"
+        }
+       }
+      },
+      "required": true
+     },
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "additionalProperties": {
+           "type": "integer"
+          },
+          "type": "object",
+          "title": "Response Add Join Hint Api Join Hints Post"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "/api/join-hints/{hid}": {
+    "delete": {
+     "summary": "Delete Join Hint",
+     "operationId": "delete_join_hint_api_join_hints__hid__delete",
+     "parameters": [
+      {
+       "name": "hid",
+       "in": "path",
+       "required": true,
+       "schema": {
+        "type": "integer",
+        "title": "Hid"
+       }
+      }
+     ],
+     "responses": {
+      "200": {
+       "description": "Successful Response",
+       "content": {
+        "application/json": {
+         "schema": {
+          "type": "object",
+          "additionalProperties": {
+           "type": "integer"
+          },
+          "title": "Response Delete Join Hint Api Join Hints  Hid  Delete"
+         }
+        }
+       }
+      },
+      "422": {
+       "description": "Validation Error",
+       "content": {
+        "application/json": {
+         "schema": {
+          "$ref": "#/components/schemas/HTTPValidationError"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "components": {
+   "schemas": {
+    "ConnectionIn": {
+     "properties": {
+      "name": {
+       "type": "string",
+       "title": "Name"
+      },
+      "type": {
+       "type": "string",
+       "title": "Type"
+      },
+      "config": {
+       "additionalProperties": true,
+       "type": "object",
+       "title": "Config"
+      },
+      "build": {
+       "type": "boolean",
+       "title": "Build",
+       "default": true
+      },
+      "priority": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Priority"
+      },
+      "clear_priority": {
+       "type": "boolean",
+       "title": "Clear Priority",
+       "default": false
+      }
+     },
+     "type": "object",
+     "required": [
+      "name",
+      "type"
+     ],
+     "title": "ConnectionIn"
+    },
+    "DDLIn": {
+     "properties": {
+      "name": {
+       "type": "string",
+       "title": "Name"
+      },
+      "ddl": {
+       "type": "string",
+       "title": "Ddl"
+      },
+      "dialect": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Dialect"
+      },
+      "default_schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Default Schema"
+      },
+      "default_catalog": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Default Catalog"
+      },
+      "build": {
+       "type": "boolean",
+       "title": "Build",
+       "default": true
+      }
+     },
+     "type": "object",
+     "required": [
+      "name",
+      "ddl"
+     ],
+     "title": "DDLIn"
+    },
+    "HTTPValidationError": {
+     "properties": {
+      "detail": {
+       "items": {
+        "$ref": "#/components/schemas/ValidationError"
+       },
+       "type": "array",
+       "title": "Detail"
+      }
+     },
+     "type": "object",
+     "title": "HTTPValidationError"
+    },
+    "JoinHintIn": {
+     "properties": {
+      "from_table": {
+       "type": "string",
+       "title": "From Table"
+      },
+      "to_table": {
+       "type": "string",
+       "title": "To Table"
+      },
+      "from_columns": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array",
+       "title": "From Columns"
+      },
+      "to_columns": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array",
+       "title": "To Columns"
+      },
+      "description": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Description"
+      }
+     },
+     "type": "object",
+     "required": [
+      "from_table",
+      "to_table"
+     ],
+     "title": "JoinHintIn"
+    },
+    "JoinPath": {
+     "properties": {
+      "tables": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array",
+       "title": "Tables"
+      },
+      "steps": {
+       "items": {
+        "$ref": "#/components/schemas/JoinStep"
+       },
+       "type": "array",
+       "title": "Steps"
+      },
+      "reliability": {
+       "type": "number",
+       "title": "Reliability"
+      }
+     },
+     "type": "object",
+     "required": [
+      "tables",
+      "steps",
+      "reliability"
+     ],
+     "title": "JoinPath"
+    },
+    "JoinStep": {
+     "properties": {
+      "from_table": {
+       "type": "string",
+       "title": "From Table"
+      },
+      "to_table": {
+       "type": "string",
+       "title": "To Table"
+      },
+      "kind": {
+       "type": "string",
+       "enum": [
+        "foreign_key",
+        "lineage",
+        "relationship_test",
+        "catalog_relation",
+        "join_hint",
+        "inferred"
+       ],
+       "title": "Kind"
+      },
+      "on": {
+       "type": "string",
+       "title": "On"
+      },
+      "source": {
+       "type": "string",
+       "title": "Source",
+       "default": ""
+      }
+     },
+     "type": "object",
+     "required": [
+      "from_table",
+      "to_table",
+      "kind",
+      "on"
+     ],
+     "title": "JoinStep"
+    },
+    "LinkIn": {
+     "properties": {
+      "question": {
+       "type": "string",
+       "title": "Question"
+      },
+      "max_tables": {
+       "type": "integer",
+       "title": "Max Tables",
+       "default": 20
+      },
+      "anchor_k": {
+       "type": "integer",
+       "title": "Anchor K",
+       "default": 6
+      },
+      "columns": {
+       "type": "string",
+       "title": "Columns",
+       "default": "relevant"
+      },
+      "use_llm": {
+       "type": "boolean",
+       "title": "Use Llm",
+       "default": false
+      },
+      "prune_top_k": {
+       "type": "integer",
+       "title": "Prune Top K",
+       "default": 8
+      },
+      "path_extra": {
+       "type": "number",
+       "title": "Path Extra",
+       "default": 0.0
+      }
+     },
+     "type": "object",
+     "required": [
+      "question"
+     ],
+     "title": "LinkIn"
+    },
+    "LinkResult": {
+     "properties": {
+      "question": {
+       "type": "string",
+       "title": "Question"
+      },
+      "tables": {
+       "items": {
+        "$ref": "#/components/schemas/LinkedTable"
+       },
+       "type": "array",
+       "title": "Tables"
+      },
+      "join_paths": {
+       "items": {
+        "$ref": "#/components/schemas/JoinPath"
+       },
+       "type": "array",
+       "title": "Join Paths"
+      },
+      "anchors": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array",
+       "title": "Anchors"
+      },
+      "terms_matched": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array",
+       "title": "Terms Matched"
+      },
+      "glossary": {
+       "additionalProperties": {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       "type": "object",
+       "title": "Glossary"
+      },
+      "ddl": {
+       "type": "string",
+       "title": "Ddl",
+       "default": ""
+      },
+      "stats": {
+       "additionalProperties": {
+        "anyOf": [
+         {
+          "type": "number"
+         },
+         {
+          "type": "integer"
+         },
+         {
+          "type": "string"
+         }
+        ]
+       },
+       "type": "object",
+       "title": "Stats"
+      },
+      "ranking": {
+       "items": {
+        "prefixItems": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "number"
+         }
+        ],
+        "type": "array",
+        "maxItems": 2,
+        "minItems": 2
+       },
+       "type": "array",
+       "title": "Ranking",
+       "description": "Top candidate tables by score (debug only)"
+      }
+     },
+     "type": "object",
+     "required": [
+      "question",
+      "tables",
+      "join_paths",
+      "anchors",
+      "terms_matched"
+     ],
+     "title": "LinkResult"
+    },
+    "LinkedColumn": {
+     "properties": {
+      "name": {
+       "type": "string",
+       "title": "Name"
+      },
+      "data_type": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Data Type"
+      },
+      "description": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Description"
+      },
+      "score": {
+       "type": "number",
+       "title": "Score",
+       "default": 0.0
+      },
+      "reason": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Reason"
+      }
+     },
+     "type": "object",
+     "required": [
+      "name"
+     ],
+     "title": "LinkedColumn"
+    },
+    "LinkedTable": {
+     "properties": {
+      "fqn": {
+       "type": "string",
+       "title": "Fqn"
+      },
+      "score": {
+       "type": "number",
+       "title": "Score"
+      },
+      "is_anchor": {
+       "type": "boolean",
+       "title": "Is Anchor",
+       "default": false
+      },
+      "columns": {
+       "items": {
+        "$ref": "#/components/schemas/LinkedColumn"
+       },
+       "type": "array",
+       "title": "Columns"
+      },
+      "description": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Description"
+      },
+      "kind": {
+       "type": "string",
+       "enum": [
+        "table",
+        "view",
+        "model",
+        "source",
+        "seed",
+        "snapshot",
+        "external"
+       ],
+       "title": "Kind",
+       "default": "table"
+      }
+     },
+     "type": "object",
+     "required": [
+      "fqn",
+      "score"
+     ],
+     "title": "LinkedTable"
+    },
+    "TermIn": {
+     "properties": {
+      "name": {
+       "type": "string",
+       "title": "Name"
+      },
+      "description": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Description"
+      },
+      "synonyms": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array",
+       "title": "Synonyms"
+      },
+      "targets": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array",
+       "title": "Targets"
+      }
+     },
+     "type": "object",
+     "required": [
+      "name"
+     ],
+     "title": "TermIn"
+    },
+    "ValidationError": {
+     "properties": {
+      "loc": {
+       "items": {
+        "anyOf": [
+         {
+          "type": "string"
+         },
+         {
+          "type": "integer"
+         }
+        ]
+       },
+       "type": "array",
+       "title": "Location"
+      },
+      "msg": {
+       "type": "string",
+       "title": "Message"
+      },
+      "type": {
+       "type": "string",
+       "title": "Error Type"
+      },
+      "input": {
+       "title": "Input"
+      },
+      "ctx": {
+       "type": "object",
+       "title": "Context"
+      }
+     },
+     "type": "object",
+     "required": [
+      "loc",
+      "msg",
+      "type"
+     ],
+     "title": "ValidationError"
+    }
+   }
+  }
+ },
+ "mcp_tools": [
+  {
+   "name": "link_schema",
+   "description": "Return the sub-schema (annotated DDL with join paths and glossary) needed to answer a natural-language question.\n\nArgs:\n    question: The user's question in natural language.\n    max_tables: Upper bound on tables returned.\n    columns: \"relevant\" (pruned) or \"all\".\n    use_llm: Let a Claude call choose anchor tables (needs ANTHROPIC_API_KEY).\n",
+   "inputSchema": {
+    "properties": {
+     "question": {
+      "title": "Question",
+      "type": "string"
+     },
+     "max_tables": {
+      "default": 20,
+      "title": "Max Tables",
+      "type": "integer"
+     },
+     "columns": {
+      "default": "relevant",
+      "title": "Columns",
+      "type": "string"
+     },
+     "use_llm": {
+      "default": false,
+      "title": "Use Llm",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "question"
+    ],
+    "title": "link_schemaArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "properties": {
+     "result": {
+      "title": "Result",
+      "type": "string"
+     }
+    },
+    "required": [
+     "result"
+    ],
+    "title": "link_schemaOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "link_schema_json",
+   "description": "Same as link_schema but structured: tables with scores, columns with reasons, join paths, matched glossary terms.",
+   "inputSchema": {
+    "properties": {
+     "question": {
+      "title": "Question",
+      "type": "string"
+     },
+     "max_tables": {
+      "default": 20,
+      "title": "Max Tables",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "question"
+    ],
+    "title": "link_schema_jsonArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "link_schema_jsonDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "search_tables",
+   "description": "Find tables by name or description substring.",
+   "inputSchema": {
+    "properties": {
+     "query": {
+      "title": "Query",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "title": "search_tablesArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "properties": {
+     "result": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Result",
+      "type": "array"
+     }
+    },
+    "required": [
+     "result"
+    ],
+    "title": "search_tablesOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "get_table",
+   "description": "Full detail for one table: columns (types, descriptions, samples), primary key, and every relation with provenance.",
+   "inputSchema": {
+    "properties": {
+     "fqn": {
+      "title": "Fqn",
+      "type": "string"
+     }
+    },
+    "required": [
+     "fqn"
+    ],
+    "title": "get_tableArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "get_tableDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "find_join_path",
+   "description": "Shortest join path(s) between two tables over foreign keys, catalog relations, dbt relationship tests, join hints and inferred keys; when none exists, the dbt lineage route (provenance, no declared join keys).",
+   "inputSchema": {
+    "properties": {
+     "from_table": {
+      "title": "From Table",
+      "type": "string"
+     },
+     "to_table": {
+      "title": "To Table",
+      "type": "string"
+     }
+    },
+    "required": [
+     "from_table",
+     "to_table"
+    ],
+    "title": "find_join_pathArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "find_join_pathDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "list_glossary",
+   "description": "Business terms with the tables/columns they map to.",
+   "inputSchema": {
+    "properties": {},
+    "title": "list_glossaryArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "properties": {
+     "result": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Result",
+      "type": "array"
+     }
+    },
+    "required": [
+     "result"
+    ],
+    "title": "list_glossaryOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "graph_stats",
+   "description": "Counts of tables, columns, relations, terms and sources in the loaded graph.",
+   "inputSchema": {
+    "properties": {},
+    "title": "graph_statsArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "graph_statsDictOutput",
+    "type": "object"
+   }
+  }
+ ],
+ "connector_config_schemas": {
+  "aws_glue": {
+   "properties": {
+    "region": {
+     "description": "AWS region, e.g. eu-west-1",
+     "title": "Region",
+     "type": "string"
+    },
+    "databases": {
+     "anyOf": [
+      {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Restrict to these Glue databases (default: all)",
+     "title": "Databases"
+    },
+    "catalog_id": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "AWS account id of the catalog (default: caller's)",
+     "title": "Catalog Id"
+    },
+    "profile": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "AWS named profile (default: environment credentials)",
+     "title": "Profile"
+    },
+    "include_partition_keys": {
+     "default": true,
+     "title": "Include Partition Keys",
+     "type": "boolean"
+    },
+    "lf_tags": {
+     "default": false,
+     "description": "Attach Lake Formation LF-tags as table tags",
+     "title": "Lf Tags",
+     "type": "boolean"
+    },
+    "endpoint_url": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Override endpoint (e.g. moto/localstack)",
+     "title": "Endpoint Url"
+    }
+   },
+   "required": [
+    "region"
+   ],
+   "title": "GlueConfig",
+   "type": "object"
+  },
+  "collibra": {
+   "properties": {
+    "host": {
+     "description": "Collibra base URL, e.g. https://acme.collibra.com",
+     "title": "Host",
+     "type": "string"
+    },
+    "username": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Basic-auth user (or use token)",
+     "title": "Username"
+    },
+    "password": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Basic-auth password (use ${COLLIBRA_PASSWORD})",
+     "title": "Password"
+    },
+    "token": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Bearer/JWT token, alternative to username/password",
+     "title": "Token"
+    },
+    "domains": {
+     "anyOf": [
+      {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Restrict to these domain names (default: all)",
+     "title": "Domains"
+    },
+    "table_type": {
+     "default": "Table",
+     "title": "Table Type",
+     "type": "string"
+    },
+    "column_type": {
+     "default": "Column",
+     "title": "Column Type",
+     "type": "string"
+    },
+    "schema_type": {
+     "default": "Schema",
+     "title": "Schema Type",
+     "type": "string"
+    },
+    "database_type": {
+     "default": "Database",
+     "title": "Database Type",
+     "type": "string"
+    },
+    "term_type": {
+     "default": "Business Term",
+     "title": "Term Type",
+     "type": "string"
+    },
+    "contains_role": {
+     "default": "contains",
+     "description": "Relation role for Schema>Table and Table>Column hierarchy",
+     "title": "Contains Role",
+     "type": "string"
+    },
+    "fk_roles": {
+     "description": "Column->Column relation roles that mean a foreign key",
+     "items": {
+      "type": "string"
+     },
+     "title": "Fk Roles",
+     "type": "array"
+    },
+    "table_relation_roles": {
+     "description": "Table->Table relation roles to import as catalog relations",
+     "items": {
+      "type": "string"
+     },
+     "title": "Table Relation Roles",
+     "type": "array"
+    },
+    "term_roles": {
+     "description": "Business Term <-> Table/Column relation roles",
+     "items": {
+      "type": "string"
+     },
+     "title": "Term Roles",
+     "type": "array"
+    },
+    "description_attribute": {
+     "default": "Description",
+     "title": "Description Attribute",
+     "type": "string"
+    },
+    "tag_attributes": {
+     "description": "Attribute types copied into tags as name=value",
+     "items": {
+      "type": "string"
+     },
+     "title": "Tag Attributes",
+     "type": "array"
+    },
+    "synonym_relation_roles": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Synonym Relation Roles",
+     "type": "array"
+    },
+    "page_size": {
+     "default": 500,
+     "title": "Page Size",
+     "type": "integer"
+    },
+    "timeout": {
+     "default": 60.0,
+     "title": "Timeout",
+     "type": "number"
+    },
+    "verify_ssl": {
+     "default": true,
+     "title": "Verify Ssl",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "host"
+   ],
+   "title": "CollibraConfig",
+   "type": "object"
+  },
+  "dbt": {
+   "properties": {
+    "project_dir": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "dbt project root (parsed without dbt)",
+     "title": "Project Dir"
+    },
+    "manifest_path": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Path to target/manifest.json",
+     "title": "Manifest Path"
+    },
+    "default_schema": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Schema for models without a config",
+     "title": "Default Schema"
+    },
+    "catalog": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Catalog"
+    }
+   },
+   "title": "DbtConfig",
+   "type": "object"
+  },
+  "ddl": {
+   "properties": {
+    "ddl": {
+     "description": "One or more CREATE TABLE statements",
+     "title": "Ddl",
+     "type": "string"
+    },
+    "dialect": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "sqlglot dialect, e.g. postgres, snowflake, bigquery, duckdb",
+     "title": "Dialect"
+    },
+    "default_schema": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Schema to assume for unqualified tables",
+     "title": "Default Schema"
+    },
+    "default_catalog": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Default Catalog"
+    }
+   },
+   "required": [
+    "ddl"
+   ],
+   "title": "DDLConfig",
+   "type": "object"
+  },
+  "duckdb": {
+   "properties": {
+    "path": {
+     "description": "Path to the .duckdb file",
+     "title": "Path",
+     "type": "string"
+    },
+    "schemas": {
+     "anyOf": [
+      {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Restrict to these schemas (default: all non-system)",
+     "title": "Schemas"
+    },
+    "sample_values": {
+     "default": 5,
+     "description": "Sample distinct values per text column",
+     "maximum": 50,
+     "minimum": 0,
+     "title": "Sample Values",
+     "type": "integer"
+    },
+    "row_counts": {
+     "default": true,
+     "title": "Row Counts",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "path"
+   ],
+   "title": "DuckDBConfig",
+   "type": "object"
+  },
+  "unity_catalog": {
+   "properties": {
+    "host": {
+     "description": "Workspace URL, e.g. https://adb-123.azuredatabricks.net or http://localhost:8080 for OSS",
+     "title": "Host",
+     "type": "string"
+    },
+    "token": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Personal access token (use ${DATABRICKS_TOKEN})",
+     "title": "Token"
+    },
+    "catalogs": {
+     "anyOf": [
+      {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Restrict to these catalogs (default: all)",
+     "title": "Catalogs"
+    },
+    "schemas": {
+     "anyOf": [
+      {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Restrict to these schemas (default: all)",
+     "title": "Schemas"
+    },
+    "include_views": {
+     "default": true,
+     "title": "Include Views",
+     "type": "boolean"
+    },
+    "lineage": {
+     "default": false,
+     "description": "Also query table lineage (Databricks only)",
+     "title": "Lineage",
+     "type": "boolean"
+    },
+    "api_base": {
+     "default": "/api/2.1/unity-catalog",
+     "description": "API prefix",
+     "title": "Api Base",
+     "type": "string"
+    },
+    "timeout": {
+     "default": 30.0,
+     "title": "Timeout",
+     "type": "number"
+    },
+    "verify_ssl": {
+     "default": true,
+     "title": "Verify Ssl",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "host"
+   ],
+   "title": "UnityConfig",
+   "type": "object"
+  }
+ },
+ "cli": {
+  "add": {
+   "help": "Register any connector from a JSON config.",
+   "params": [
+    [
+     "type_name",
+     [
+      "type_name"
+     ],
+     "None",
+     "str",
+     "connector type: unity_catalog | aws_glue | collibra | ddl | dbt | duckdb"
+    ],
+    [
+     "name",
+     [
+      "name"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "config",
+     [
+      "--config",
+      "-c"
+     ],
+     "None",
+     "str",
+     "JSON config or @file.json; ${ENV} references allowed"
+    ],
+    [
+     "no_build",
+     [
+      "--no-build"
+     ],
+     "False",
+     "boolean",
+     null
+    ],
+    [
+     "priority",
+     [
+      "--priority"
+     ],
+     "None",
+     "int",
+     "merge order: lower merges first and wins conflicting fields (default: by source type, user > collibra > dbt > unity_catalog > duckdb > ddl > aws_glue); omitted on re-register keeps the stored one"
+    ],
+    [
+     "clear_priority",
+     [
+      "--clear-priority"
+     ],
+     "False",
+     "boolean",
+     "reset a stored priority to the source-type order"
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "add-dbt": {
+   "help": "Register a dbt project (parsed without dbt) or a compiled manifest.",
+   "params": [
+    [
+     "project_dir",
+     [
+      "--project-dir"
+     ],
+     "None",
+     "path",
+     "dbt project root"
+    ],
+    [
+     "manifest",
+     [
+      "--manifest"
+     ],
+     "None",
+     "path",
+     "target/manifest.json"
+    ],
+    [
+     "name",
+     [
+      "--name",
+      "-n"
+     ],
+     "'dbt'",
+     "str",
+     null
+    ],
+    [
+     "schema",
+     [
+      "--schema"
+     ],
+     "None",
+     "str",
+     "default schema"
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "add-ddl": {
+   "help": "Register a DDL file as a connection and build it.",
+   "params": [
+    [
+     "file",
+     [
+      "file"
+     ],
+     "None",
+     "path",
+     "SQL file with CREATE TABLE statements"
+    ],
+    [
+     "name",
+     [
+      "--name",
+      "-n"
+     ],
+     "'ddl'",
+     "str",
+     null
+    ],
+    [
+     "dialect",
+     [
+      "--dialect"
+     ],
+     "None",
+     "str",
+     "sqlglot dialect"
+    ],
+    [
+     "schema",
+     [
+      "--schema"
+     ],
+     "None",
+     "str",
+     "default schema for unqualified tables"
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "add-duckdb": {
+   "help": "Register a DuckDB database file.",
+   "params": [
+    [
+     "path",
+     [
+      "path"
+     ],
+     "None",
+     "path",
+     null
+    ],
+    [
+     "name",
+     [
+      "--name",
+      "-n"
+     ],
+     "'duckdb'",
+     "str",
+     null
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "bench-spider1": {
+   "help": "Gold-table recall over a Spider-format dataset with real foreign keys (bridge tables, path union and pruning are measurable here).",
+   "params": [
+    [
+     "tables_json",
+     [
+      "tables_json"
+     ],
+     "None",
+     "path",
+     "Spider-format tables.json (declared FKs)"
+    ],
+    [
+     "questions_json",
+     [
+      "questions_json"
+     ],
+     "None",
+     "path",
+     "questions [{db_id, question, query}]"
+    ],
+    [
+     "max_tables",
+     [
+      "--max-tables"
+     ],
+     "4",
+     "int",
+     null
+    ],
+    [
+     "anchor_k",
+     [
+      "--anchor-k"
+     ],
+     "2",
+     "int",
+     null
+    ],
+    [
+     "infer",
+     [
+      "--infer"
+     ],
+     "False",
+     "boolean",
+     "add name-based inferred edges on top of the declared FKs"
+    ],
+    [
+     "limit",
+     [
+      "--limit"
+     ],
+     "None",
+     "int",
+     null
+    ],
+    [
+     "dialect",
+     [
+      "--dialect"
+     ],
+     "'sqlite'",
+     "str",
+     null
+    ],
+    [
+     "out",
+     [
+      "--out"
+     ],
+     "PosixPath('bench_results')",
+     "path",
+     null
+    ],
+    [
+     "tag",
+     [
+      "--tag"
+     ],
+     "None",
+     "str",
+     "output file tag"
+    ],
+    [
+     "opt",
+     [
+      "--opt"
+     ],
+     "None",
+     "str",
+     "extra LinkOptions as key=value (repeatable)"
+    ]
+   ]
+  },
+  "bench-spider2-lite": {
+   "help": "Gold-table recall of link_schema over the 547 Spider 2.0-Lite (or -Snow) tasks (no execution, no credentials).",
+   "params": [
+    [
+     "spider2_root",
+     [
+      "spider2_root"
+     ],
+     "None",
+     "path",
+     "path to the xlang-ai/Spider2 clone"
+    ],
+    [
+     "max_tables",
+     [
+      "--max-tables"
+     ],
+     "20",
+     "int",
+     null
+    ],
+    [
+     "anchor_k",
+     [
+      "--anchor-k"
+     ],
+     "6",
+     "int",
+     null
+    ],
+    [
+     "docs",
+     [
+      "--docs"
+     ],
+     "True",
+     "boolean",
+     "append the task's external-knowledge document to the question"
+    ],
+    [
+     "doc_chars",
+     [
+      "--doc-chars"
+     ],
+     "4000",
+     "int",
+     null
+    ],
+    [
+     "infer",
+     [
+      "--infer"
+     ],
+     "True",
+     "boolean",
+     "add name-based inferred edges (catalogs declare no FKs)"
+    ],
+    [
+     "families",
+     [
+      "--families"
+     ],
+     "True",
+     "boolean",
+     "collapse partition families (tables differing only in digit runs with the same columns)"
+    ],
+    [
+     "dialect",
+     [
+      "--dialect"
+     ],
+     "None",
+     "str",
+     "bigquery | snowflake | sqlite (repeatable)"
+    ],
+    [
+     "limit",
+     [
+      "--limit"
+     ],
+     "None",
+     "int",
+     null
+    ],
+    [
+     "min_db_tables",
+     [
+      "--min-db-tables"
+     ],
+     "0",
+     "int",
+     "only tasks whose database has at least this many tables"
+    ],
+    [
+     "llm",
+     [
+      "--llm"
+     ],
+     "False",
+     "boolean",
+     "use Claude to pick anchor tables"
+    ],
+    [
+     "out",
+     [
+      "--out"
+     ],
+     "PosixPath('bench_results')",
+     "path",
+     null
+    ],
+    [
+     "tag",
+     [
+      "--tag"
+     ],
+     "None",
+     "str",
+     "output file tag"
+    ],
+    [
+     "opt",
+     [
+      "--opt"
+     ],
+     "None",
+     "str",
+     "extra LinkOptions as key=value (repeatable)"
+    ],
+    [
+     "suite",
+     [
+      "--suite"
+     ],
+     "'lite'",
+     "str",
+     "lite (547 tasks, 3 dialects) | snow (547 tasks, all Snowflake, larger schemas)"
+    ],
+    [
+     "desc_weight",
+     [
+      "--desc-weight"
+     ],
+     "0.35",
+     "float",
+     "index weight of a token found only in a table/column description"
+    ],
+    [
+     "only",
+     [
+      "--only"
+     ],
+     "None",
+     "str",
+     "only these instance ids (repeatable)"
+    ]
+   ]
+  },
+  "build": {
+   "help": "(Re)introspect one connection or all.",
+   "params": [
+    [
+     "name",
+     [
+      "name"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "connections": {
+   "help": "List connections.",
+   "params": [
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "explain": {
+   "help": "Show activation seeds and PPR scores for a question.",
+   "params": [
+    [
+     "question",
+     [
+      "question"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "link": {
+   "help": "Link a question to a sub-schema and print annotated DDL.",
+   "params": [
+    [
+     "question",
+     [
+      "question"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "max_tables",
+     [
+      "--max-tables"
+     ],
+     "20",
+     "int",
+     null
+    ],
+    [
+     "columns",
+     [
+      "--columns"
+     ],
+     "'relevant'",
+     "str",
+     null
+    ],
+    [
+     "llm",
+     [
+      "--llm"
+     ],
+     "False",
+     "boolean",
+     "use Claude to pick anchor tables"
+    ],
+    [
+     "as_json",
+     [
+      "--json"
+     ],
+     "False",
+     "boolean",
+     null
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "mcp": {
+   "help": "Run the MCP server (stdio by default).",
+   "params": [
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ],
+    [
+     "transport",
+     [
+      "--transport"
+     ],
+     "'stdio'",
+     "str",
+     null
+    ]
+   ]
+  },
+  "path": {
+   "help": "Shortest join path(s) between two tables.",
+   "params": [
+    [
+     "a",
+     [
+      "a"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "b",
+     [
+      "b"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "remove": {
+   "help": "Remove a connection and its snapshot.",
+   "params": [
+    [
+     "name",
+     [
+      "name"
+     ],
+     "None",
+     "str",
+     null
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "serve": {
+   "help": "Run the HTTP API + frontend.",
+   "params": [
+    [
+     "host",
+     [
+      "--host"
+     ],
+     "'127.0.0.1'",
+     "str",
+     null
+    ],
+    [
+     "port",
+     [
+      "--port"
+     ],
+     "8765",
+     "int",
+     null
+    ],
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  },
+  "stats": {
+   "help": "Print graph statistics as JSON.",
+   "params": [
+    [
+     "home",
+     [
+      "--home",
+      "-H"
+     ],
+     "None",
+     "path",
+     "Data directory (default .schemagraph or $SCHEMAGRAPH_HOME)"
+    ]
+   ]
+  }
+ },
+ "link_options": [
+  [
+   "max_tables",
+   "20"
+  ],
+  [
+   "anchor_k",
+   "6"
+  ],
+  [
+   "min_anchor_ratio",
+   "0.15"
+  ],
+  [
+   "fill_ratio",
+   "0.06"
+  ],
+  [
+   "bypass_if_fits",
+   "True"
+  ],
+  [
+   "ppr_alpha",
+   "0.85"
+  ],
+  [
+   "paths",
+   "True"
+  ],
+  [
+   "path_extra",
+   "0.0"
+  ],
+  [
+   "path_cutoff",
+   "6"
+  ],
+  [
+   "prune_alpha",
+   "0.8"
+  ],
+  [
+   "prune_theta",
+   "0.05"
+  ],
+  [
+   "prune_top_k",
+   "8"
+  ],
+  [
+   "columns",
+   "'relevant'"
+  ],
+  [
+   "max_columns_per_table",
+   "40"
+  ],
+  [
+   "columns_top_uncapped",
+   "1"
+  ],
+  [
+   "small_schema_bypass",
+   "0"
+  ],
+  [
+   "use_llm",
+   "False"
+  ],
+  [
+   "render",
+   "True"
+  ],
+  [
+   "debug",
+   "False"
+  ],
+  [
+   "ranking_limit",
+   "60"
+  ],
+  [
+   "idf",
+   "True"
+  ],
+  [
+   "agg",
+   "'top3'"
+  ],
+  [
+   "min_numeric_len",
+   "4"
+  ],
+  [
+   "adaptive_budget",
+   "True"
+  ],
+  [
+   "large_threshold",
+   "30"
+  ],
+  [
+   "max_tables_large",
+   "20"
+  ],
+  [
+   "anchor_k_large",
+   "6"
+  ],
+  [
+   "schema_routing",
+   "0.0"
+  ],
+  [
+   "ngram_stop",
+   "True"
+  ],
+  [
+   "ppr_edge_attr",
+   "'weight'"
+  ],
+  [
+   "ranker",
+   "'rrf'"
+  ],
+  [
+   "rrf_k",
+   "60"
+  ],
+  [
+   "seed_bm25",
+   "False"
+  ],
+  [
+   "seed_k",
+   "5"
+  ],
+  [
+   "seed_w",
+   "1.0"
+  ],
+  [
+   "embed",
+   "False"
+  ],
+  [
+   "embed_model",
+   "'minishlab/potion-base-8M'"
+  ],
+  [
+   "embed_threshold",
+   "0.5"
+  ],
+  [
+   "embed_top_k",
+   "5"
+  ],
+  [
+   "embed_weight",
+   "0.8"
+  ]
+ ],
+ "spider2_row_fields": [
+  "instance_id",
+  "db",
+  "dialect",
+  "n_gold",
+  "n_pred",
+  "n_tables_db",
+  "hit",
+  "recall",
+  "precision",
+  "strict",
+  "anchor_hit",
+  "ms",
+  "missed",
+  "max_gold_rank",
+  "gold_in_top10",
+  "gold_in_top20",
+  "n_cols_db",
+  "n_cols_graph",
+  "ddl_tokens",
+  "n_gold_cols",
+  "n_pred_cols",
+  "col_hit",
+  "col_recall",
+  "col_precision",
+  "col_strict",
+  "unresolved_cols",
+  "sql_parsed",
+  "missed_cols"
+ ],
+ "spider1_row_fields": [
+  "instance_id",
+  "db",
+  "n_gold",
+  "n_pred",
+  "n_tables_db",
+  "hit",
+  "recall",
+  "precision",
+  "strict",
+  "anchor_hit",
+  "n_bridge",
+  "bridge_recovered",
+  "ms",
+  "missed",
+  "max_gold_rank"
+ ],
+ "stats_keys": [
+  "columns",
+  "embed",
+  "home",
+  "llm",
+  "relation_pairs",
+  "relations",
+  "sources",
+  "tables",
+  "terms",
+  "tokens"
+ ]
+}

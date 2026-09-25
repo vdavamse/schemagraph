@@ -1,0 +1,3075 @@
+{
+ "nodes": [
+  [
+   "t:public.customer",
+   {
+    "ntype": "table",
+    "fqn": "public.customer",
+    "name": "customer"
+   }
+  ],
+  [
+   "c:public.customer.id",
+   {
+    "ntype": "column",
+    "fqn": "public.customer",
+    "name": "id",
+    "table": "t:public.customer"
+   }
+  ],
+  [
+   "c:public.customer.name",
+   {
+    "ntype": "column",
+    "fqn": "public.customer",
+    "name": "name",
+    "table": "t:public.customer"
+   }
+  ],
+  [
+   "c:public.customer.state",
+   {
+    "ntype": "column",
+    "fqn": "public.customer",
+    "name": "state",
+    "table": "t:public.customer"
+   }
+  ],
+  [
+   "c:public.customer.loyalty_tier",
+   {
+    "ntype": "column",
+    "fqn": "public.customer",
+    "name": "loyalty_tier",
+    "table": "t:public.customer"
+   }
+  ],
+  [
+   "t:public.stores",
+   {
+    "ntype": "table",
+    "fqn": "public.stores",
+    "name": "stores"
+   }
+  ],
+  [
+   "c:public.stores.id",
+   {
+    "ntype": "column",
+    "fqn": "public.stores",
+    "name": "id",
+    "table": "t:public.stores"
+   }
+  ],
+  [
+   "c:public.stores.city",
+   {
+    "ntype": "column",
+    "fqn": "public.stores",
+    "name": "city",
+    "table": "t:public.stores"
+   }
+  ],
+  [
+   "c:public.stores.manager",
+   {
+    "ntype": "column",
+    "fqn": "public.stores",
+    "name": "manager",
+    "table": "t:public.stores"
+   }
+  ],
+  [
+   "t:public.visits",
+   {
+    "ntype": "table",
+    "fqn": "public.visits",
+    "name": "visits"
+   }
+  ],
+  [
+   "c:public.visits.id",
+   {
+    "ntype": "column",
+    "fqn": "public.visits",
+    "name": "id",
+    "table": "t:public.visits"
+   }
+  ],
+  [
+   "c:public.visits.store_id",
+   {
+    "ntype": "column",
+    "fqn": "public.visits",
+    "name": "store_id",
+    "table": "t:public.visits"
+   }
+  ],
+  [
+   "c:public.visits.customer_id",
+   {
+    "ntype": "column",
+    "fqn": "public.visits",
+    "name": "customer_id",
+    "table": "t:public.visits"
+   }
+  ],
+  [
+   "t:public.v_visits",
+   {
+    "ntype": "table",
+    "fqn": "public.v_visits",
+    "name": "v_visits"
+   }
+  ],
+  [
+   "c:public.v_visits.id",
+   {
+    "ntype": "column",
+    "fqn": "public.v_visits",
+    "name": "id",
+    "table": "t:public.v_visits"
+   }
+  ],
+  [
+   "c:public.v_visits.store_id",
+   {
+    "ntype": "column",
+    "fqn": "public.v_visits",
+    "name": "store_id",
+    "table": "t:public.v_visits"
+   }
+  ],
+  [
+   "c:public.v_visits.customer_id",
+   {
+    "ntype": "column",
+    "fqn": "public.v_visits",
+    "name": "customer_id",
+    "table": "t:public.v_visits"
+   }
+  ],
+  [
+   "t:sales.orders",
+   {
+    "ntype": "table",
+    "fqn": "sales.orders",
+    "name": "orders"
+   }
+  ],
+  [
+   "c:sales.orders.customer_id",
+   {
+    "ntype": "column",
+    "fqn": "sales.orders",
+    "name": "customer_id",
+    "table": "t:sales.orders"
+   }
+  ],
+  [
+   "c:sales.orders.amount",
+   {
+    "ntype": "column",
+    "fqn": "sales.orders",
+    "name": "amount",
+    "table": "t:sales.orders"
+   }
+  ],
+  [
+   "t:sales.customers",
+   {
+    "ntype": "table",
+    "fqn": "sales.customers",
+    "name": "customers"
+   }
+  ],
+  [
+   "c:sales.customers.id",
+   {
+    "ntype": "column",
+    "fqn": "sales.customers",
+    "name": "id",
+    "table": "t:sales.customers"
+   }
+  ],
+  [
+   "t:analytics.orders",
+   {
+    "ntype": "table",
+    "fqn": "analytics.orders",
+    "name": "orders"
+   }
+  ],
+  [
+   "c:analytics.orders.id",
+   {
+    "ntype": "column",
+    "fqn": "analytics.orders",
+    "name": "id",
+    "table": "t:analytics.orders"
+   }
+  ],
+  [
+   "c:analytics.orders.customer_id",
+   {
+    "ntype": "column",
+    "fqn": "analytics.orders",
+    "name": "customer_id",
+    "table": "t:analytics.orders"
+   }
+  ],
+  [
+   "t:analytics.dim_customers",
+   {
+    "ntype": "table",
+    "fqn": "analytics.dim_customers",
+    "name": "dim_customers"
+   }
+  ],
+  [
+   "c:analytics.dim_customers.id",
+   {
+    "ntype": "column",
+    "fqn": "analytics.dim_customers",
+    "name": "id",
+    "table": "t:analytics.dim_customers"
+   }
+  ],
+  [
+   "t:analytics.country_codes",
+   {
+    "ntype": "table",
+    "fqn": "analytics.country_codes",
+    "name": "country_codes"
+   }
+  ],
+  [
+   "c:analytics.country_codes.code",
+   {
+    "ntype": "column",
+    "fqn": "analytics.country_codes",
+    "name": "code",
+    "table": "t:analytics.country_codes"
+   }
+  ],
+  [
+   "t:raw.raw_orders",
+   {
+    "ntype": "table",
+    "fqn": "raw.raw_orders",
+    "name": "raw_orders"
+   }
+  ],
+  [
+   "c:raw.raw_orders.id",
+   {
+    "ntype": "column",
+    "fqn": "raw.raw_orders",
+    "name": "id",
+    "table": "t:raw.raw_orders"
+   }
+  ],
+  [
+   "t:sales.core.orders",
+   {
+    "ntype": "table",
+    "fqn": "sales.core.orders",
+    "name": "orders"
+   }
+  ],
+  [
+   "c:sales.core.orders.id",
+   {
+    "ntype": "column",
+    "fqn": "sales.core.orders",
+    "name": "id",
+    "table": "t:sales.core.orders"
+   }
+  ],
+  [
+   "c:sales.core.orders.customer_id",
+   {
+    "ntype": "column",
+    "fqn": "sales.core.orders",
+    "name": "customer_id",
+    "table": "t:sales.core.orders"
+   }
+  ],
+  [
+   "t:sales.core.customers",
+   {
+    "ntype": "table",
+    "fqn": "sales.core.customers",
+    "name": "customers"
+   }
+  ],
+  [
+   "c:sales.core.customers.id",
+   {
+    "ntype": "column",
+    "fqn": "sales.core.customers",
+    "name": "id",
+    "table": "t:sales.core.customers"
+   }
+  ],
+  [
+   "t:sales.core.v_orders",
+   {
+    "ntype": "table",
+    "fqn": "sales.core.v_orders",
+    "name": "v_orders"
+   }
+  ],
+  [
+   "c:sales.core.v_orders.id",
+   {
+    "ntype": "column",
+    "fqn": "sales.core.v_orders",
+    "name": "id",
+    "table": "t:sales.core.v_orders"
+   }
+  ],
+  [
+   "c:public.customer.email",
+   {
+    "ntype": "column",
+    "fqn": "public.customer",
+    "name": "email",
+    "table": "t:public.customer"
+   }
+  ],
+  [
+   "c:public.customer.city",
+   {
+    "ntype": "column",
+    "fqn": "public.customer",
+    "name": "city",
+    "table": "t:public.customer"
+   }
+  ],
+  [
+   "t:public.orders",
+   {
+    "ntype": "table",
+    "fqn": "public.orders",
+    "name": "orders"
+   }
+  ],
+  [
+   "c:public.orders.id",
+   {
+    "ntype": "column",
+    "fqn": "public.orders",
+    "name": "id",
+    "table": "t:public.orders"
+   }
+  ],
+  [
+   "c:public.orders.customer_id",
+   {
+    "ntype": "column",
+    "fqn": "public.orders",
+    "name": "customer_id",
+    "table": "t:public.orders"
+   }
+  ],
+  [
+   "c:public.orders.store_id",
+   {
+    "ntype": "column",
+    "fqn": "public.orders",
+    "name": "store_id",
+    "table": "t:public.orders"
+   }
+  ],
+  [
+   "c:public.orders.total_amount",
+   {
+    "ntype": "column",
+    "fqn": "public.orders",
+    "name": "total_amount",
+    "table": "t:public.orders"
+   }
+  ],
+  [
+   "c:public.orders.order_date",
+   {
+    "ntype": "column",
+    "fqn": "public.orders",
+    "name": "order_date",
+    "table": "t:public.orders"
+   }
+  ],
+  [
+   "c:public.orders.status",
+   {
+    "ntype": "column",
+    "fqn": "public.orders",
+    "name": "status",
+    "table": "t:public.orders"
+   }
+  ],
+  [
+   "t:public.product_category",
+   {
+    "ntype": "table",
+    "fqn": "public.product_category",
+    "name": "product_category"
+   }
+  ],
+  [
+   "c:public.product_category.id",
+   {
+    "ntype": "column",
+    "fqn": "public.product_category",
+    "name": "id",
+    "table": "t:public.product_category"
+   }
+  ],
+  [
+   "c:public.product_category.name",
+   {
+    "ntype": "column",
+    "fqn": "public.product_category",
+    "name": "name",
+    "table": "t:public.product_category"
+   }
+  ],
+  [
+   "c:public.product_category.segment",
+   {
+    "ntype": "column",
+    "fqn": "public.product_category",
+    "name": "segment",
+    "table": "t:public.product_category"
+   }
+  ],
+  [
+   "t:public.products",
+   {
+    "ntype": "table",
+    "fqn": "public.products",
+    "name": "products"
+   }
+  ],
+  [
+   "c:public.products.id",
+   {
+    "ntype": "column",
+    "fqn": "public.products",
+    "name": "id",
+    "table": "t:public.products"
+   }
+  ],
+  [
+   "c:public.products.name",
+   {
+    "ntype": "column",
+    "fqn": "public.products",
+    "name": "name",
+    "table": "t:public.products"
+   }
+  ],
+  [
+   "c:public.products.category_id",
+   {
+    "ntype": "column",
+    "fqn": "public.products",
+    "name": "category_id",
+    "table": "t:public.products"
+   }
+  ],
+  [
+   "c:public.products.price",
+   {
+    "ntype": "column",
+    "fqn": "public.products",
+    "name": "price",
+    "table": "t:public.products"
+   }
+  ],
+  [
+   "t:public.order_items",
+   {
+    "ntype": "table",
+    "fqn": "public.order_items",
+    "name": "order_items"
+   }
+  ],
+  [
+   "c:public.order_items.id",
+   {
+    "ntype": "column",
+    "fqn": "public.order_items",
+    "name": "id",
+    "table": "t:public.order_items"
+   }
+  ],
+  [
+   "c:public.order_items.order_id",
+   {
+    "ntype": "column",
+    "fqn": "public.order_items",
+    "name": "order_id",
+    "table": "t:public.order_items"
+   }
+  ],
+  [
+   "c:public.order_items.product_id",
+   {
+    "ntype": "column",
+    "fqn": "public.order_items",
+    "name": "product_id",
+    "table": "t:public.order_items"
+   }
+  ],
+  [
+   "c:public.order_items.quantity",
+   {
+    "ntype": "column",
+    "fqn": "public.order_items",
+    "name": "quantity",
+    "table": "t:public.order_items"
+   }
+  ],
+  [
+   "c:public.order_items.line_total",
+   {
+    "ntype": "column",
+    "fqn": "public.order_items",
+    "name": "line_total",
+    "table": "t:public.order_items"
+   }
+  ],
+  [
+   "t:public.shipment",
+   {
+    "ntype": "table",
+    "fqn": "public.shipment",
+    "name": "shipment"
+   }
+  ],
+  [
+   "c:public.shipment.id",
+   {
+    "ntype": "column",
+    "fqn": "public.shipment",
+    "name": "id",
+    "table": "t:public.shipment"
+   }
+  ],
+  [
+   "c:public.shipment.order_item_id",
+   {
+    "ntype": "column",
+    "fqn": "public.shipment",
+    "name": "order_item_id",
+    "table": "t:public.shipment"
+   }
+  ],
+  [
+   "c:public.shipment.shipped_date",
+   {
+    "ntype": "column",
+    "fqn": "public.shipment",
+    "name": "shipped_date",
+    "table": "t:public.shipment"
+   }
+  ],
+  [
+   "c:public.shipment.carrier",
+   {
+    "ntype": "column",
+    "fqn": "public.shipment",
+    "name": "carrier",
+    "table": "t:public.shipment"
+   }
+  ],
+  [
+   "t:public.audit_log",
+   {
+    "ntype": "table",
+    "fqn": "public.audit_log",
+    "name": "audit_log"
+   }
+  ],
+  [
+   "c:public.audit_log.id",
+   {
+    "ntype": "column",
+    "fqn": "public.audit_log",
+    "name": "id",
+    "table": "t:public.audit_log"
+   }
+  ],
+  [
+   "c:public.audit_log.actor",
+   {
+    "ntype": "column",
+    "fqn": "public.audit_log",
+    "name": "actor",
+    "table": "t:public.audit_log"
+   }
+  ],
+  [
+   "c:public.audit_log.action",
+   {
+    "ntype": "column",
+    "fqn": "public.audit_log",
+    "name": "action",
+    "table": "t:public.audit_log"
+   }
+  ],
+  [
+   "c:public.audit_log.at",
+   {
+    "ntype": "column",
+    "fqn": "public.audit_log",
+    "name": "at",
+    "table": "t:public.audit_log"
+   }
+  ],
+  [
+   "t:lake.events",
+   {
+    "ntype": "table",
+    "fqn": "lake.events",
+    "name": "events"
+   }
+  ],
+  [
+   "c:lake.events.user_id",
+   {
+    "ntype": "column",
+    "fqn": "lake.events",
+    "name": "user_id",
+    "table": "t:lake.events"
+   }
+  ],
+  [
+   "c:lake.events.url",
+   {
+    "ntype": "column",
+    "fqn": "lake.events",
+    "name": "url",
+    "table": "t:lake.events"
+   }
+  ],
+  [
+   "c:lake.events.dt",
+   {
+    "ntype": "column",
+    "fqn": "lake.events",
+    "name": "dt",
+    "table": "t:lake.events"
+   }
+  ],
+  [
+   "t:lake.v_daily",
+   {
+    "ntype": "table",
+    "fqn": "lake.v_daily",
+    "name": "v_daily"
+   }
+  ],
+  [
+   "c:lake.v_daily.dt",
+   {
+    "ntype": "column",
+    "fqn": "lake.v_daily",
+    "name": "dt",
+    "table": "t:lake.v_daily"
+   }
+  ],
+  [
+   "k:revenue",
+   {
+    "ntype": "term",
+    "name": "revenue"
+   }
+  ],
+  [
+   "k:buyer",
+   {
+    "ntype": "term",
+    "name": "buyer"
+   }
+  ],
+  [
+   "k:courier",
+   {
+    "ntype": "term",
+    "name": "courier"
+   }
+  ],
+  [
+   "k:order",
+   {
+    "ntype": "term",
+    "name": "order"
+   }
+  ],
+  [
+   "k:order_total",
+   {
+    "ntype": "term",
+    "name": "order_total"
+   }
+  ],
+  [
+   "k:order_count",
+   {
+    "ntype": "term",
+    "name": "order_count"
+   }
+  ]
+ ],
+ "edges": [
+  [
+   "t:public.customer",
+   "c:public.customer.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.customer",
+   "c:public.customer.name",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.customer",
+   "c:public.customer.state",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.customer",
+   "c:public.customer.loyalty_tier",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.customer",
+   "c:public.customer.email",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.customer",
+   "c:public.customer.city",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.customer",
+   "t:public.audit_log",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "join_hint",
+      "from_table": "public.audit_log",
+      "to_table": "public.customer",
+      "from_columns": [
+       "actor"
+      ],
+      "to_columns": [
+       "email"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "user"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:public.customer",
+   "t:public.visits",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "foreign_key",
+      "from_table": "public.visits",
+      "to_table": "public.customer",
+      "from_columns": [
+       "customer_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "warehouse_db"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:public.customer",
+   "t:public.orders",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "foreign_key",
+      "from_table": "public.orders",
+      "to_table": "public.customer",
+      "from_columns": [
+       "customer_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "store"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:public.customer",
+   "k:buyer",
+   {
+    "etype": "glossary",
+    "weight": 0.7,
+    "affinity": 0.7
+   }
+  ],
+  [
+   "c:public.customer.id",
+   "c:public.visits.customer_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "c:public.customer.id",
+   "c:public.orders.customer_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:public.stores",
+   "c:public.stores.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.stores",
+   "c:public.stores.city",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.stores",
+   "c:public.stores.manager",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.stores",
+   "t:public.orders",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "join_hint",
+      "from_table": "public.orders",
+      "to_table": "public.stores",
+      "from_columns": [
+       "store_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": "orders to stores",
+      "confidence": 1.0,
+      "source": "user"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:public.stores",
+   "t:public.visits",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "foreign_key",
+      "from_table": "public.visits",
+      "to_table": "public.stores",
+      "from_columns": [
+       "store_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "warehouse_db"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:public.stores",
+   "k:courier",
+   {
+    "etype": "glossary",
+    "weight": 0.7,
+    "affinity": 0.7
+   }
+  ],
+  [
+   "c:public.stores.id",
+   "c:public.orders.store_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "c:public.stores.id",
+   "c:public.visits.store_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:public.visits",
+   "c:public.visits.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.visits",
+   "c:public.visits.store_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.visits",
+   "c:public.visits.customer_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.v_visits",
+   "c:public.v_visits.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.v_visits",
+   "c:public.v_visits.store_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.v_visits",
+   "c:public.v_visits.customer_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:sales.orders",
+   "c:sales.orders.customer_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:sales.orders",
+   "c:sales.orders.amount",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:sales.orders",
+   "t:sales.customers",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "foreign_key",
+      "from_table": "sales.orders",
+      "to_table": "sales.customers",
+      "from_columns": [
+       "customer_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": "Collibra: references",
+      "confidence": 1.0,
+      "source": "collibra"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:sales.orders.customer_id",
+   "c:sales.customers.id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "c:sales.orders.amount",
+   "k:revenue",
+   {
+    "etype": "glossary",
+    "weight": 0.7,
+    "affinity": 0.7
+   }
+  ],
+  [
+   "t:sales.customers",
+   "c:sales.customers.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:analytics.orders",
+   "c:analytics.orders.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:analytics.orders",
+   "c:analytics.orders.customer_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:analytics.orders",
+   "t:raw.raw_orders",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "raw.raw_orders",
+      "to_table": "analytics.orders",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "dbt_manifest"
+     },
+     {
+      "kind": "relationship_test",
+      "from_table": "analytics.orders",
+      "to_table": "raw.raw_orders",
+      "from_columns": [
+       "id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "dbt_manifest"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:analytics.orders",
+   "t:analytics.dim_customers",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "analytics.dim_customers",
+      "to_table": "analytics.orders",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "dbt_manifest"
+     },
+     {
+      "kind": "foreign_key",
+      "from_table": "analytics.orders",
+      "to_table": "analytics.dim_customers",
+      "from_columns": [
+       "customer_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "dbt_manifest"
+     },
+     {
+      "kind": "relationship_test",
+      "from_table": "analytics.orders",
+      "to_table": "analytics.dim_customers",
+      "from_columns": [
+       "customer_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "dbt_manifest"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:analytics.orders",
+   "k:order_total",
+   {
+    "etype": "glossary",
+    "weight": 0.7,
+    "affinity": 0.7
+   }
+  ],
+  [
+   "t:analytics.orders",
+   "k:order_count",
+   {
+    "etype": "glossary",
+    "weight": 0.7,
+    "affinity": 0.7
+   }
+  ],
+  [
+   "c:analytics.orders.id",
+   "c:raw.raw_orders.id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "c:analytics.orders.id",
+   "k:order",
+   {
+    "etype": "glossary",
+    "weight": 0.7,
+    "affinity": 0.7
+   }
+  ],
+  [
+   "c:analytics.orders.customer_id",
+   "c:analytics.dim_customers.id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:analytics.dim_customers",
+   "c:analytics.dim_customers.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:analytics.country_codes",
+   "c:analytics.country_codes.code",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:raw.raw_orders",
+   "c:raw.raw_orders.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:sales.core.orders",
+   "c:sales.core.orders.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:sales.core.orders",
+   "c:sales.core.orders.customer_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:sales.core.orders",
+   "t:sales.core.customers",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "foreign_key",
+      "from_table": "sales.core.orders",
+      "to_table": "sales.core.customers",
+      "from_columns": [
+       "customer_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": "fk_c",
+      "confidence": 1.0,
+      "source": "unity"
+     },
+     {
+      "kind": "lineage",
+      "from_table": "sales.core.customers",
+      "to_table": "sales.core.orders",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "unity"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:sales.core.orders.customer_id",
+   "c:sales.core.customers.id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:sales.core.customers",
+   "c:sales.core.customers.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:sales.core.customers",
+   "t:sales.core.v_orders",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "sales.core.customers",
+      "to_table": "sales.core.v_orders",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "unity"
+     }
+    ],
+    "weight": 1.6,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:sales.core.v_orders",
+   "c:sales.core.v_orders.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "c:public.customer.email",
+   "c:public.audit_log.actor",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:public.orders",
+   "c:public.orders.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.orders",
+   "c:public.orders.customer_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.orders",
+   "c:public.orders.store_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.orders",
+   "c:public.orders.total_amount",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.orders",
+   "c:public.orders.order_date",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.orders",
+   "c:public.orders.status",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.orders",
+   "t:public.order_items",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "foreign_key",
+      "from_table": "public.order_items",
+      "to_table": "public.orders",
+      "from_columns": [
+       "order_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "store"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:public.orders.id",
+   "c:public.order_items.order_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "c:public.orders.total_amount",
+   "k:revenue",
+   {
+    "etype": "glossary",
+    "weight": 0.7,
+    "affinity": 0.7
+   }
+  ],
+  [
+   "t:public.product_category",
+   "c:public.product_category.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.product_category",
+   "c:public.product_category.name",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.product_category",
+   "c:public.product_category.segment",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.product_category",
+   "t:public.products",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "foreign_key",
+      "from_table": "public.products",
+      "to_table": "public.product_category",
+      "from_columns": [
+       "category_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "store"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:public.product_category.id",
+   "c:public.products.category_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:public.products",
+   "c:public.products.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.products",
+   "c:public.products.name",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.products",
+   "c:public.products.category_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.products",
+   "c:public.products.price",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.products",
+   "t:public.order_items",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "foreign_key",
+      "from_table": "public.order_items",
+      "to_table": "public.products",
+      "from_columns": [
+       "product_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "store"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:public.products.id",
+   "c:public.order_items.product_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:public.order_items",
+   "c:public.order_items.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.order_items",
+   "c:public.order_items.order_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.order_items",
+   "c:public.order_items.product_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.order_items",
+   "c:public.order_items.quantity",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.order_items",
+   "c:public.order_items.line_total",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.order_items",
+   "t:public.shipment",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "foreign_key",
+      "from_table": "public.shipment",
+      "to_table": "public.order_items",
+      "from_columns": [
+       "order_item_id"
+      ],
+      "to_columns": [
+       "id"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "store"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:public.order_items.id",
+   "c:public.shipment.order_item_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:public.shipment",
+   "c:public.shipment.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.shipment",
+   "c:public.shipment.order_item_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.shipment",
+   "c:public.shipment.shipped_date",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.shipment",
+   "c:public.shipment.carrier",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "c:public.shipment.carrier",
+   "k:courier",
+   {
+    "etype": "glossary",
+    "weight": 0.7,
+    "affinity": 0.7
+   }
+  ],
+  [
+   "t:public.audit_log",
+   "c:public.audit_log.id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.audit_log",
+   "c:public.audit_log.actor",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.audit_log",
+   "c:public.audit_log.action",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:public.audit_log",
+   "c:public.audit_log.at",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:lake.events",
+   "c:lake.events.user_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:lake.events",
+   "c:lake.events.url",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:lake.events",
+   "c:lake.events.dt",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:lake.v_daily",
+   "c:lake.v_daily.dt",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ]
+ ],
+ "tables": {
+  "public.customer": {
+   "name": "customer",
+   "schema": "public",
+   "catalog": null,
+   "kind": "table",
+   "description": "customers from the operational db",
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INTEGER",
+     "description": null,
+     "nullable": false,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "name",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [
+      "n0",
+      "n1",
+      "n10",
+      "n11",
+      "n12",
+      "n13",
+      "n14",
+      "n15",
+      "n16",
+      "n17",
+      "n18",
+      "n19",
+      "n2",
+      "n20",
+      "n21",
+      "n22",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "n7",
+      "n8",
+      "n9"
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "state",
+     "data_type": "VARCHAR",
+     "description": "US state, e.g. California",
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [
+      "State 0",
+      "State 1",
+      "State 2",
+      "State 3",
+      "State 4",
+      "State 5",
+      "State 6",
+      "California",
+      "Texas",
+      "New York",
+      "U.S."
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "loyalty_tier",
+     "data_type": "VARCHAR",
+     "description": "bronze, silver or gold",
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [
+      "bronze",
+      "gold",
+      "silver"
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "email",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "city",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": 60,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "warehouse_db,store"
+  },
+  "public.stores": {
+   "name": "stores",
+   "schema": "public",
+   "catalog": null,
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INTEGER",
+     "description": null,
+     "nullable": false,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "city",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [
+      "Austin",
+      "Boston"
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "manager",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [
+      "Ann",
+      "Bob"
+     ],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": 2,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "warehouse_db"
+  },
+  "public.visits": {
+   "name": "visits",
+   "schema": "public",
+   "catalog": null,
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INTEGER",
+     "description": null,
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "store_id",
+     "data_type": "INTEGER",
+     "description": null,
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "customer_id",
+     "data_type": "INTEGER",
+     "description": null,
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": 0,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "warehouse_db"
+  },
+  "public.v_visits": {
+   "name": "v_visits",
+   "schema": "public",
+   "catalog": null,
+   "kind": "view",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INTEGER",
+     "description": null,
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "store_id",
+     "data_type": "INTEGER",
+     "description": null,
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "customer_id",
+     "data_type": "INTEGER",
+     "description": null,
+     "nullable": true,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": 0,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "warehouse_db"
+  },
+  "sales.orders": {
+   "name": "orders",
+   "schema": "sales",
+   "catalog": null,
+   "kind": "table",
+   "description": "Customer orders",
+   "columns": [
+    {
+     "name": "customer_id",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {
+      "collibra_id": "c1"
+     }
+    },
+    {
+     "name": "amount",
+     "data_type": "DECIMAL",
+     "description": "Order amount in EUR",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {
+      "collibra_id": "c3"
+     }
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [
+    "Data Classification=Internal"
+   ],
+   "properties": {
+    "collibra_id": "tb1",
+    "domain": "Sales"
+   },
+   "source": "collibra"
+  },
+  "sales.customers": {
+   "name": "customers",
+   "schema": "sales",
+   "catalog": null,
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {
+      "collibra_id": "c2"
+     }
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "collibra_id": "tb2",
+    "domain": "Sales"
+   },
+   "source": "collibra"
+  },
+  "analytics.orders": {
+   "name": "orders",
+   "schema": "analytics",
+   "catalog": null,
+   "kind": "model",
+   "description": "orders model",
+   "columns": [
+    {
+     "name": "id",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "customer_id",
+     "data_type": null,
+     "description": "buyer",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [
+    "core"
+   ],
+   "properties": {
+    "unique_id": "",
+    "dbt_name": "orders"
+   },
+   "source": "dbt_manifest"
+  },
+  "analytics.dim_customers": {
+   "name": "dim_customers",
+   "schema": "analytics",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "int",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "unique_id": "",
+    "dbt_name": "customers"
+   },
+   "source": "dbt_manifest"
+  },
+  "analytics.country_codes": {
+   "name": "country_codes",
+   "schema": "analytics",
+   "catalog": null,
+   "kind": "seed",
+   "description": null,
+   "columns": [
+    {
+     "name": "code",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "code"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "unique_id": "",
+    "dbt_name": "country_codes"
+   },
+   "source": "dbt_manifest"
+  },
+  "raw.raw_orders": {
+   "name": "raw_orders",
+   "schema": "raw",
+   "catalog": null,
+   "kind": "source",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "unique_id": "",
+    "dbt_name": "raw_orders"
+   },
+   "source": "dbt_manifest"
+  },
+  "sales.core.orders": {
+   "name": "orders",
+   "schema": "core",
+   "catalog": "sales",
+   "kind": "table",
+   "description": "Orders fact",
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "bigint",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "customer_id",
+     "data_type": "bigint",
+     "description": "FK to customers",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": null,
+   "owner": "data-eng",
+   "tags": [],
+   "properties": {},
+   "source": "unity"
+  },
+  "sales.core.customers": {
+   "name": "customers",
+   "schema": "core",
+   "catalog": "sales",
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "bigint",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "unity"
+  },
+  "sales.core.v_orders": {
+   "name": "v_orders",
+   "schema": "core",
+   "catalog": "sales",
+   "kind": "view",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "bigint",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "unity"
+  },
+  "public.orders": {
+   "name": "orders",
+   "schema": "public",
+   "catalog": null,
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "customer_id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "store_id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "total_amount",
+     "data_type": "DECIMAL",
+     "description": "order revenue in USD",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "order_date",
+     "data_type": "TIMESTAMP",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "status",
+     "data_type": "VARCHAR",
+     "description": "current order status: paid, refunded, pending",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "paid",
+      "refunded",
+      "awaiting confirmation from the payment provider today",
+      "10%",
+      "A++"
+     ],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "store"
+  },
+  "public.product_category": {
+   "name": "product_category",
+   "schema": "public",
+   "catalog": null,
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "name",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "segment",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "store"
+  },
+  "public.products": {
+   "name": "products",
+   "schema": "public",
+   "catalog": null,
+   "kind": "table",
+   "description": "Product catalog: items by category and price",
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "name",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "category_id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "price",
+     "data_type": "DECIMAL",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "store"
+  },
+  "public.order_items": {
+   "name": "order_items",
+   "schema": "public",
+   "catalog": null,
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "order_id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "product_id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "quantity",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "line_total",
+     "data_type": "DECIMAL",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "store"
+  },
+  "public.shipment": {
+   "name": "shipment",
+   "schema": "public",
+   "catalog": null,
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "order_item_id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "shipped_date",
+     "data_type": "DATE",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "carrier",
+     "data_type": "VARCHAR",
+     "description": "UPS, FedEx, DHL",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "UPS",
+      "FedEx",
+      "DHL"
+     ],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "store"
+  },
+  "public.audit_log": {
+   "name": "audit_log",
+   "schema": "public",
+   "catalog": null,
+   "kind": "table",
+   "description": null,
+   "columns": [
+    {
+     "name": "id",
+     "data_type": "INT",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "actor",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "action",
+     "data_type": "VARCHAR",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "at",
+     "data_type": "TIMESTAMP",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {},
+   "source": "store"
+  },
+  "lake.events": {
+   "name": "events",
+   "schema": "lake",
+   "catalog": null,
+   "kind": "external",
+   "description": "clickstream",
+   "columns": [
+    {
+     "name": "user_id",
+     "data_type": "bigint",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [
+      "pii=low"
+     ],
+     "properties": {
+      "pii": "no"
+     }
+    },
+    {
+     "name": "url",
+     "data_type": "string",
+     "description": "page",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "dt",
+     "data_type": "string",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [
+      "partition_key"
+     ],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": "web",
+   "tags": [
+    "domain=web"
+   ],
+   "properties": {
+    "classification": "parquet",
+    "location": "s3://b/events"
+   },
+   "source": "glue"
+  },
+  "lake.v_daily": {
+   "name": "v_daily",
+   "schema": "lake",
+   "catalog": null,
+   "kind": "view",
+   "description": "daily view",
+   "columns": [
+    {
+     "name": "dt",
+     "data_type": "string",
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "comment": "daily view"
+   },
+   "source": "glue"
+  }
+ },
+ "terms": {
+  "revenue": {
+   "name": "Revenue",
+   "description": "money in",
+   "synonyms": [
+    "sales",
+    "gross revenue"
+   ],
+   "targets": [
+    "public.orders.total_amount",
+    "sales.orders.amount"
+   ],
+   "source": "user"
+  },
+  "buyer": {
+   "name": "buyer",
+   "description": null,
+   "synonyms": [],
+   "targets": [
+    "customer"
+   ],
+   "source": "user"
+  },
+  "courier": {
+   "name": "courier",
+   "description": null,
+   "synonyms": [
+    "carrier company"
+   ],
+   "targets": [
+    "public.shipment.carrier",
+    "public.stores"
+   ],
+   "source": "user"
+  },
+  "order": {
+   "name": "order",
+   "description": "primary entity of semantic model orders_sm",
+   "synonyms": [],
+   "targets": [
+    "analytics.orders.id"
+   ],
+   "source": "dbt_manifest"
+  },
+  "order_total": {
+   "name": "order_total",
+   "description": "sum measure",
+   "synonyms": [],
+   "targets": [
+    "analytics.orders.total"
+   ],
+   "source": "dbt_manifest"
+  },
+  "order_count": {
+   "name": "order_count",
+   "description": "number of orders",
+   "synonyms": [],
+   "targets": [
+    "analytics.orders.order_count"
+   ],
+   "source": "dbt_manifest"
+  }
+ },
+ "sources": {
+  "user": "user",
+  "warehouse_db": "duckdb",
+  "collibra": "collibra",
+  "dbt_manifest": "dbt",
+  "unity": "unity",
+  "store": "ddl",
+  "glue": "glue"
+ },
+ "stats": {
+  "tables": 21,
+  "columns": 57,
+  "terms": 6,
+  "tokens": 0,
+  "relations": 18,
+  "relation_pairs": 14,
+  "sources": 7
+ },
+ "table_graph_edges": [
+  [
+   "t:public.customer",
+   "t:public.audit_log",
+   1.0
+  ],
+  [
+   "t:public.customer",
+   "t:public.visits",
+   1.0
+  ],
+  [
+   "t:public.customer",
+   "t:public.orders",
+   1.0
+  ],
+  [
+   "t:public.stores",
+   "t:public.orders",
+   1.0
+  ],
+  [
+   "t:public.stores",
+   "t:public.visits",
+   1.0
+  ],
+  [
+   "t:sales.orders",
+   "t:sales.customers",
+   1.0
+  ],
+  [
+   "t:analytics.orders",
+   "t:raw.raw_orders",
+   1.0
+  ],
+  [
+   "t:analytics.orders",
+   "t:analytics.dim_customers",
+   1.0
+  ],
+  [
+   "t:sales.core.orders",
+   "t:sales.core.customers",
+   1.0
+  ],
+  [
+   "t:public.orders",
+   "t:public.order_items",
+   1.0
+  ],
+  [
+   "t:public.product_category",
+   "t:public.products",
+   1.0
+  ],
+  [
+   "t:public.products",
+   "t:public.order_items",
+   1.0
+  ],
+  [
+   "t:public.order_items",
+   "t:public.shipment",
+   1.0
+  ]
+ ],
+ "lineage": {
+  "public.customer": [
+   [],
+   []
+  ],
+  "public.stores": [
+   [],
+   []
+  ],
+  "public.visits": [
+   [],
+   []
+  ],
+  "public.v_visits": [
+   [],
+   []
+  ],
+  "sales.orders": [
+   [],
+   []
+  ],
+  "sales.customers": [
+   [],
+   []
+  ],
+  "analytics.orders": [
+   [
+    "analytics.dim_customers",
+    "raw.raw_orders"
+   ],
+   []
+  ],
+  "analytics.dim_customers": [
+   [],
+   [
+    "analytics.orders"
+   ]
+  ],
+  "analytics.country_codes": [
+   [],
+   []
+  ],
+  "raw.raw_orders": [
+   [],
+   [
+    "analytics.orders"
+   ]
+  ],
+  "sales.core.orders": [
+   [
+    "sales.core.customers"
+   ],
+   []
+  ],
+  "sales.core.customers": [
+   [],
+   [
+    "sales.core.orders",
+    "sales.core.v_orders"
+   ]
+  ],
+  "sales.core.v_orders": [
+   [
+    "sales.core.customers"
+   ],
+   []
+  ],
+  "public.orders": [
+   [],
+   []
+  ],
+  "public.product_category": [
+   [],
+   []
+  ],
+  "public.products": [
+   [],
+   []
+  ],
+  "public.order_items": [
+   [],
+   []
+  ],
+  "public.shipment": [
+   [],
+   []
+  ],
+  "public.audit_log": [
+   [],
+   []
+  ],
+  "lake.events": [
+   [],
+   []
+  ],
+  "lake.v_daily": [
+   [],
+   []
+  ]
+ }
+}

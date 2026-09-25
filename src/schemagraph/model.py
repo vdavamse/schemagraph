@@ -26,10 +26,13 @@ TableKind = Literal["table", "view", "model", "source", "seed", "snapshot", "ext
 
 
 def utcnow() -> datetime:
+    """Return the current time as a timezone-aware UTC datetime."""
     return datetime.now(UTC)
 
 
 class Column(BaseModel):
+    """A column of a table, with optional type, description, key flag, samples and tags."""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str
@@ -43,6 +46,11 @@ class Column(BaseModel):
 
 
 class Table(BaseModel):
+    """A table, view or dbt model/source, with its columns and the source that described it.
+
+    ``schema_name`` is serialised as ``schema``.
+    """
+
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: str
@@ -60,13 +68,15 @@ class Table(BaseModel):
 
     @property
     def fqn(self) -> str:
+        """Dotted ``catalog.schema.name``, skipping the parts that are unset."""
         return ".".join(p for p in (self.catalog, self.schema_name, self.name) if p)
 
     def column(self, name: str) -> Column | None:
-        lname = name.lower()
-        for c in self.columns:
-            if c.name.lower() == lname:
-                return c
+        """Return the column called ``name`` (case-insensitive), or None."""
+        lower_name = name.lower()
+        for column in self.columns:
+            if column.name.lower() == lower_name:
+                return column
         return None
 
 
@@ -86,6 +96,7 @@ class Edge(BaseModel):
 
     @property
     def key(self) -> tuple[str, str, str, tuple[str, ...], tuple[str, ...]]:
+        """Case-insensitive identity: kind, both tables and both column lists, lowercased."""
         return (
             self.kind,
             self.from_table.lower(),
@@ -111,6 +122,8 @@ class BusinessTerm(BaseModel):
 
 
 class SchemaSnapshot(BaseModel):
+    """Everything one connector introspected from one source: tables, edges and glossary terms."""
+
     model_config = ConfigDict(extra="forbid")
 
     source: str
@@ -120,23 +133,26 @@ class SchemaSnapshot(BaseModel):
     terms: list[BusinessTerm] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utcnow)
     warnings: list[str] = Field(default_factory=list)
-    priority: int | None = None  # merge order: lower merges first and wins conflicting fields; None = by source_type (graph.build.SOURCE_PRIORITY)
+    # merge order: lower merges first and wins conflicting fields;
+    # None = by source_type (graph.build.SOURCE_PRIORITY)
+    priority: int | None = None
 
     def stamp(self) -> SchemaSnapshot:
         """Fill ``source`` on every child object that does not carry one."""
-        for t in self.tables:
-            t.source = t.source or self.source
-        for e in self.edges:
-            e.source = e.source or self.source
-        for b in self.terms:
-            b.source = b.source or self.source
+        for table in self.tables:
+            table.source = table.source or self.source
+        for edge in self.edges:
+            edge.source = edge.source or self.source
+        for term in self.terms:
+            term.source = term.source or self.source
         return self
 
     def table(self, fqn: str) -> Table | None:
-        lf = fqn.lower()
-        for t in self.tables:
-            if t.fqn.lower() == lf:
-                return t
+        """Return the table with this FQN (case-insensitive), or None."""
+        lower_fqn = fqn.lower()
+        for table in self.tables:
+            if table.fqn.lower() == lower_fqn:
+                return table
         return None
 
 
@@ -144,6 +160,8 @@ class SchemaSnapshot(BaseModel):
 
 
 class LinkedColumn(BaseModel):
+    """A column kept in a linked table, with its score and why it was kept."""
+
     name: str
     data_type: str | None = None
     description: str | None = None
@@ -152,6 +170,8 @@ class LinkedColumn(BaseModel):
 
 
 class LinkedTable(BaseModel):
+    """A table in the linked sub-schema, with its score, anchor flag and selected columns."""
+
     fqn: str
     score: float
     is_anchor: bool = False
@@ -161,6 +181,8 @@ class LinkedTable(BaseModel):
 
 
 class JoinStep(BaseModel):
+    """One hop of a join path: two tables, the relation kind and the join condition."""
+
     from_table: str
     to_table: str
     kind: EdgeKind
@@ -169,12 +191,16 @@ class JoinStep(BaseModel):
 
 
 class JoinPath(BaseModel):
+    """A chain of tables connecting anchors, with its steps and a reliability score."""
+
     tables: list[str]
     steps: list[JoinStep]
     reliability: float
 
 
 class LinkResult(BaseModel):
+    """The sub-schema linked to a question: tables, join paths, anchors, glossary hits and DDL."""
+
     question: str
     tables: list[LinkedTable]
     join_paths: list[JoinPath]
@@ -183,4 +209,7 @@ class LinkResult(BaseModel):
     glossary: dict[str, list[str]] = Field(default_factory=dict)
     ddl: str = ""
     stats: dict[str, float | int | str] = Field(default_factory=dict)
-    ranking: list[tuple[str, float]] = Field(default_factory=list, description="Top candidate tables by score (debug only)")
+    ranking: list[tuple[str, float]] = Field(
+        default_factory=list,
+        description="Top candidate tables by score (debug only)",
+    )

@@ -1,0 +1,2201 @@
+{
+ "nodes": [
+  [
+   "t:main.daily_agg_reviews",
+   {
+    "ntype": "table",
+    "fqn": "main.daily_agg_reviews",
+    "name": "daily_agg_reviews"
+   }
+  ],
+  [
+   "c:main.daily_agg_reviews.review_totals",
+   {
+    "ntype": "column",
+    "fqn": "main.daily_agg_reviews",
+    "name": "review_totals",
+    "table": "t:main.daily_agg_reviews"
+   }
+  ],
+  [
+   "c:main.daily_agg_reviews.review_sentiment",
+   {
+    "ntype": "column",
+    "fqn": "main.daily_agg_reviews",
+    "name": "review_sentiment",
+    "table": "t:main.daily_agg_reviews"
+   }
+  ],
+  [
+   "c:main.daily_agg_reviews.review_date",
+   {
+    "ntype": "column",
+    "fqn": "main.daily_agg_reviews",
+    "name": "review_date",
+    "table": "t:main.daily_agg_reviews"
+   }
+  ],
+  [
+   "c:main.daily_agg_reviews.date_sentiment_id",
+   {
+    "ntype": "column",
+    "fqn": "main.daily_agg_reviews",
+    "name": "date_sentiment_id",
+    "table": "t:main.daily_agg_reviews"
+   }
+  ],
+  [
+   "t:main.mom_agg_reviews",
+   {
+    "ntype": "table",
+    "fqn": "main.mom_agg_reviews",
+    "name": "mom_agg_reviews"
+   }
+  ],
+  [
+   "c:main.mom_agg_reviews.review_totals",
+   {
+    "ntype": "column",
+    "fqn": "main.mom_agg_reviews",
+    "name": "review_totals",
+    "table": "t:main.mom_agg_reviews"
+   }
+  ],
+  [
+   "c:main.mom_agg_reviews.review_sentiment",
+   {
+    "ntype": "column",
+    "fqn": "main.mom_agg_reviews",
+    "name": "review_sentiment",
+    "table": "t:main.mom_agg_reviews"
+   }
+  ],
+  [
+   "c:main.mom_agg_reviews.aggregation_date",
+   {
+    "ntype": "column",
+    "fqn": "main.mom_agg_reviews",
+    "name": "aggregation_date",
+    "table": "t:main.mom_agg_reviews"
+   }
+  ],
+  [
+   "c:main.mom_agg_reviews.mom",
+   {
+    "ntype": "column",
+    "fqn": "main.mom_agg_reviews",
+    "name": "mom",
+    "table": "t:main.mom_agg_reviews"
+   }
+  ],
+  [
+   "c:main.mom_agg_reviews.date_sentiment_id",
+   {
+    "ntype": "column",
+    "fqn": "main.mom_agg_reviews",
+    "name": "date_sentiment_id",
+    "table": "t:main.mom_agg_reviews"
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   {
+    "ntype": "table",
+    "fqn": "main.dim_listings_hosts",
+    "name": "dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.created_at",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "created_at",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.updated_at",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "updated_at",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.listing_id",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "listing_id",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.listing_name",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "listing_name",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.room_type",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "room_type",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.minimum_nights",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "minimum_nights",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.price",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "price",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.host_id",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "host_id",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.host_name",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "host_name",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.is_superhost",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "is_superhost",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.listing_host_id",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings_hosts",
+    "name": "listing_host_id",
+    "table": "t:main.dim_listings_hosts"
+   }
+  ],
+  [
+   "t:main.monthly_agg_reviews",
+   {
+    "ntype": "table",
+    "fqn": "main.monthly_agg_reviews",
+    "name": "monthly_agg_reviews"
+   }
+  ],
+  [
+   "c:main.monthly_agg_reviews.date_sentiment_id",
+   {
+    "ntype": "column",
+    "fqn": "main.monthly_agg_reviews",
+    "name": "date_sentiment_id",
+    "table": "t:main.monthly_agg_reviews"
+   }
+  ],
+  [
+   "c:main.monthly_agg_reviews.review_sentiment",
+   {
+    "ntype": "column",
+    "fqn": "main.monthly_agg_reviews",
+    "name": "review_sentiment",
+    "table": "t:main.monthly_agg_reviews"
+   }
+  ],
+  [
+   "t:main.wow_agg_reviews",
+   {
+    "ntype": "table",
+    "fqn": "main.wow_agg_reviews",
+    "name": "wow_agg_reviews"
+   }
+  ],
+  [
+   "c:main.wow_agg_reviews.date_sentiment_id",
+   {
+    "ntype": "column",
+    "fqn": "main.wow_agg_reviews",
+    "name": "date_sentiment_id",
+    "table": "t:main.wow_agg_reviews"
+   }
+  ],
+  [
+   "c:main.wow_agg_reviews.review_sentiment",
+   {
+    "ntype": "column",
+    "fqn": "main.wow_agg_reviews",
+    "name": "review_sentiment",
+    "table": "t:main.wow_agg_reviews"
+   }
+  ],
+  [
+   "t:main.dim_hosts",
+   {
+    "ntype": "table",
+    "fqn": "main.dim_hosts",
+    "name": "dim_hosts"
+   }
+  ],
+  [
+   "c:main.dim_hosts.host_id",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_hosts",
+    "name": "host_id",
+    "table": "t:main.dim_hosts"
+   }
+  ],
+  [
+   "t:main.dim_listings",
+   {
+    "ntype": "table",
+    "fqn": "main.dim_listings",
+    "name": "dim_listings"
+   }
+  ],
+  [
+   "c:main.dim_listings.listing_id",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings",
+    "name": "listing_id",
+    "table": "t:main.dim_listings"
+   }
+  ],
+  [
+   "c:main.dim_listings.minimum_nights",
+   {
+    "ntype": "column",
+    "fqn": "main.dim_listings",
+    "name": "minimum_nights",
+    "table": "t:main.dim_listings"
+   }
+  ],
+  [
+   "t:main.fct_reviews",
+   {
+    "ntype": "table",
+    "fqn": "main.fct_reviews",
+    "name": "fct_reviews"
+   }
+  ],
+  [
+   "c:main.fct_reviews.review_sentiment",
+   {
+    "ntype": "column",
+    "fqn": "main.fct_reviews",
+    "name": "review_sentiment",
+    "table": "t:main.fct_reviews"
+   }
+  ],
+  [
+   "c:main.fct_reviews.listing_id",
+   {
+    "ntype": "column",
+    "fqn": "main.fct_reviews",
+    "name": "listing_id",
+    "table": "t:main.fct_reviews"
+   }
+  ],
+  [
+   "t:main.raw_hosts",
+   {
+    "ntype": "table",
+    "fqn": "main.raw_hosts",
+    "name": "raw_hosts"
+   }
+  ],
+  [
+   "t:main.raw_listings",
+   {
+    "ntype": "table",
+    "fqn": "main.raw_listings",
+    "name": "raw_listings"
+   }
+  ],
+  [
+   "t:main.raw_reviews",
+   {
+    "ntype": "table",
+    "fqn": "main.raw_reviews",
+    "name": "raw_reviews"
+   }
+  ],
+  [
+   "t:main.dim_dates",
+   {
+    "ntype": "table",
+    "fqn": "main.dim_dates",
+    "name": "dim_dates"
+   }
+  ],
+  [
+   "t:main.src_hosts",
+   {
+    "ntype": "table",
+    "fqn": "main.src_hosts",
+    "name": "src_hosts"
+   }
+  ],
+  [
+   "c:main.src_hosts.host_id",
+   {
+    "ntype": "column",
+    "fqn": "main.src_hosts",
+    "name": "host_id",
+    "table": "t:main.src_hosts"
+   }
+  ],
+  [
+   "c:main.src_hosts.host_name",
+   {
+    "ntype": "column",
+    "fqn": "main.src_hosts",
+    "name": "host_name",
+    "table": "t:main.src_hosts"
+   }
+  ],
+  [
+   "c:main.src_hosts.is_superhost",
+   {
+    "ntype": "column",
+    "fqn": "main.src_hosts",
+    "name": "is_superhost",
+    "table": "t:main.src_hosts"
+   }
+  ],
+  [
+   "c:main.src_hosts.created_at",
+   {
+    "ntype": "column",
+    "fqn": "main.src_hosts",
+    "name": "created_at",
+    "table": "t:main.src_hosts"
+   }
+  ],
+  [
+   "c:main.src_hosts.updated_at",
+   {
+    "ntype": "column",
+    "fqn": "main.src_hosts",
+    "name": "updated_at",
+    "table": "t:main.src_hosts"
+   }
+  ],
+  [
+   "t:main.src_listings",
+   {
+    "ntype": "table",
+    "fqn": "main.src_listings",
+    "name": "src_listings"
+   }
+  ],
+  [
+   "c:main.src_listings.listing_id",
+   {
+    "ntype": "column",
+    "fqn": "main.src_listings",
+    "name": "listing_id",
+    "table": "t:main.src_listings"
+   }
+  ],
+  [
+   "c:main.src_listings.listing_name",
+   {
+    "ntype": "column",
+    "fqn": "main.src_listings",
+    "name": "listing_name",
+    "table": "t:main.src_listings"
+   }
+  ],
+  [
+   "c:main.src_listings.listing_url",
+   {
+    "ntype": "column",
+    "fqn": "main.src_listings",
+    "name": "listing_url",
+    "table": "t:main.src_listings"
+   }
+  ],
+  [
+   "c:main.src_listings.room_type",
+   {
+    "ntype": "column",
+    "fqn": "main.src_listings",
+    "name": "room_type",
+    "table": "t:main.src_listings"
+   }
+  ],
+  [
+   "c:main.src_listings.minimum_nights",
+   {
+    "ntype": "column",
+    "fqn": "main.src_listings",
+    "name": "minimum_nights",
+    "table": "t:main.src_listings"
+   }
+  ],
+  [
+   "c:main.src_listings.host_id",
+   {
+    "ntype": "column",
+    "fqn": "main.src_listings",
+    "name": "host_id",
+    "table": "t:main.src_listings"
+   }
+  ],
+  [
+   "c:main.src_listings.price_str",
+   {
+    "ntype": "column",
+    "fqn": "main.src_listings",
+    "name": "price_str",
+    "table": "t:main.src_listings"
+   }
+  ],
+  [
+   "c:main.src_listings.created_at",
+   {
+    "ntype": "column",
+    "fqn": "main.src_listings",
+    "name": "created_at",
+    "table": "t:main.src_listings"
+   }
+  ],
+  [
+   "c:main.src_listings.updated_at",
+   {
+    "ntype": "column",
+    "fqn": "main.src_listings",
+    "name": "updated_at",
+    "table": "t:main.src_listings"
+   }
+  ],
+  [
+   "t:main.src_reviews",
+   {
+    "ntype": "table",
+    "fqn": "main.src_reviews",
+    "name": "src_reviews"
+   }
+  ],
+  [
+   "c:main.src_reviews.listing_id",
+   {
+    "ntype": "column",
+    "fqn": "main.src_reviews",
+    "name": "listing_id",
+    "table": "t:main.src_reviews"
+   }
+  ],
+  [
+   "c:main.src_reviews.review_date",
+   {
+    "ntype": "column",
+    "fqn": "main.src_reviews",
+    "name": "review_date",
+    "table": "t:main.src_reviews"
+   }
+  ],
+  [
+   "c:main.src_reviews.reviewer_name",
+   {
+    "ntype": "column",
+    "fqn": "main.src_reviews",
+    "name": "reviewer_name",
+    "table": "t:main.src_reviews"
+   }
+  ],
+  [
+   "c:main.src_reviews.review_text",
+   {
+    "ntype": "column",
+    "fqn": "main.src_reviews",
+    "name": "review_text",
+    "table": "t:main.src_reviews"
+   }
+  ],
+  [
+   "c:main.src_reviews.review_sentiment",
+   {
+    "ntype": "column",
+    "fqn": "main.src_reviews",
+    "name": "review_sentiment",
+    "table": "t:main.src_reviews"
+   }
+  ]
+ ],
+ "edges": [
+  [
+   "t:main.daily_agg_reviews",
+   "c:main.daily_agg_reviews.review_totals",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.daily_agg_reviews",
+   "c:main.daily_agg_reviews.review_sentiment",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.daily_agg_reviews",
+   "c:main.daily_agg_reviews.review_date",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.daily_agg_reviews",
+   "c:main.daily_agg_reviews.date_sentiment_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.mom_agg_reviews",
+   "c:main.mom_agg_reviews.review_totals",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.mom_agg_reviews",
+   "c:main.mom_agg_reviews.review_sentiment",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.mom_agg_reviews",
+   "c:main.mom_agg_reviews.aggregation_date",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.mom_agg_reviews",
+   "c:main.mom_agg_reviews.mom",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.mom_agg_reviews",
+   "c:main.mom_agg_reviews.date_sentiment_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.created_at",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.updated_at",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.listing_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.listing_name",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.room_type",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.minimum_nights",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.price",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.host_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.host_name",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.is_superhost",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "c:main.dim_listings_hosts.listing_host_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "t:main.dim_hosts",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "relationship_test",
+      "from_table": "main.dim_listings_hosts",
+      "to_table": "main.dim_hosts",
+      "from_columns": [
+       "HOST_ID"
+      ],
+      "to_columns": [
+       "HOST_ID"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "t:main.dim_listings",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "relationship_test",
+      "from_table": "main.dim_listings_hosts",
+      "to_table": "main.dim_listings",
+      "from_columns": [
+       "LISTING_ID"
+      ],
+      "to_columns": [
+       "LISTING_ID"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "t:main.fct_reviews",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "relationship_test",
+      "from_table": "main.fct_reviews",
+      "to_table": "main.dim_listings_hosts",
+      "from_columns": [
+       "LISTING_ID"
+      ],
+      "to_columns": [
+       "LISTING_ID"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.listing_id",
+   "c:main.dim_listings.listing_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.listing_id",
+   "c:main.fct_reviews.listing_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "c:main.dim_listings_hosts.host_id",
+   "c:main.dim_hosts.host_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:main.monthly_agg_reviews",
+   "c:main.monthly_agg_reviews.date_sentiment_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.monthly_agg_reviews",
+   "c:main.monthly_agg_reviews.review_sentiment",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.monthly_agg_reviews",
+   "t:main.fct_reviews",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "main.fct_reviews",
+      "to_table": "main.monthly_agg_reviews",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.6,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.wow_agg_reviews",
+   "c:main.wow_agg_reviews.date_sentiment_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.wow_agg_reviews",
+   "c:main.wow_agg_reviews.review_sentiment",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.wow_agg_reviews",
+   "t:main.fct_reviews",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "main.fct_reviews",
+      "to_table": "main.wow_agg_reviews",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.6,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.dim_hosts",
+   "c:main.dim_hosts.host_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_hosts",
+   "t:main.src_hosts",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "main.src_hosts",
+      "to_table": "main.dim_hosts",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.6,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.dim_listings",
+   "c:main.dim_listings.listing_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings",
+   "c:main.dim_listings.minimum_nights",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.dim_listings",
+   "t:main.src_listings",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "main.src_listings",
+      "to_table": "main.dim_listings",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.6,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.dim_listings",
+   "t:main.fct_reviews",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "relationship_test",
+      "from_table": "main.fct_reviews",
+      "to_table": "main.dim_listings",
+      "from_columns": [
+       "LISTING_ID"
+      ],
+      "to_columns": [
+       "LISTING_ID"
+      ],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.0,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "c:main.dim_listings.listing_id",
+   "c:main.fct_reviews.listing_id",
+   {
+    "etype": "fk_col",
+    "weight": 0.8,
+    "affinity": 0.8
+   }
+  ],
+  [
+   "t:main.fct_reviews",
+   "c:main.fct_reviews.review_sentiment",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.fct_reviews",
+   "c:main.fct_reviews.listing_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.fct_reviews",
+   "t:main.src_reviews",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "main.src_reviews",
+      "to_table": "main.fct_reviews",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.6,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.raw_hosts",
+   "t:main.src_hosts",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "main.raw_hosts",
+      "to_table": "main.src_hosts",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.6,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.raw_listings",
+   "t:main.src_listings",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "main.raw_listings",
+      "to_table": "main.src_listings",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.6,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.raw_reviews",
+   "t:main.src_reviews",
+   {
+    "etype": "relation",
+    "relations": [
+     {
+      "kind": "lineage",
+      "from_table": "main.raw_reviews",
+      "to_table": "main.src_reviews",
+      "from_columns": [],
+      "to_columns": [],
+      "description": null,
+      "confidence": 1.0,
+      "source": "airbnb"
+     }
+    ],
+    "weight": 1.6,
+    "affinity": 1.0
+   }
+  ],
+  [
+   "t:main.src_hosts",
+   "c:main.src_hosts.host_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_hosts",
+   "c:main.src_hosts.host_name",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_hosts",
+   "c:main.src_hosts.is_superhost",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_hosts",
+   "c:main.src_hosts.created_at",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_hosts",
+   "c:main.src_hosts.updated_at",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_listings",
+   "c:main.src_listings.listing_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_listings",
+   "c:main.src_listings.listing_name",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_listings",
+   "c:main.src_listings.listing_url",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_listings",
+   "c:main.src_listings.room_type",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_listings",
+   "c:main.src_listings.minimum_nights",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_listings",
+   "c:main.src_listings.host_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_listings",
+   "c:main.src_listings.price_str",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_listings",
+   "c:main.src_listings.created_at",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_listings",
+   "c:main.src_listings.updated_at",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_reviews",
+   "c:main.src_reviews.listing_id",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_reviews",
+   "c:main.src_reviews.review_date",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_reviews",
+   "c:main.src_reviews.reviewer_name",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_reviews",
+   "c:main.src_reviews.review_text",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ],
+  [
+   "t:main.src_reviews",
+   "c:main.src_reviews.review_sentiment",
+   {
+    "etype": "contains",
+    "weight": 0.5,
+    "affinity": 0.5
+   }
+  ]
+ ],
+ "tables": {
+  "main.daily_agg_reviews": {
+   "name": "daily_agg_reviews",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": "This model aggregates the total number of reviews and their sentiment for each day. It is an incremental model that processes new data daily. \nA surrogate key is generated based on the review sentiment and review date to ensure uniqueness. The model only processes reviews from the current date when running incrementally.\n",
+   "columns": [
+    {
+     "name": "REVIEW_TOTALS",
+     "data_type": null,
+     "description": "The total count of reviews for a specific sentiment on a given date.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "REVIEW_SENTIMENT",
+     "data_type": null,
+     "description": "The sentiment of the review (e.g., positive, neutral, or negative).",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "positive",
+      "negative",
+      "neutral"
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "REVIEW_DATE",
+     "data_type": null,
+     "description": "The date on which the review was submitted.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "DATE_SENTIMENT_ID",
+     "data_type": null,
+     "description": "A surrogate key generated from the review sentiment and the review date, ensuring uniqueness for each date-sentiment combination.",
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "DATE_SENTIMENT_ID"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "daily_agg_reviews"
+   },
+   "source": "airbnb"
+  },
+  "main.mom_agg_reviews": {
+   "name": "mom_agg_reviews",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": "This model calculates the total number of reviews and their sentiment over a rolling 30-day window, providing month-over-month (MoM) comparison metrics. \nThe model aggregates review data over the past 30 days and calculates the percentage change in review totals compared to the previous month. \nIt uses a surrogate key generated from the aggregation date and review sentiment to ensure uniqueness.\n",
+   "columns": [
+    {
+     "name": "REVIEW_TOTALS",
+     "data_type": null,
+     "description": "The total count of reviews for a specific sentiment during the 30-day aggregation window.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "REVIEW_SENTIMENT",
+     "data_type": null,
+     "description": "The sentiment of the review (e.g., positive, neutral, or negative).",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "positive",
+      "negative",
+      "neutral"
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "AGGREGATION_DATE",
+     "data_type": null,
+     "description": "The aggregation date representing the date on which the 30-day rolling aggregation was calculated.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "MOM",
+     "data_type": null,
+     "description": "The month-over-month (MoM) percentage change in review totals compared to the previous 30 days.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "DATE_SENTIMENT_ID",
+     "data_type": null,
+     "description": "A surrogate key generated from the aggregation date and review sentiment, ensuring uniqueness for each date-sentiment combination.",
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "DATE_SENTIMENT_ID"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "mom_agg_reviews"
+   },
+   "source": "airbnb"
+  },
+  "main.dim_listings_hosts": {
+   "name": "dim_listings_hosts",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": "This model combines listing information with host details by joining the `dim_listings` and `dim_hosts` tables.\nIt merges the data based on `HOST_ID`, ensuring the most recent `UPDATED_AT` timestamp between the two tables is captured.\nA surrogate key is generated for each unique combination of `LISTING_ID` and `HOST_ID`.\n",
+   "columns": [
+    {
+     "name": "CREATED_AT",
+     "data_type": null,
+     "description": "The date and time when the listing was created.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "UPDATED_AT",
+     "data_type": null,
+     "description": "The most recent update time between the listing and the host. \nIt takes the greater value of `listings_cte.UPDATED_AT` and `hosts_cte.UPDATED_AT`.\n",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "LISTING_ID",
+     "data_type": null,
+     "description": "The unique identifier for the listing.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "LISTING_NAME",
+     "data_type": null,
+     "description": "The name of the listing, typically used to describe the property.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "ROOM_TYPE",
+     "data_type": null,
+     "description": "The type of room being offered (e.g., entire home, private room, etc.).",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "minimum_nights",
+     "data_type": null,
+     "description": "The minimum number of nights required to book the listing.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "PRICE",
+     "data_type": null,
+     "description": "The price per night for the listing.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "HOST_ID",
+     "data_type": null,
+     "description": "The unique identifier for the host of the listing.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "HOST_NAME",
+     "data_type": null,
+     "description": "The name of the host managing the listing.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "IS_SUPERHOST",
+     "data_type": null,
+     "description": "Indicates whether the host is a 'Superhost', a status awarded for high ratings and performance.",
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "LISTING_HOST_ID",
+     "data_type": null,
+     "description": "A surrogate key generated for each unique combination of `LISTING_ID` and `HOST_ID`.\nThis key is used to uniquely identify the relationship between a listing and its host.\n",
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "LISTING_HOST_ID"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "dim_listings_hosts"
+   },
+   "source": "airbnb"
+  },
+  "main.monthly_agg_reviews": {
+   "name": "monthly_agg_reviews",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [
+    {
+     "name": "DATE_SENTIMENT_ID",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "REVIEW_SENTIMENT",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "positive",
+      "negative",
+      "neutral"
+     ],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "DATE_SENTIMENT_ID"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "monthly_agg_reviews",
+    "sql_path": "models/agg/monthly_agg_reviews.sql"
+   },
+   "source": "airbnb"
+  },
+  "main.wow_agg_reviews": {
+   "name": "wow_agg_reviews",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [
+    {
+     "name": "DATE_SENTIMENT_ID",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "REVIEW_SENTIMENT",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "positive",
+      "negative",
+      "neutral"
+     ],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "DATE_SENTIMENT_ID"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "wow_agg_reviews",
+    "sql_path": "models/agg/wow_agg_reviews.sql"
+   },
+   "source": "airbnb"
+  },
+  "main.dim_hosts": {
+   "name": "dim_hosts",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [
+    {
+     "name": "HOST_ID",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "HOST_ID"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "dim_hosts",
+    "sql_path": "models/dim/dim_hosts.sql"
+   },
+   "source": "airbnb"
+  },
+  "main.dim_listings": {
+   "name": "dim_listings",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [
+    {
+     "name": "LISTING_ID",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": true,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "MINIMUM_NIGHTS",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [
+    "LISTING_ID"
+   ],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "dim_listings",
+    "sql_path": "models/dim/dim_listings.sql"
+   },
+   "source": "airbnb"
+  },
+  "main.fct_reviews": {
+   "name": "fct_reviews",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [
+    {
+     "name": "REVIEW_SENTIMENT",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [
+      "positive",
+      "negative",
+      "neutral"
+     ],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "LISTING_ID",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "fct_reviews",
+    "sql_path": "models/fact/fct_reviews.sql"
+   },
+   "source": "airbnb"
+  },
+  "main.raw_hosts": {
+   "name": "raw_hosts",
+   "schema": "main",
+   "catalog": null,
+   "kind": "source",
+   "description": null,
+   "columns": [],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "hosts",
+    "source_name": "airbnb"
+   },
+   "source": "airbnb"
+  },
+  "main.raw_listings": {
+   "name": "raw_listings",
+   "schema": "main",
+   "catalog": null,
+   "kind": "source",
+   "description": null,
+   "columns": [],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "listings",
+    "source_name": "airbnb"
+   },
+   "source": "airbnb"
+  },
+  "main.raw_reviews": {
+   "name": "raw_reviews",
+   "schema": "main",
+   "catalog": null,
+   "kind": "source",
+   "description": null,
+   "columns": [],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "reviews",
+    "source_name": "airbnb"
+   },
+   "source": "airbnb"
+  },
+  "main.dim_dates": {
+   "name": "dim_dates",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "dim_dates",
+    "sql_path": "models/dim/dim_dates.sql"
+   },
+   "source": "airbnb"
+  },
+  "main.src_hosts": {
+   "name": "src_hosts",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [
+    {
+     "name": "HOST_ID",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "HOST_NAME",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "IS_SUPERHOST",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "CREATED_AT",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "UPDATED_AT",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "src_hosts",
+    "sql_path": "models/source/src_hosts.sql"
+   },
+   "source": "airbnb"
+  },
+  "main.src_listings": {
+   "name": "src_listings",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [
+    {
+     "name": "LISTING_ID",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "LISTING_NAME",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "LISTING_URL",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "ROOM_TYPE",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "MINIMUM_NIGHTS",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "HOST_ID",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "PRICE_STR",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "CREATED_AT",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "UPDATED_AT",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "src_listings",
+    "sql_path": "models/source/src_listings.sql"
+   },
+   "source": "airbnb"
+  },
+  "main.src_reviews": {
+   "name": "src_reviews",
+   "schema": "main",
+   "catalog": null,
+   "kind": "model",
+   "description": null,
+   "columns": [
+    {
+     "name": "LISTING_ID",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "REVIEW_DATE",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "REVIEWER_NAME",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "REVIEW_TEXT",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    },
+    {
+     "name": "REVIEW_SENTIMENT",
+     "data_type": null,
+     "description": null,
+     "nullable": null,
+     "is_primary_key": false,
+     "sample_values": [],
+     "tags": [],
+     "properties": {}
+    }
+   ],
+   "primary_key": [],
+   "row_count": null,
+   "owner": null,
+   "tags": [],
+   "properties": {
+    "dbt_name": "src_reviews",
+    "sql_path": "models/source/src_reviews.sql"
+   },
+   "source": "airbnb"
+  }
+ },
+ "terms": {},
+ "sources": {
+  "airbnb": "dbt"
+ },
+ "stats": {
+  "tables": 15,
+  "columns": 48,
+  "terms": 0,
+  "tokens": 0,
+  "relations": 12,
+  "relation_pairs": 12,
+  "sources": 1
+ },
+ "table_graph_edges": [
+  [
+   "t:main.dim_listings_hosts",
+   "t:main.dim_hosts",
+   1.0
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "t:main.dim_listings",
+   1.0
+  ],
+  [
+   "t:main.dim_listings_hosts",
+   "t:main.fct_reviews",
+   1.0
+  ],
+  [
+   "t:main.dim_listings",
+   "t:main.fct_reviews",
+   1.0
+  ]
+ ],
+ "lineage": {
+  "main.daily_agg_reviews": [
+   [],
+   []
+  ],
+  "main.mom_agg_reviews": [
+   [],
+   []
+  ],
+  "main.dim_listings_hosts": [
+   [],
+   []
+  ],
+  "main.monthly_agg_reviews": [
+   [
+    "main.fct_reviews"
+   ],
+   []
+  ],
+  "main.wow_agg_reviews": [
+   [
+    "main.fct_reviews"
+   ],
+   []
+  ],
+  "main.dim_hosts": [
+   [
+    "main.src_hosts"
+   ],
+   []
+  ],
+  "main.dim_listings": [
+   [
+    "main.src_listings"
+   ],
+   []
+  ],
+  "main.fct_reviews": [
+   [
+    "main.src_reviews"
+   ],
+   [
+    "main.monthly_agg_reviews",
+    "main.wow_agg_reviews"
+   ]
+  ],
+  "main.raw_hosts": [
+   [],
+   [
+    "main.src_hosts"
+   ]
+  ],
+  "main.raw_listings": [
+   [],
+   [
+    "main.src_listings"
+   ]
+  ],
+  "main.raw_reviews": [
+   [],
+   [
+    "main.src_reviews"
+   ]
+  ],
+  "main.dim_dates": [
+   [],
+   []
+  ],
+  "main.src_hosts": [
+   [
+    "main.raw_hosts"
+   ],
+   [
+    "main.dim_hosts"
+   ]
+  ],
+  "main.src_listings": [
+   [
+    "main.raw_listings"
+   ],
+   [
+    "main.dim_listings"
+   ]
+  ],
+  "main.src_reviews": [
+   [
+    "main.raw_reviews"
+   ],
+   [
+    "main.fct_reviews"
+   ]
+  ]
+ }
+}

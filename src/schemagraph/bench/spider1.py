@@ -10,57 +10,134 @@ still returned) next to strict recall.
 
 from __future__ import annotations
 
-import csv
 import json
 import re
 import statistics
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import sqlglot
 from sqlglot import exp
 
+from schemagraph.bench._output import blank_if_none, write_outputs
 from schemagraph.graph.build import build_graph
 from schemagraph.graph.infer import with_inferred_edges
 from schemagraph.linking.linker import Linker, LinkOptions
-from schemagraph.model import Column, Edge, SchemaSnapshot, Table
+from schemagraph.model import Column, Edge, LinkResult, SchemaSnapshot, Table
+
+# Fallback gold-table extraction when sqlglot cannot parse the gold query.
+_FROM_RE = re.compile(r"(?:FROM|JOIN)\s+([A-Za-z_][\w]*)", re.I)
+
+# Columns of the CSV written next to the JSON results, in order.
+_CSV_HEADER = (
+    "instance_id db n_gold n_pred n_tables_db hit recall precision strict anchor_hit n_bridge "
+    "bridge_recovered max_gold_rank ms missed"
+).split()
+
+# Summary keys of the markdown table printed by format_table.
+_TABLE_COLUMNS = (
+    "n recall precision strict_recall anchor_hit bridge_tasks bridge_recall "
+    "strict_on_bridge_tasks avg_pred_tables avg_db_tables p50_ms"
+).split()
+
+
+# ---------------------------------------------------------------- snapshots
+def _spider_tables(db: dict) -> list[Table]:
+    """Column-less tables of a ``tables.json`` entry.
+
+    A readable name that is not just the original with spaces for underscores becomes
+    ``business_name``.
+    """
+    names = db["table_names_original"]
+    readable = db.get("table_names") or names
+    tables: list[Table] = []
+    for i, name in enumerate(names):
+        properties = (
+            {"business_name": readable[i]}
+            if i < len(readable) and readable[i].lower() != name.lower().replace("_", " ")
+            else {}
+        )
+        tables.append(Table(name=name, properties=properties))
+    return tables
+
+
+def _attach_spider_columns(db: dict, tables: list[Table]) -> None:
+    """Append every column of a ``tables.json`` entry to its table (skipping the ``*`` column).
+
+    Mutates ``tables`` in place.
+    """
+    columns = db["column_names_original"]
+    readable_columns = db.get("column_names") or columns
+    column_types = db.get("column_types") or []
+    for column_index, (table_index, column_name) in enumerate(columns):
+        if table_index < 0:
+            continue
+        readable = (
+            readable_columns[column_index][1] if column_index < len(readable_columns) else None
+        )
+        properties = (
+            {"business_name": readable}
+            if readable and readable.lower() != column_name.lower().replace("_", " ")
+            else {}
+        )
+        data_type = column_types[column_index] if column_index < len(column_types) else None
+        tables[table_index].columns.append(
+            Column(name=column_name, data_type=data_type, properties=properties)
+        )
+
+
+def _apply_spider_primary_keys(db: dict, tables: list[Table]) -> None:
+    """Mark the primary-key columns (single or composite) of a ``tables.json`` entry.
+
+    Mutates ``tables`` in place.
+    """
+    columns = db["column_names_original"]
+    for pk in db.get("primary_keys") or []:
+        for column_index in pk if isinstance(pk, list) else [pk]:
+            table_index, column_name = columns[column_index]
+            column = tables[table_index].column(column_name)
+            if column is not None:
+                column.is_primary_key = True
+                if column_name not in tables[table_index].primary_key:
+                    tables[table_index].primary_key.append(column_name)
+
+
+def _spider_fk_edges(db: dict) -> list[Edge]:
+    """One ``foreign_key`` edge per column pair in ``foreign_keys``."""
+    names = db["table_names_original"]
+    columns = db["column_names_original"]
+    edges: list[Edge] = []
+    for from_index, to_index in db.get("foreign_keys") or []:
+        from_table, from_column = columns[from_index]
+        to_table, to_column = columns[to_index]
+        edges.append(
+            Edge(
+                kind="foreign_key",
+                from_table=names[from_table],
+                to_table=names[to_table],
+                from_columns=[from_column],
+                to_columns=[to_column],
+            )
+        )
+    return edges
 
 
 def snapshot_from_spider(db: dict, source: str | None = None) -> SchemaSnapshot:
-    """One Spider ``tables.json`` entry -> SchemaSnapshot (FKs as ``foreign_key`` edges, readable names as ``business_name``)."""
-    names = db["table_names_original"]
-    readable = db.get("table_names") or names
-    cols = db["column_names_original"]
-    creadable = db.get("column_names") or cols
-    ctypes = db.get("column_types") or []
-    tables: list[Table] = []
-    for i, n in enumerate(names):
-        props = {"business_name": readable[i]} if i < len(readable) and readable[i].lower() != n.lower().replace("_", " ") else {}
-        tables.append(Table(name=n, properties=props))
-    for ci, (ti, cname) in enumerate(cols):
-        if ti < 0:
-            continue
-        rd = creadable[ci][1] if ci < len(creadable) else None
-        props = {"business_name": rd} if rd and rd.lower() != cname.lower().replace("_", " ") else {}
-        tables[ti].columns.append(Column(name=cname, data_type=ctypes[ci] if ci < len(ctypes) else None, properties=props))
-    for pk in db.get("primary_keys") or []:
-        for ci in pk if isinstance(pk, list) else [pk]:
-            ti, cname = cols[ci]
-            c = tables[ti].column(cname)
-            if c is not None:
-                c.is_primary_key = True
-                if cname not in tables[ti].primary_key:
-                    tables[ti].primary_key.append(cname)
-    edges: list[Edge] = []
-    for a, b in db.get("foreign_keys") or []:
-        ta, ca = cols[a]
-        tb, cb = cols[b]
-        edges.append(Edge(kind="foreign_key", from_table=names[ta], to_table=names[tb], from_columns=[ca], to_columns=[cb]))
-    return SchemaSnapshot(source=source or f"spider:{db['db_id']}", source_type="spider", tables=tables, edges=edges)
+    """One Spider ``tables.json`` entry -> SchemaSnapshot.
 
-
-_FROM_RE = re.compile(r"(?:FROM|JOIN)\s+([A-Za-z_][\w]*)", re.I)
+    FKs become ``foreign_key`` edges and readable names ``business_name`` properties.
+    """
+    tables = _spider_tables(db)
+    _attach_spider_columns(db, tables)
+    _apply_spider_primary_keys(db, tables)
+    edges = _spider_fk_edges(db)
+    return SchemaSnapshot(
+        source=source or f"spider:{db['db_id']}",
+        source_type="spider",
+        tables=tables,
+        edges=edges,
+    )
 
 
 def gold_tables(sql: str, dialect: str = "sqlite") -> set[str]:
@@ -68,13 +145,37 @@ def gold_tables(sql: str, dialect: str = "sqlite") -> set[str]:
     try:
         tree = sqlglot.parse_one(sql, read=dialect)
     except Exception:
-        return {m.lower() for m in _FROM_RE.findall(sql)}
-    ctes = {c.alias_or_name.lower() for c in tree.find_all(exp.CTE)}
-    return {t.name.lower() for t in tree.find_all(exp.Table) if t.name and t.name.lower() not in ctes}
+        return {match.lower() for match in _FROM_RE.findall(sql)}
+    ctes = {cte.alias_or_name.lower() for cte in tree.find_all(exp.CTE)}
+    return {
+        table.name.lower()
+        for table in tree.find_all(exp.Table)
+        if table.name and table.name.lower() not in ctes
+    }
 
 
 @dataclass
 class Row:
+    """Scores of one question: one JSON row and one CSV line of the output.
+
+    Attributes:
+        instance_id: The question's ``instance_id``, else its position in the questions file.
+        db: Database id.
+        n_gold: Gold tables (those of the gold SQL that exist in the database).
+        n_pred: Returned tables.
+        n_tables_db: Tables in the database.
+        hit: Gold tables returned.
+        recall: ``hit / n_gold``.
+        precision: ``hit / n_pred`` (0.0 when nothing was returned).
+        strict: 1 if every gold table was returned.
+        anchor_hit: 1 if every gold table was an anchor.
+        n_bridge: Gold tables that were not anchors.
+        bridge_recovered: ... of which the returned set still contains.
+        ms: Link latency in milliseconds, rounded to 0.1.
+        missed: Gold tables not returned, sorted.
+        max_gold_rank: Worst rank of any gold table in the candidate ranking (None = unranked).
+    """
+
     instance_id: str
     db: str
     n_gold: int
@@ -85,13 +186,90 @@ class Row:
     precision: float
     strict: int
     anchor_hit: int
-    n_bridge: int  # gold tables that were not anchors
-    bridge_recovered: int  # ... of which the returned set still contains
+    n_bridge: int
+    bridge_recovered: int
     ms: float
     missed: list[str] = field(default_factory=list)
     max_gold_rank: int | None = None
 
 
+# ---------------------------------------------------------------- scoring
+def _gold_rank_of(gold: set[str], result: LinkResult) -> int | None:
+    """Worst 1-based rank of any gold table in the candidate ranking, None if one is unranked.
+
+    A name ranked more than once keeps its last rank.
+    """
+    rank_of = {fqn.lower(): rank + 1 for rank, (fqn, _) in enumerate(result.ranking)}
+    ranks = [rank_of.get(table) for table in gold]
+    return None if any(rank is None for rank in ranks) else max(ranks)
+
+
+def _score_question(
+    instance_id: str,
+    db_id: str,
+    gold: set[str],
+    result: LinkResult,
+    ms: float,
+    n_tables_db: int,
+) -> Row:
+    """Score one linked question against its gold tables.
+
+    Args:
+        instance_id: Row id of the question.
+        db_id: Database id.
+        gold: Lowercased gold tables, all present in the database.
+        result: What the linker returned (with ``ranking``, i.e. ``debug=True``).
+        ms: Link latency in milliseconds.
+        n_tables_db: Tables in the database.
+
+    Returns:
+        The row of the question.
+    """
+    pred = {table.fqn.lower() for table in result.tables}
+    anchors = {anchor.lower() for anchor in result.anchors}
+    bridge = gold - anchors
+    return Row(
+        instance_id=instance_id,
+        db=db_id,
+        n_gold=len(gold),
+        n_pred=len(pred),
+        n_tables_db=n_tables_db,
+        hit=len(gold & pred),
+        recall=len(gold & pred) / len(gold),
+        precision=len(gold & pred) / len(pred) if pred else 0.0,
+        strict=int(gold <= pred),
+        anchor_hit=int(gold <= anchors),
+        n_bridge=len(bridge),
+        bridge_recovered=len(bridge & pred),
+        ms=round(ms, 1),
+        missed=sorted(gold - pred),
+        max_gold_rank=_gold_rank_of(gold, result),
+    )
+
+
+# ---------------------------------------------------------------- output
+def _csv_row(row: Row) -> list:
+    """One CSV line of a row, in ``_CSV_HEADER`` order."""
+    return [
+        row.instance_id,
+        row.db,
+        row.n_gold,
+        row.n_pred,
+        row.n_tables_db,
+        row.hit,
+        f"{row.recall:.3f}",
+        f"{row.precision:.3f}",
+        row.strict,
+        row.anchor_hit,
+        row.n_bridge,
+        row.bridge_recovered,
+        blank_if_none(row.max_gold_rank),
+        row.ms,
+        ";".join(row.missed),
+    ]
+
+
+# ---------------------------------------------------------------- run
 def run(
     tables_json: str | Path,
     questions_json: str | Path,
@@ -105,16 +283,43 @@ def run(
     tag: str | None = None,
     **link_kwargs,
 ) -> dict:
-    dbs = {d["db_id"]: d for d in json.loads(Path(tables_json).read_text(encoding="utf-8"))}
+    """Link every question of a Spider-format dataset and score the result.
+
+    Questions whose database is unknown or whose gold SQL names no table of it are skipped.
+
+    Args:
+        tables_json: Spider ``tables.json`` (declared FKs and PKs).
+        questions_json: Questions as ``[{db_id, question, query}]`` (``sql`` accepted for query).
+        max_tables: ``LinkOptions.max_tables``.
+        anchor_k: ``LinkOptions.anchor_k``.
+        infer: Add name-based inferred edges on top of the declared FKs.
+        limit: Keep only the first this many questions of the file; the cut happens before
+            skipping, so skipped questions count toward it.
+        dialect: sqlglot dialect of the gold SQL.
+        out_dir: Folder for ``spider1_<tag>.json`` / ``.csv``; None writes nothing.
+        tag: Output file tag; ``mt<max_tables>_k<anchor_k>`` when None.
+        **link_kwargs: Any other ``LinkOptions`` fields (``bypass_if_fits`` defaults to False).
+
+    Returns:
+        ``{"summary": ..., "rows": [Row, ...]}``; the summary is :func:`summarize` plus the run
+        ``config``.
+    """
+    dbs = {db["db_id"]: db for db in json.loads(Path(tables_json).read_text(encoding="utf-8"))}
     questions = json.loads(Path(questions_json).read_text(encoding="utf-8"))
     if limit:
         questions = questions[:limit]
-    opts = LinkOptions(max_tables=max_tables, anchor_k=anchor_k, render=False, debug=True, **{"ranking_limit": 0, "bypass_if_fits": False, **link_kwargs})
+    opts = LinkOptions(
+        max_tables=max_tables,
+        anchor_k=anchor_k,
+        render=False,
+        debug=True,
+        **{"ranking_limit": 0, "bypass_if_fits": False, **link_kwargs},
+    )
     linkers: dict[str, Linker] = {}
     rows: list[Row] = []
     skipped = 0
-    for i, q in enumerate(questions):
-        db_id = q["db_id"]
+    for i, question in enumerate(questions):
+        db_id = question["db_id"]
         if db_id not in dbs:
             skipped += 1
             continue
@@ -124,71 +329,88 @@ def run(
                 with_inferred_edges(snap)
             linkers[db_id] = Linker(build_graph([snap]))
         linker = linkers[db_id]
-        gold = {g for g in gold_tables(q.get("query") or q.get("sql") or "", dialect) if g in linker.sg.tables}
+        gold_sql = question.get("query") or question.get("sql") or ""
+        gold = {
+            table
+            for table in gold_tables(gold_sql, dialect)
+            if table in linker.schema_graph.tables
+        }
         if not gold:
             skipped += 1
             continue
         t0 = time.perf_counter()
-        res = linker.link(q["question"], opts)
+        result = linker.link(question["question"], opts)
         ms = (time.perf_counter() - t0) * 1000
-        pred = {t.fqn.lower() for t in res.tables}
-        anchors = {a.lower() for a in res.anchors}
-        rank_of = {f.lower(): r + 1 for r, (f, _) in enumerate(res.ranking)}
-        ranks = [rank_of.get(g) for g in gold]
-        bridge = gold - anchors
         rows.append(
-            Row(
-                instance_id=str(q.get("instance_id", i)),
-                db=db_id,
-                n_gold=len(gold),
-                n_pred=len(pred),
-                n_tables_db=len(linker.sg.tables),
-                hit=len(gold & pred),
-                recall=len(gold & pred) / len(gold),
-                precision=len(gold & pred) / len(pred) if pred else 0.0,
-                strict=int(gold <= pred),
-                anchor_hit=int(gold <= anchors),
-                n_bridge=len(bridge),
-                bridge_recovered=len(bridge & pred),
-                ms=round(ms, 1),
-                missed=sorted(gold - pred),
-                max_gold_rank=None if any(r is None for r in ranks) else max(ranks),
+            _score_question(
+                str(question.get("instance_id", i)),
+                db_id,
+                gold,
+                result,
+                ms,
+                len(linker.schema_graph.tables),
             )
         )
     summary = summarize(rows)
-    summary["config"] = {"max_tables": max_tables, "anchor_k": anchor_k, "infer": infer, "dialect": dialect, "link_kwargs": link_kwargs, "n": len(rows), "skipped": skipped, "tables_json": str(tables_json), "questions_json": str(questions_json)}
+    summary["config"] = {
+        "max_tables": max_tables,
+        "anchor_k": anchor_k,
+        "infer": infer,
+        "dialect": dialect,
+        "link_kwargs": link_kwargs,
+        "n": len(rows),
+        "skipped": skipped,
+        "tables_json": str(tables_json),
+        "questions_json": str(questions_json),
+    }
     if out_dir:
-        od = Path(out_dir)
-        od.mkdir(parents=True, exist_ok=True)
         tag = tag or f"mt{max_tables}_k{anchor_k}"
-        (od / f"spider1_{tag}.json").write_text(json.dumps({"summary": summary, "rows": [asdict(r) for r in rows]}, indent=2), encoding="utf-8")
-        with (od / f"spider1_{tag}.csv").open("w", encoding="utf-8", newline="") as fh:
-            w = csv.writer(fh)
-            w.writerow(["instance_id", "db", "n_gold", "n_pred", "n_tables_db", "hit", "recall", "precision", "strict", "anchor_hit", "n_bridge", "bridge_recovered", "max_gold_rank", "ms", "missed"])
-            for r in rows:
-                w.writerow([r.instance_id, r.db, r.n_gold, r.n_pred, r.n_tables_db, r.hit, f"{r.recall:.3f}", f"{r.precision:.3f}", r.strict, r.anchor_hit, r.n_bridge, r.bridge_recovered, "" if r.max_gold_rank is None else r.max_gold_rank, r.ms, ";".join(r.missed)])
+        write_outputs(
+            Path(out_dir),
+            f"spider1_{tag}",
+            summary,
+            rows,
+            _CSV_HEADER,
+            _csv_row,
+        )
     return {"summary": summary, "rows": rows}
 
 
+# ---------------------------------------------------------------- summary
 def summarize(rows: list[Row]) -> dict:
+    """Aggregate rows into percentages (2 decimals), bridge metrics, averages and median latency.
+
+    ``bridge_recall`` is None when no gold table was a bridge.
+    """
     if not rows:
         return {"n": 0}
-    n_bridge = sum(r.n_bridge for r in rows)
+    n_bridge = sum(row.n_bridge for row in rows)
+    bridge_tasks = sum(1 for row in rows if row.n_bridge)
+    bridge_recall = (
+        round(100 * sum(row.bridge_recovered for row in rows) / n_bridge, 2) if n_bridge else None
+    )
+    strict_on_bridge = round(
+        100 * sum(row.strict for row in rows if row.n_bridge) / max(1, bridge_tasks),
+        2,
+    )
     return {
         "n": len(rows),
-        "recall": round(100 * statistics.mean(r.recall for r in rows), 2),
-        "precision": round(100 * statistics.mean(r.precision for r in rows), 2),
-        "strict_recall": round(100 * sum(r.strict for r in rows) / len(rows), 2),
-        "anchor_hit": round(100 * sum(r.anchor_hit for r in rows) / len(rows), 2),
-        "bridge_tasks": sum(1 for r in rows if r.n_bridge),
-        "bridge_recall": round(100 * sum(r.bridge_recovered for r in rows) / n_bridge, 2) if n_bridge else None,
-        "strict_on_bridge_tasks": round(100 * sum(r.strict for r in rows if r.n_bridge) / max(1, sum(1 for r in rows if r.n_bridge)), 2),
-        "avg_pred_tables": round(statistics.mean(r.n_pred for r in rows), 2),
-        "avg_db_tables": round(statistics.mean(r.n_tables_db for r in rows), 1),
-        "p50_ms": round(statistics.median(r.ms for r in rows), 1),
+        "recall": round(100 * statistics.mean(row.recall for row in rows), 2),
+        "precision": round(100 * statistics.mean(row.precision for row in rows), 2),
+        "strict_recall": round(100 * sum(row.strict for row in rows) / len(rows), 2),
+        "anchor_hit": round(100 * sum(row.anchor_hit for row in rows) / len(rows), 2),
+        "bridge_tasks": bridge_tasks,
+        "bridge_recall": bridge_recall,
+        "strict_on_bridge_tasks": strict_on_bridge,
+        "avg_pred_tables": round(statistics.mean(row.n_pred for row in rows), 2),
+        "avg_db_tables": round(statistics.mean(row.n_tables_db for row in rows), 1),
+        "p50_ms": round(statistics.median(row.ms for row in rows), 1),
     }
 
 
 def format_table(summary: dict) -> str:
-    cols = ["n", "recall", "precision", "strict_recall", "anchor_hit", "bridge_tasks", "bridge_recall", "strict_on_bridge_tasks", "avg_pred_tables", "avg_db_tables", "p50_ms"]
-    return "| " + " | ".join(cols) + " |\n|" + "|".join("---" for _ in cols) + "|\n| " + " | ".join(str(summary.get(c, "")) for c in cols) + " |"
+    """Render a summary as a one-row markdown table."""
+    header = "| " + " | ".join(_TABLE_COLUMNS) + " |"
+    rule = "|" + "|".join("---" for _ in _TABLE_COLUMNS) + "|"
+    values = "| " + " | ".join(str(summary.get(c, "")) for c in _TABLE_COLUMNS) + " |"
+    return f"{header}\n{rule}\n{values}"

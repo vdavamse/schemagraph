@@ -25,13 +25,41 @@ log = logging.getLogger("schemagraph")
 DEFAULT_HOME = Path(os.environ.get("SCHEMAGRAPH_HOME", ".schemagraph"))
 
 
+# Values of ``SCHEMAGRAPH_EMBED`` that turn embeddings on (anything else but ``auto`` is off).
+_EMBED_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
 class Engine:
-    def __init__(self, home: str | Path | None = None, *, llm: Any | None = "auto", embed: bool | str | None = None):
-        """``embed``: seed paraphrases with the optional static embedding model (``LinkOptions.embed``;
-        Spider2-Lite: +0.4 strict, +3 strict@7). ``None`` reads ``SCHEMAGRAPH_EMBED`` (``1`` / ``0`` /
-        ``auto``, default ``auto``); ``"auto"`` turns it on when the ``embed`` extra is installed. The
-        model loads in :meth:`reload`, never inside a request; if it cannot load (not cached and
-        offline), embeddings stay off with a warning. Set ``HF_HUB_OFFLINE=1`` on air-gapped hosts."""
+    """The one object the CLI, API and MCP server drive.
+
+    Owns the :class:`Store`, the merged :class:`SchemaGraph` rebuilt from every stored snapshot
+    (``engine.graph`` is the SchemaGraph; ``engine.graph.graph`` is its NetworkX graph) and the
+    :class:`Linker` over it. An ``RLock`` guards the graph and linker: :meth:`reload` swaps both
+    under it and :meth:`link` / :meth:`explain` run under it; connector introspection runs
+    outside it.
+    """
+
+    def __init__(
+        self,
+        home: str | Path | None = None,
+        *,
+        llm: Any | None = "auto",
+        embed: bool | str | None = None,
+    ):
+        """Open the store under ``home`` and build the graph and linker.
+
+        Args:
+            home: Data directory (default ``$SCHEMAGRAPH_HOME`` or ``.schemagraph``).
+            llm: Anchor picker for ``use_llm``; ``"auto"`` builds a Claude picker when an
+                Anthropic key is set, None disables it.
+            embed: Seed paraphrases with the optional static embedding model
+                (``LinkOptions.embed``; Spider2-Lite: +0.4 strict, +3 strict@7). ``None`` reads
+                ``SCHEMAGRAPH_EMBED`` (``1`` / ``0`` / ``auto``, default ``auto``); ``"auto"``
+                turns it on when the ``embed`` extra is installed. The model loads in
+                :meth:`reload`, never inside a request; if it cannot load (not cached and
+                offline), embeddings stay off with a warning. Set ``HF_HUB_OFFLINE=1`` on
+                air-gapped hosts.
+        """
         self.home = Path(home) if home else DEFAULT_HOME
         self.store = Store(self.home / "schemagraph.duckdb")
         self._lock = threading.RLock()
@@ -39,16 +67,19 @@ class Engine:
         self.linker: Linker | None = None
         self._llm = llm
         self._embed_requested = self._resolve_embed(embed)
-        self._embed = False  # effective: requested and the model loaded at the last reload
-        self._embed_failed = False  # a load failed: later reloads retry only from the local cache, never the Hub
+        # effective: requested and the model loaded at the last reload
+        self._embed = False
+        # a load failed: later reloads retry only from the local cache, never the Hub
+        self._embed_failed = False
         self.reload()
 
     @staticmethod
     def _resolve_embed(embed: bool | str | None) -> bool:
+        """Whether embeddings are requested (see ``embed`` in :meth:`__init__`)."""
         if embed is None:
             embed = os.environ.get("SCHEMAGRAPH_EMBED", "auto").strip().lower()
             if embed != "auto":
-                embed = embed in {"1", "true", "yes", "on"}
+                embed = embed in _EMBED_TRUE_VALUES
         if embed != "auto":
             return bool(embed)
         try:
@@ -60,24 +91,35 @@ class Engine:
 
     @property
     def has_embed(self) -> bool:
+        """Whether embeddings are on (requested and the model loaded at the last reload)."""
         return self._embed
 
     # ----------------------------------------------------------- lifecycle
     def close(self) -> None:
+        """Close the store."""
         self.store.close()
 
     def reload(self) -> None:
+        """Rebuild the graph and linker from every stored snapshot plus the user's curation."""
         with self._lock:
             snaps = self.store.snapshots()
-            snaps.append(self.store.user_snapshot())  # priority 0: merged first, so curation wins conflicts
+            # priority 0: merged first, so curation wins conflicts
+            snaps.append(self.store.user_snapshot())
             self.graph = build_graph(snaps)
             llm = self._resolve_llm()
             self.linker = Linker(self.graph, llm=llm)
-            self._embed = self._embed_requested and (not self._embed_failed or self._model_cached()) and self._warm_embedder()
+            self._embed = (
+                self._embed_requested
+                and (not self._embed_failed or self._model_cached())
+                and self._warm_embedder()
+            )
 
     @staticmethod
     def _model_cached() -> bool:
-        """The embedding model can load without the network (a local directory or the HF cache)."""
+        """Whether the embedding model can load without the network.
+
+        True for a local directory or a model in the Hugging Face cache.
+        """
         model = LinkOptions().embed_model
         if Path(model).is_dir():
             return True
@@ -89,22 +131,35 @@ class Engine:
             return False
 
     def _warm_embedder(self) -> bool:
-        """Load the model and encode the catalog now, so the cost and any failure land at startup,
-        not in a request. After a failure, reloads retry only once the model is in the local cache
-        (a Hub timeout would otherwise be paid on every reload, under the lock)."""
+        """Load the model and encode the catalog now; return whether it worked.
+
+        The cost and any failure land at startup, not in a request. After a failure, reloads
+        retry only once the model is in the local cache (a Hub timeout would otherwise be paid
+        on every reload, under the lock).
+        """
         assert self.linker is not None
         model = LinkOptions().embed_model
         t0 = time.perf_counter()
         try:
             self.linker.embedder(model)
         except Exception as e:
-            log.warning("embedding model %s unavailable, embeddings off until it is cached locally: %s", model, e)
+            log.warning(
+                "embedding model %s unavailable, embeddings off until it is cached locally: %s",
+                model,
+                e,
+            )
             self._embed_failed = True
             return False
-        log.info("embeddings on: %s, %d objects encoded in %.2fs", model, len(self.linker.embedder(model).nodes), time.perf_counter() - t0)
+        log.info(
+            "embeddings on: %s, %d objects encoded in %.2fs",
+            model,
+            len(self.linker.embedder(model).nodes),
+            time.perf_counter() - t0,
+        )
         return True
 
     def _resolve_llm(self):
+        """Return the anchor picker: the one given, or for ``"auto"`` Claude when a key is set."""
         if self._llm != "auto":
             return self._llm
         if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
@@ -119,30 +174,66 @@ class Engine:
 
     @property
     def has_llm(self) -> bool:
+        """Whether the linker has an LLM anchor picker."""
         return self.linker is not None and self.linker.llm is not None
 
     # ----------------------------------------------------------- connections
     def connector_types(self) -> list[str]:
+        """Names of the registered connector types."""
         return connector_types()
 
     def connector_schema(self, type_name: str) -> dict[str, Any]:
+        """JSON schema of one connector type's config."""
         return config_schema(type_name)
 
-    def add_connection(self, name: str, type_name: str, config: dict[str, Any], *, build: bool = True, priority: int | None = None, clear_priority: bool = False) -> SchemaSnapshot | None:
-        """``priority``: merge order (lower merges first and wins conflicting fields); None keeps a stored
-        priority, else merges by source type. ``clear_priority`` goes back to the source-type order."""
+    def add_connection(
+        self,
+        name: str,
+        type_name: str,
+        config: dict[str, Any],
+        *,
+        build: bool = True,
+        priority: int | None = None,
+        clear_priority: bool = False,
+    ) -> SchemaSnapshot | None:
+        """Validate and register a connection, then optionally build it.
+
+        Args:
+            name: Connection name; it becomes the snapshot's ``source``.
+            type_name: Registered connector type.
+            config: Connector config (``${ENV}`` references allowed).
+            build: Introspect it right away.
+            priority: Merge order (lower merges first and wins conflicting fields); None keeps a
+                stored priority, else merges by source type.
+            clear_priority: Go back to the source-type order.
+
+        Returns:
+            The built snapshot, or None when ``build`` is false.
+        """
         make_connector(type_name, name, substitute_env(config))  # validate config shape
-        self.store.upsert_connection(name, type_name, config, priority=priority, clear_priority=clear_priority)
+        self.store.upsert_connection(
+            name,
+            type_name,
+            config,
+            priority=priority,
+            clear_priority=clear_priority,
+        )
         if build:
             return self.build(name)
         return None
 
     def remove_connection(self, name: str) -> None:
+        """Delete a connection and its snapshot, then reload."""
         with self._lock:
             self.store.delete_connection(name)
         self.reload()
 
     def check_connection(self, name: str) -> str:
+        """Run the connector's connectivity check and return its status message.
+
+        Raises:
+            KeyError: ``name`` is not a registered connection.
+        """
         row = self.store.connection(name)
         if not row:
             raise KeyError(name)
@@ -150,18 +241,28 @@ class Engine:
         return make_connector(type_name, name, substitute_env(config)).check()
 
     def build(self, name: str | None = None) -> SchemaSnapshot | list[SchemaSnapshot]:
-        """Introspect one connection (or all) and persist the snapshot(s)."""
+        """Introspect one connection (or all) and persist the snapshot(s).
+
+        Args:
+            name: Connection to build; None builds every connection.
+
+        Returns:
+            The snapshot when ``name`` is given, else the list of all snapshots built.
+
+        Raises:
+            KeyError: A named connection is not registered.
+        """
         names = [name] if name else [c["name"] for c in self.store.connections()]
         out: list[SchemaSnapshot] = []
-        for n in names:
-            row = self.store.connection(n)
+        for connection_name in names:
+            row = self.store.connection(connection_name)
             if not row:
-                raise KeyError(n)
+                raise KeyError(connection_name)
             type_name, config = row
-            conn = make_connector(type_name, n, substitute_env(config))
-            log.info("building %s (%s)", n, type_name)
-            snap = conn.introspect()
-            snap.source = n
+            connector = make_connector(type_name, connection_name, substitute_env(config))
+            log.info("building %s (%s)", connection_name, type_name)
+            snap = connector.introspect()
+            snap.source = connection_name
             with self._lock:
                 self.store.save_snapshot(snap)
             out.append(snap)
@@ -169,67 +270,98 @@ class Engine:
         return out[0] if name else out
 
     def connections(self) -> list[dict[str, Any]]:
+        """Summaries of every stored connection (configs redacted)."""
         return self.store.connections()
 
     # ----------------------------------------------------------- glossary / hints
     def upsert_term(self, term: BusinessTerm) -> None:
+        """Insert or update a user glossary term, then reload."""
         self.store.upsert_term(term)
         self.reload()
 
     def delete_term(self, name: str) -> None:
+        """Delete a user glossary term, then reload."""
         self.store.delete_term(name)
         self.reload()
 
     def add_join_hint(self, edge: Edge) -> int:
-        hid = self.store.add_join_hint(edge)
+        """Store a user join hint, reload, and return its id."""
+        hint_id = self.store.add_join_hint(edge)
         self.reload()
-        return hid
+        return hint_id
 
     def delete_join_hint(self, hid: int) -> None:
+        """Delete a user join hint, then reload."""
         self.store.delete_join_hint(hid)
         self.reload()
 
     # ----------------------------------------------------------- queries
+    def _link_options(self, kw: dict[str, Any]) -> LinkOptions:
+        """Build the options for a link: the engine's ``embed`` setting, overridden by ``kw``.
+
+        ``use_llm`` is dropped when no anchor picker is configured. Call under the lock.
+        """
+        opts = LinkOptions(**{"embed": self._embed, **kw})
+        if opts.use_llm and not self.has_llm:
+            opts.use_llm = False
+        return opts
+
     def link(self, question: str, **kw: Any) -> LinkResult:
+        """Link a question to a sub-schema; ``kw`` are :class:`LinkOptions` fields."""
         assert self.linker is not None
         with self._lock:  # read the embed flag under the lock: a reload can turn it off
-            opts = LinkOptions(**{"embed": self._embed, **kw})
-            if opts.use_llm and not self.has_llm:
-                opts.use_llm = False
-            return self.linker.link(question, opts)
+            return self.linker.link(question, self._link_options(kw))
 
     def explain(self, question: str, **kw: Any) -> dict[str, Any]:
-        """Same options as :meth:`link` (the engine's ``embed`` setting included), so it shows the seeds that ranked."""
+        """Show the activation seeds and scores behind a link.
+
+        Takes the same options as :meth:`link` (the engine's ``embed`` setting included), so it
+        shows the seeds that ranked.
+        """
         assert self.linker is not None
         with self._lock:
-            opts = LinkOptions(**{"embed": self._embed, **kw})
-            if opts.use_llm and not self.has_llm:
-                opts.use_llm = False
-            return self.linker.explain(question, opts)
+            return self.linker.explain(question, self._link_options(kw))
 
     def tables(self) -> list[Table]:
+        """Every table in the graph, sorted by FQN."""
         return sorted(self.graph.tables.values(), key=lambda t: t.fqn)
 
     def table(self, fqn: str) -> Table | None:
+        """Look a table up by FQN or unambiguous suffix."""
         return self.graph.find_table(fqn)
 
     def edges(self) -> list[Edge]:
+        """Every relation edge in the graph."""
         return self.graph.all_edges()
 
     def join_path(self, a: str, b: str) -> list[list[str]]:
+        """Shortest join path(s) between two tables, as lists of table FQNs.
+
+        Falls back to lineage routes when no join route exists, so "how do these connect" still
+        answers.
+
+        Raises:
+            KeyError: Either table is unknown.
+        """
         from schemagraph.graph.pathfinding import union_of_shortest_paths
 
-        ta, tb = self.graph.find_table(a), self.graph.find_table(b)
-        if not ta or not tb:
-            raise KeyError(a if not ta else b)
-        paths, _ = union_of_shortest_paths(self.graph, [ta.fqn], [tb.fqn])
-        if not paths:  # no join route: fall back to lineage so "how do these connect" still answers
-            paths, _ = union_of_shortest_paths(self.graph, [ta.fqn], [tb.fqn], kinds=None)
-        return [[self.graph.g.nodes[n]["fqn"] for n in p] for p in paths]
+        table_a, table_b = self.graph.find_table(a), self.graph.find_table(b)
+        if not table_a or not table_b:
+            raise KeyError(a if not table_a else b)
+        paths, _ = union_of_shortest_paths(self.graph, [table_a.fqn], [table_b.fqn])
+        if not paths:  # no join route: fall back to lineage
+            paths, _ = union_of_shortest_paths(
+                self.graph,
+                [table_a.fqn],
+                [table_b.fqn],
+                kinds=None,
+            )
+        return [[self.graph.graph.nodes[node]["fqn"] for node in path] for path in paths]
 
     def stats(self) -> dict[str, Any]:
-        s = self.graph.stats()
-        s["llm"] = self.has_llm
-        s["embed"] = self.has_embed
-        s["home"] = str(self.home)
-        return s
+        """Graph counts plus the engine's ``llm``, ``embed`` and ``home`` settings."""
+        stats = self.graph.stats()
+        stats["llm"] = self.has_llm
+        stats["embed"] = self.has_embed
+        stats["home"] = str(self.home)
+        return stats
