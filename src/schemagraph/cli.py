@@ -481,6 +481,12 @@ def ask(
     as_json: Annotated[
         bool, typer.Option("--json", help="print the full AnswerResult as JSON")
     ] = False,
+    trace: Annotated[
+        bool,
+        typer.Option(
+            help="keep every model call's messages (prompt, reasoning, tool calls) in --json"
+        ),
+    ] = False,
     home: HomeOpt = None,
 ):
     """Write, run (read-only) and pick SQL for a question (needs the agent extra and model keys)."""
@@ -494,6 +500,7 @@ def ask(
         judge=judge,
         selector=selector,
         mcp_url=mcp_url,
+        trace=trace,
     )
     engine = _engine(home)
     _quiet_mcp_logs()
@@ -577,6 +584,12 @@ def bench_spider2_exec(
         typer.Option(help="output file tag (default <strategy>_n<budget>, or judge)"),
     ] = None,
     resume: Annotated[bool, typer.Option(help="skip tasks already in the rows file")] = True,
+    trace: Annotated[
+        bool,
+        typer.Option(
+            help="write every model call's messages to spider2_exec_<tag>_messages.jsonl"
+        ),
+    ] = True,
 ):
     """Execution accuracy of the agent loop on the 135 Spider 2.0-Lite local (SQLite) tasks."""
     from schemagraph.bench import spider2_exec
@@ -590,6 +603,7 @@ def bench_spider2_exec(
         judge_model=judge_model,
         judge=True,
         selector=selector,
+        trace=trace,
     )
     ids = set(only) if only else None
     _quiet_mcp_logs()

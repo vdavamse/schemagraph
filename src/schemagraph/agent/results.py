@@ -267,6 +267,27 @@ class UsageRecord(BaseModel):
         self.ok = self.ok and other.ok
 
 
+class Transcript(BaseModel):
+    """The messages of one model call attempt, kept when ``AgentConfig.trace`` is on.
+
+    Attributes:
+        role: The agent's role (``generator``, ``judge``, ``selector`` or ``critic``).
+        model: The model's name.
+        node_id: The search node the call belongs to, if any.
+        attempt: 1 for the first try, higher for retries after a rate limit or server error.
+        ok: Whether the attempt succeeded.
+        messages: pydantic-ai's messages in JSON form: the prompt, the reasoning, the tool
+            calls and their results, and the output.
+    """
+
+    role: str
+    model: str = ""
+    node_id: str | None = None
+    attempt: int = 1
+    ok: bool = True
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class UsageSummary(BaseModel):
     """Usage records summed per role, per model and overall.
 
@@ -357,6 +378,7 @@ class AnswerResult(BaseModel):
         linked_tables: Tables of the wide context linked for the question.
         models: Model name by role.
         ms: Wall time of the answer.
+        transcripts: The messages of every model call, when ``AgentConfig.trace`` is on.
     """
 
     question: str
@@ -375,6 +397,7 @@ class AnswerResult(BaseModel):
     linked_tables: list[str] = Field(default_factory=list)
     models: dict[str, str] = Field(default_factory=dict)
     ms: float = 0.0
+    transcripts: list[Transcript] = Field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -431,6 +454,7 @@ class AgentConfig:
         weights: Weights of the candidate score.
         mcp_url: URL of a schemagraph MCP server (streamable HTTP); None starts one in-process
             for the call.
+        trace: Keep every model call's messages on ``AnswerResult.transcripts``.
     """
 
     strategy: Strategy = "abmcts"
@@ -460,3 +484,4 @@ class AgentConfig:
     output_retries: int = 2
     weights: ScoreWeights = field(default_factory=ScoreWeights)
     mcp_url: str | None = None
+    trace: bool = False

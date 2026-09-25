@@ -189,6 +189,40 @@ def test_run_scores_with_the_official_comparison_and_resumes(tmp_path):
         spider2_exec.run(root, cfg=_config(selector=False), models=models, out_dir=out, tag="t")
 
 
+def test_trace_writes_every_model_call_and_the_candidates_keep_the_advice(tmp_path):
+    from schemagraph.bench import spider2_exec
+
+    models = _Models().agent_models()
+    root, out = _spider2(tmp_path / "s2"), tmp_path / "out"
+    cfg = _config(strategy="refine", budget=3, batch_size=1, early_stop=1.01, trace=True)
+    result = spider2_exec.run(root, cfg=cfg, models=models, out_dir=out, tag="t")
+    messages = [
+        json.loads(line)
+        for line in (out / "spider2_exec_t_messages.jsonl").read_text().splitlines()
+    ]
+    roles = {record["role"] for record in messages}
+    assert {"generator", "critic"} <= roles
+    assert all(record["messages"] and record["attempt"] >= 1 for record in messages)
+    assert {record["instance_id"] for record in messages} == {"local901", "local902"}
+    candidates = [
+        json.loads(line)
+        for line in (out / "spider2_exec_t_candidates.jsonl").read_text().splitlines()
+    ]
+    assert any(candidate["advice"] == "- fix" for candidate in candidates)  # the critic's text
+    untraced = _run_config_hash(cfg, models)
+    assert result["config"]["config_hash"] == untraced  # tracing changes no answer
+
+
+def _run_config_hash(cfg, models):
+    from dataclasses import replace
+
+    from schemagraph.bench.spider2_exec import _run_config
+
+    return _run_config(replace(cfg, trace=False), models, seed=0, use_docs=True, concurrency=1)[
+        "config_hash"
+    ]
+
+
 # config_hash of AgentConfig() with the NAMES models, seed 0 and docs on, computed on the
 # pre-refactor code (backup/agentic-sql-6-pre-refactor, 54828c6): rows written before the
 # refactor resume only while this holds.

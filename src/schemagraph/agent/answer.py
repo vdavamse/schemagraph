@@ -32,6 +32,7 @@ from schemagraph.agent.results import (
     Judgement,
     RubricBase,
     SqlCandidate,
+    Transcript,
     UsageRecord,
     UsageSummary,
     rubric_type,
@@ -107,6 +108,7 @@ class Answerer:
         self.cfg = cfg or AgentConfig()
         self.models = models or AgentModels.resolve(self.cfg)
         self.records: list[UsageRecord] = []
+        self.transcripts: list[Transcript] | None = [] if self.cfg.trace else None
         self.question = ""
         self.evidence: str | None = None
         self._toolset = agents.schema_toolset(schema.mcp_url)
@@ -122,6 +124,7 @@ class Answerer:
         candidates.
         """
         self.records = []
+        self.transcripts = [] if self.cfg.trace else None
         self._advice_locks = {}
         self.question = question
         self.evidence = evidence
@@ -156,6 +159,7 @@ class Answerer:
             candidates=trace.candidates,
             selector_matrix=matrix,
             usage=UsageSummary.of(self.records),
+            transcripts=self.transcripts or [],
             linked_tables=list(self._wide.tables),
             models=self.models.names,
             ms=(time.perf_counter() - started) * 1000,
@@ -236,6 +240,7 @@ class Answerer:
             model_name=self.models.names["generator"],
             node_id=node_id,
             sink=self.records,
+            transcripts=self.transcripts,
             deps=agents.AgentDeps(self.executor, self.cfg, probes_left=self.cfg.probe_limit),
             toolsets=[self._toolset],
             model_settings={
@@ -355,6 +360,7 @@ class Answerer:
                 model_name=model_name,
                 node_id=candidate.id,
                 sink=self.records,
+                transcripts=self.transcripts,
                 output_type=rubric,
                 model_settings=self._limits("judge", None, JUDGE_TIMEOUT_S),
             )
@@ -388,6 +394,7 @@ class Answerer:
                     model_name=self.models.names["critic"],
                     node_id=parent.id,
                     sink=self.records,
+                    transcripts=self.transcripts,
                     model_settings=self._limits("critic", CRITIC_MAX_TOKENS, GEN_TIMEOUT_S),
                 )
             except Exception:
@@ -405,6 +412,7 @@ class Answerer:
                 model=self.models.selector,
                 model_name=self.models.names["selector"],
                 sink=self.records,
+                transcripts=self.transcripts,
                 model_settings=self._limits("selector", None, JUDGE_TIMEOUT_S),
             )
         except Exception:

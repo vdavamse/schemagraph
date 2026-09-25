@@ -380,10 +380,13 @@ def _run_config(
 
     ``mcp_url`` is left out of ``agent_config``: the benchmark always serves each database
     itself, so the field would be None-valued noise, and leaving it out keeps the hash of rows
-    written before the field existed.
+    written before the field existed. ``trace`` is left out too: it records, it changes no
+    answer.
     """
     agent_config = {
-        key: value for key, value in asdict(cfg).items() if key not in {"weights", "mcp_url"}
+        key: value
+        for key, value in asdict(cfg).items()
+        if key not in {"weights", "mcp_url", "trace"}
     }
     config: dict[str, Any] = {
         "strategy": cfg.strategy,
@@ -406,15 +409,20 @@ def _run_config(
     return config
 
 
-def _resume(rows_path: Path, candidates_path: Path, chash: str, *, resume: bool) -> set[str]:
+def _resume(
+    rows_path: Path, per_task_paths: tuple[Path, ...], chash: str, *, resume: bool
+) -> set[str]:
     """Prepare the results files and return the tasks already done under ``chash``.
+
+    ``per_task_paths`` are the files keyed by ``instance_id`` (candidates, transcripts); their
+    records of tasks that run again are dropped.
 
     Raises:
         ValueError: The rows file holds rows of another configuration; the summary would
             describe numbers it did not produce.
     """
     if not resume:
-        for path in (rows_path, candidates_path):
+        for path in (rows_path, *per_task_paths):
             path.unlink(missing_ok=True)
     other = {row.get("config_hash") for row in read_rows(rows_path)} - {chash}
     if other:
@@ -423,10 +431,12 @@ def _resume(rows_path: Path, candidates_path: Path, chash: str, *, resume: bool)
             f"({', '.join(sorted(map(str, other)))}); use a different --tag or --no-resume"
         )
     done = done_ids(rows_path, chash)
-    if candidates_path.exists():  # drop candidates of tasks that run again (a crash, an error row)
-        lines = candidates_path.read_text(encoding="utf-8").splitlines()
+    for path in per_task_paths:  # drop records of tasks that run again (a crash, an error row)
+        if not path.exists():
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
         keep = [line for line in lines if line.strip() and json.loads(line)["instance_id"] in done]
-        candidates_path.write_text("".join(line + "\n" for line in keep), encoding="utf-8")
+        path.write_text("".join(line + "\n" for line in keep), encoding="utf-8")
     return done
 
 
@@ -496,8 +506,11 @@ def run(
     out.mkdir(parents=True, exist_ok=True)
     rows_path = out / f"spider2_exec_{tag}.rows.jsonl"
     candidates_path = out / f"spider2_exec_{tag}_candidates.jsonl"
+    messages_path = out / f"spider2_exec_{tag}_messages.jsonl"
     config = _run_config(cfg, models, seed=seed, use_docs=use_docs, concurrency=concurrency)
-    done = _resume(rows_path, candidates_path, config["config_hash"], resume=resume)
+    done = _resume(
+        rows_path, (candidates_path, messages_path), config["config_hash"], resume=resume
+    )
     bench = _ExecBench(
         runner=Runner(root, use_docs=use_docs),
         cfg=cfg,
@@ -505,6 +518,7 @@ def run(
         standard=standard,
         rows_path=rows_path,
         candidates_path=candidates_path,
+        messages_path=messages_path,
         config_hash=config["config_hash"],
         seed=seed,
         total=len(tasks),
@@ -531,6 +545,8 @@ class _ExecBench:
         standard: The evaluation standard per instance id.
         rows_path: The rows file (one row per task attempt).
         candidates_path: The candidates file (one record per candidate).
+        messages_path: The transcripts file (one record per model call attempt), written when
+            ``cfg.trace`` is on.
         config_hash: Stamped on every row.
         seed: The run seed.
         total: Tasks in the run, done ones included.
@@ -544,6 +560,7 @@ class _ExecBench:
     standard: dict[str, dict]
     rows_path: Path
     candidates_path: Path
+    messages_path: Path
     config_hash: str
     seed: int
     total: int
@@ -586,6 +603,9 @@ class _ExecBench:
                 for candidate in result.candidates:
                     match = row["candidate_ex"].get(candidate.id)
                     append_record(self.candidates_path, _candidate_record(task, candidate, match))
+                for transcript in result.transcripts:
+                    record = {"instance_id": task.instance_id, **transcript.model_dump(mode="json")}
+                    append_record(self.messages_path, record)
             append_record(self.rows_path, row)
             self.finished += 1
             if self.progress:
@@ -614,6 +634,9 @@ def _candidate_record(task: Instance, candidate: Candidate, match: int | None) -
         "depth": candidate.depth,
         "action": candidate.action,
         "sql": candidate.sql,
+        "rationale": candidate.rationale,
+        "advice": candidate.advice,
+        "feedback": candidate.feedback,
         "score": candidate.score,
         "score_parts": candidate.score_parts,
         "rubric": judgement.fields if judgement else None,
