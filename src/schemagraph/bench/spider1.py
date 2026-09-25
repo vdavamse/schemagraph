@@ -10,17 +10,17 @@ still returned) next to strict recall.
 
 from __future__ import annotations
 
-import csv
 import json
 import re
 import statistics
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import sqlglot
 from sqlglot import exp
 
+from schemagraph.bench._output import blank_if_none, write_outputs
 from schemagraph.graph.build import build_graph
 from schemagraph.graph.infer import with_inferred_edges
 from schemagraph.linking.linker import Linker, LinkOptions
@@ -30,38 +30,16 @@ from schemagraph.model import Column, Edge, LinkResult, SchemaSnapshot, Table
 _FROM_RE = re.compile(r"(?:FROM|JOIN)\s+([A-Za-z_][\w]*)", re.I)
 
 # Columns of the CSV written next to the JSON results, in order.
-_CSV_HEADER = [
-    "instance_id",
-    "db",
-    "n_gold",
-    "n_pred",
-    "n_tables_db",
-    "hit",
-    "recall",
-    "precision",
-    "strict",
-    "anchor_hit",
-    "n_bridge",
-    "bridge_recovered",
-    "max_gold_rank",
-    "ms",
-    "missed",
-]
+_CSV_HEADER = (
+    "instance_id db n_gold n_pred n_tables_db hit recall precision strict anchor_hit n_bridge "
+    "bridge_recovered max_gold_rank ms missed"
+).split()
 
 # Summary keys of the markdown table printed by format_table.
-TABLE_COLUMNS = [
-    "n",
-    "recall",
-    "precision",
-    "strict_recall",
-    "anchor_hit",
-    "bridge_tasks",
-    "bridge_recall",
-    "strict_on_bridge_tasks",
-    "avg_pred_tables",
-    "avg_db_tables",
-    "p50_ms",
-]
+_TABLE_COLUMNS = (
+    "n recall precision strict_recall anchor_hit bridge_tasks bridge_recall "
+    "strict_on_bridge_tasks avg_pred_tables avg_db_tables p50_ms"
+).split()
 
 
 # ---------------------------------------------------------------- snapshots
@@ -285,22 +263,10 @@ def _csv_row(row: Row) -> list:
         row.anchor_hit,
         row.n_bridge,
         row.bridge_recovered,
-        "" if row.max_gold_rank is None else row.max_gold_rank,
+        blank_if_none(row.max_gold_rank),
         row.ms,
         ";".join(row.missed),
     ]
-
-
-def _write_outputs(out_dir: Path, stem: str, summary: dict, rows: list[Row]) -> None:
-    """Write ``<stem>.json`` (summary and rows) and ``<stem>.csv`` (one line per row)."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    payload = {"summary": summary, "rows": [asdict(row) for row in rows]}
-    (out_dir / f"{stem}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    with (out_dir / f"{stem}.csv").open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.writer(fh)
-        writer.writerow(_CSV_HEADER)
-        for row in rows:
-            writer.writerow(_csv_row(row))
 
 
 # ---------------------------------------------------------------- run
@@ -327,7 +293,8 @@ def run(
         max_tables: ``LinkOptions.max_tables``.
         anchor_k: ``LinkOptions.anchor_k``.
         infer: Add name-based inferred edges on top of the declared FKs.
-        limit: Score only the first this many questions.
+        limit: Keep only the first this many questions of the file; the cut happens before
+            skipping, so skipped questions count toward it.
         dialect: sqlglot dialect of the gold SQL.
         out_dir: Folder for ``spider1_<tag>.json`` / ``.csv``; None writes nothing.
         tag: Output file tag; ``mt<max_tables>_k<anchor_k>`` when None.
@@ -398,7 +365,14 @@ def run(
     }
     if out_dir:
         tag = tag or f"mt{max_tables}_k{anchor_k}"
-        _write_outputs(Path(out_dir), f"spider1_{tag}", summary, rows)
+        write_outputs(
+            Path(out_dir),
+            f"spider1_{tag}",
+            summary,
+            rows,
+            _CSV_HEADER,
+            _csv_row,
+        )
     return {"summary": summary, "rows": rows}
 
 
@@ -436,7 +410,7 @@ def summarize(rows: list[Row]) -> dict:
 
 def format_table(summary: dict) -> str:
     """Render a summary as a one-row markdown table."""
-    header = "| " + " | ".join(TABLE_COLUMNS) + " |"
-    rule = "|" + "|".join("---" for _ in TABLE_COLUMNS) + "|"
-    values = "| " + " | ".join(str(summary.get(c, "")) for c in TABLE_COLUMNS) + " |"
+    header = "| " + " | ".join(_TABLE_COLUMNS) + " |"
+    rule = "|" + "|".join("---" for _ in _TABLE_COLUMNS) + "|"
+    values = "| " + " | ".join(str(summary.get(c, "")) for c in _TABLE_COLUMNS) + " |"
     return f"{header}\n{rule}\n{values}"

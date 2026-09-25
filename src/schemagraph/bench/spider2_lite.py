@@ -15,15 +15,16 @@ daily shards):
 
 from __future__ import annotations
 
-import csv
 import json
 import statistics
 import time
 from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
+from schemagraph.bench._output import blank_if_none, write_outputs
 from schemagraph.bench.gold_sql import gold_columns
 from schemagraph.connectors.spider2 import (
     DIALECT_FOR_PREFIX,
@@ -35,6 +36,7 @@ from schemagraph.graph.build import SchemaGraph, build_graph
 from schemagraph.graph.infer import with_inferred_edges
 from schemagraph.linking.lexical import DESC_WEIGHT, build_index
 from schemagraph.linking.linker import Linker, LinkOptions
+from schemagraph.linking.render import LINKED_TABLES_MARKER
 from schemagraph.model import LinkResult
 
 
@@ -98,78 +100,47 @@ SUITES: dict[str, Suite] = {
 }
 
 # Instance-id prefixes that name a dialect (keys of DIALECT_FOR_PREFIX), tried in this order.
-INSTANCE_PREFIXES = ("local", "ga", "bq", "sf")
+_INSTANCE_PREFIXES = ("local", "ga", "bq", "sf")
 
-# The rendered DDL context starts after this line; what precedes it is the question header.
-LINKED_TABLES_MARKER = "-- Linked tables:"
-
-# DBCC buckets by raw column count of the database (Liu et al. 2026, arXiv 2606.28601).
-COLUMN_BUCKETS: dict[str, Callable[[int], bool]] = {
-    "cols<1k": lambda n_cols: n_cols < 1000,
-    "cols1k-10k": lambda n_cols: 1000 <= n_cols < 10000,
-    "cols>=10k": lambda n_cols: n_cols >= 10000,
-    "cols>5k": lambda n_cols: n_cols > 5000,
+# DBCC buckets by raw column count of the database (Liu et al. 2026, arXiv 2606.28601), as
+# half-open ranges ``low <= n_cols < high`` (None = unbounded). "cols>5k" means n_cols > 5000,
+# i.e. n_cols >= 5001 for an integer count. Buckets overlap; order is the output order.
+_COLUMN_BUCKETS: dict[str, tuple[int | None, int | None]] = {
+    "cols<1k": (None, 1000),
+    "cols1k-10k": (1000, 10000),
+    "cols>=10k": (10000, None),
+    "cols>5k": (5001, None),
 }
 
 # Columns of the CSV written next to the JSON results, in order.
-_CSV_HEADER = [
-    "instance_id",
-    "db",
-    "dialect",
-    "n_gold",
-    "n_pred",
-    "n_tables_db",
-    "hit",
-    "recall",
-    "precision",
-    "strict",
-    "anchor_hit",
-    "max_gold_rank",
-    "ms",
-    "n_cols_db",
-    "n_cols_graph",
-    "ddl_tokens",
-    "n_gold_cols",
-    "n_pred_cols",
-    "col_recall",
-    "col_precision",
-    "col_strict",
-    "unresolved_cols",
-    "missed",
-    "missed_cols",
-]
+_CSV_HEADER = (
+    "instance_id db dialect n_gold n_pred n_tables_db hit recall precision strict anchor_hit "
+    "max_gold_rank ms n_cols_db n_cols_graph ddl_tokens n_gold_cols n_pred_cols col_recall "
+    "col_precision col_strict unresolved_cols missed missed_cols"
+).split()
 
 # Summary keys of the table-level markdown table printed by format_table.
-TABLE_COLUMNS = [
-    "n",
-    "recall",
-    "precision",
-    "f1",
-    "strict_recall",
-    "anchor_hit",
-    "gold_in_top10",
-    "gold_in_top20",
-    "avg_pred_tables",
-    "avg_db_tables",
-    "p50_ms",
-]
+_TABLE_COLUMNS = (
+    "n recall precision f1 strict_recall anchor_hit gold_in_top10 gold_in_top20 "
+    "avg_pred_tables avg_db_tables p50_ms"
+).split()
 # Summary keys of the DBCC-protocol markdown table printed by format_table.
-DBCC_COLUMNS = [
-    "n",
-    "avg_db_cols",
-    "p50_ddl_tokens",
-    "avg_ddl_tokens",
-    "n_colgold",
-    "col_strict",
-    "col_recall",
-    "col_precision",
-    "avg_gold_cols",
-    "avg_pred_cols",
-]
-DBCC_CAPTION = (
+_DBCC_COLUMNS = (
+    "n avg_db_cols p50_ddl_tokens avg_ddl_tokens n_colgold col_strict col_recall col_precision "
+    "avg_gold_cols avg_pred_cols"
+).split()
+_DBCC_CAPTION = (
     "DBCC protocol (column-level where gold SQL is public; "
     "tokens = o200k count of the rendered DDL context):"
 )
+
+
+class _Encoder(Protocol):
+    """A tokenizer such as tiktoken's ``Encoding``: only ``encode`` is used."""
+
+    def encode(self, text: str) -> list[int]:
+        """Token ids of ``text``."""
+        ...
 
 
 @dataclass
@@ -221,14 +192,16 @@ class Row:
         n_cols_db: Raw column count of the database (DBCC protocol).
         n_cols_graph: Columns in the database's graph (after family collapsing).
         ddl_tokens: Tokens of the rendered context (None when not rendered).
-        n_gold_cols: Gold columns parsed from the public gold SQL (None without it).
-        n_pred_cols: Columns in the returned DDL (None without gold SQL).
+        n_gold_cols: Gold columns resolved from the public gold SQL. This and the other ``col_*``
+            / ``n_pred_cols`` fields are None without gold SQL, when sqlglot cannot parse it, or
+            when it resolves to no known column.
+        n_pred_cols: Columns in the returned DDL.
         col_hit: Gold columns returned.
         col_recall: ``col_hit / n_gold_cols``.
-        col_precision: ``col_hit / n_pred_cols``.
+        col_precision: ``col_hit / n_pred_cols`` (0.0 when no column was returned).
         col_strict: 1 if every gold column was returned.
-        unresolved_cols: Gold SQL column names that matched no base table.
-        sql_parsed: Whether sqlglot parsed the gold SQL.
+        unresolved_cols: Gold SQL column names that matched no base table (None without gold SQL).
+        sql_parsed: Whether sqlglot parsed the gold SQL (None without gold SQL).
         missed_cols: Gold columns not in the returned DDL, as ``table.column``.
     """
 
@@ -265,7 +238,7 @@ class Row:
 # ---------------------------------------------------------------- loading
 def _prefix(instance_id: str) -> str:
     """Dialect prefix of an instance id (its first two characters when no known prefix fits)."""
-    for prefix in INSTANCE_PREFIXES:
+    for prefix in _INSTANCE_PREFIXES:
         if instance_id.startswith(prefix):
             return prefix
     return instance_id[:2]
@@ -484,15 +457,13 @@ def canon(name: str, member_map: dict[str, str]) -> str:
 
 
 # ---------------------------------------------------------------- scoring
-def _doc_excerpt(doc: str, limit: int) -> str:
-    """Head of an external-knowledge document, where table/column names are usually explained."""
-    return doc[:limit]
-
-
 def _question_text(instance: Instance, use_docs: bool, doc_chars: int) -> str:
-    """The text to link: the question, followed by the document excerpt when docs are on."""
+    """The text to link: the question, then the document's head when docs are on.
+
+    The head of an external-knowledge document is where table/column names are usually explained.
+    """
     if use_docs and instance.doc:
-        return f"{instance.question}\n\n{_doc_excerpt(instance.doc, doc_chars)}"
+        return f"{instance.question}\n\n{instance.doc[:doc_chars]}"
     return instance.question
 
 
@@ -509,7 +480,7 @@ def _gold_rank_of(gold: set[str], result: LinkResult, member_map: dict[str, str]
     return None if any(rank is None for rank in ranks) else max(ranks)
 
 
-def _ddl_tokens(ddl: str, encoder) -> int:
+def _ddl_tokens(ddl: str, encoder: _Encoder | None) -> int:
     """Count the tokens of the rendered context, without the question header.
 
     The ``-- Question: ...`` header carries the external document too, so only what follows
@@ -587,7 +558,7 @@ def _score_instance(
     result: LinkResult,
     ms: float,
     cache: _GraphCache,
-    encoder,
+    encoder: _Encoder | None,
     render: bool,
 ) -> Row:
     """Score one linked instance against its gold tables (and gold columns where public).
@@ -639,42 +610,6 @@ def _score_instance(
 
 
 # ---------------------------------------------------------------- output
-def _run_config(
-    *,
-    render: bool,
-    max_tables: int,
-    anchor_k: int,
-    use_docs: bool,
-    doc_chars: int,
-    infer: bool,
-    sample_values: int,
-    use_llm: bool,
-    min_db_tables: int,
-    collapse_families: bool,
-    link_kwargs: dict,
-    suite: str,
-    n: int,
-    skipped: list[str],
-) -> dict:
-    """Build the ``config`` entry of the summary; its key order is part of the output format."""
-    return {
-        "render": render,
-        "max_tables": max_tables,
-        "anchor_k": anchor_k,
-        "use_docs": use_docs,
-        "doc_chars": doc_chars,
-        "infer": infer,
-        "sample_values": sample_values,
-        "use_llm": use_llm,
-        "min_db_tables": min_db_tables,
-        "collapse_families": collapse_families,
-        "link_kwargs": link_kwargs,
-        "suite": suite,
-        "n": n,
-        "skipped_missing_schema": skipped,
-    }
-
-
 def _default_tag(
     max_tables: int,
     anchor_k: int,
@@ -687,11 +622,6 @@ def _default_tag(
     inferred = "infer" if infer else "noinfer"
     llm = "_llm" if use_llm else ""
     return f"mt{max_tables}_k{anchor_k}_{docs}_{inferred}{llm}"
-
-
-def _blank_if_none(value, fmt: str = "{}") -> str:
-    """Format a CSV cell, leaving it empty for None."""
-    return "" if value is None else fmt.format(value)
 
 
 def _csv_row(row: Row) -> list:
@@ -708,32 +638,20 @@ def _csv_row(row: Row) -> list:
         f"{row.precision:.3f}",
         row.strict,
         row.anchor_hit,
-        _blank_if_none(row.max_gold_rank),
+        blank_if_none(row.max_gold_rank),
         row.ms,
         row.n_cols_db,
         row.n_cols_graph,
-        _blank_if_none(row.ddl_tokens),
-        _blank_if_none(row.n_gold_cols),
-        _blank_if_none(row.n_pred_cols),
-        _blank_if_none(row.col_recall, "{:.3f}"),
-        _blank_if_none(row.col_precision, "{:.3f}"),
-        _blank_if_none(row.col_strict),
-        _blank_if_none(row.unresolved_cols),
+        blank_if_none(row.ddl_tokens),
+        blank_if_none(row.n_gold_cols),
+        blank_if_none(row.n_pred_cols),
+        blank_if_none(row.col_recall, "{:.3f}"),
+        blank_if_none(row.col_precision, "{:.3f}"),
+        blank_if_none(row.col_strict),
+        blank_if_none(row.unresolved_cols),
         ";".join(row.missed),
         ";".join(row.missed_cols),
     ]
-
-
-def _write_outputs(out_dir: Path, stem: str, summary: dict, rows: list[Row]) -> None:
-    """Write ``<stem>.json`` (summary and rows) and ``<stem>.csv`` (one line per row)."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    payload = {"summary": summary, "rows": [asdict(row) for row in rows]}
-    (out_dir / f"{stem}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    with (out_dir / f"{stem}.csv").open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.writer(fh)
-        writer.writerow(_CSV_HEADER)
-        for row in rows:
-            writer.writerow(_csv_row(row))
 
 
 # ---------------------------------------------------------------- run
@@ -834,25 +752,33 @@ def run(
         if progress:
             progress(i + 1, len(instances), rows[-1])
     summary = summarize(rows)
-    summary["config"] = _run_config(
-        render=render,
-        max_tables=max_tables,
-        anchor_k=anchor_k,
-        use_docs=use_docs,
-        doc_chars=doc_chars,
-        infer=infer,
-        sample_values=sample_values,
-        use_llm=use_llm,
-        min_db_tables=min_db_tables,
-        collapse_families=collapse_families,
-        link_kwargs=link_kwargs,
-        suite=suite,
-        n=len(rows),
-        skipped=skipped,
-    )
+    # Key order of the config dict is part of the output format.
+    summary["config"] = {
+        "render": render,
+        "max_tables": max_tables,
+        "anchor_k": anchor_k,
+        "use_docs": use_docs,
+        "doc_chars": doc_chars,
+        "infer": infer,
+        "sample_values": sample_values,
+        "use_llm": use_llm,
+        "min_db_tables": min_db_tables,
+        "collapse_families": collapse_families,
+        "link_kwargs": link_kwargs,
+        "suite": suite,
+        "n": len(rows),
+        "skipped_missing_schema": skipped,
+    }
     if out_dir:
         tag = tag or _default_tag(max_tables, anchor_k, use_docs, infer, use_llm)
-        _write_outputs(Path(out_dir), f"spider2_{suite}_{tag}", summary, rows)
+        write_outputs(
+            Path(out_dir),
+            f"spider2_{suite}_{tag}",
+            summary,
+            rows,
+            _CSV_HEADER,
+            _csv_row,
+        )
     return {"summary": summary, "rows": rows}
 
 
@@ -904,6 +830,11 @@ def _aggregate(rows: list[Row]) -> dict:
     return summary
 
 
+def _in_range(n_cols: int, low: int | None, high: int | None) -> bool:
+    """Whether ``low <= n_cols < high``, a None bound being unbounded."""
+    return (low is None or n_cols >= low) and (high is None or n_cols < high)
+
+
 def summarize(rows: list[Row]) -> dict:
     """Aggregate rows overall, per dialect (sorted) and per DBCC column-count bucket.
 
@@ -915,8 +846,8 @@ def summarize(rows: list[Row]) -> dict:
     for row in rows:
         by_dialect[row.dialect].append(row)
     by_bucket = {
-        bucket: [row for row in rows if in_bucket(row.n_cols_db)]
-        for bucket, in_bucket in COLUMN_BUCKETS.items()
+        bucket: [row for row in rows if _in_range(row.n_cols_db, low, high)]
+        for bucket, (low, high) in _COLUMN_BUCKETS.items()
     }
     return {
         "overall": _aggregate(rows),
@@ -950,13 +881,13 @@ def format_table(summary: dict) -> str:
         *summary["by_dialect"].items(),
         *summary.get("by_bucket", {}).items(),
     ]
-    lines = _markdown_table(splits, TABLE_COLUMNS)
+    lines = _markdown_table(splits, _TABLE_COLUMNS)
     if any("col_strict" in split or "p50_ddl_tokens" in split for _, split in splits):
-        lines += ["", DBCC_CAPTION, *_markdown_table(splits, DBCC_COLUMNS)]
+        lines += ["", _DBCC_CAPTION, *_markdown_table(splits, _DBCC_COLUMNS)]
     return "\n".join(lines)
 
 
-def _tokenizer():
+def _tokenizer() -> _Encoder | None:
     """Return the o200k tokenizer, or None when tiktoken is not installed."""
     try:
         import tiktoken
