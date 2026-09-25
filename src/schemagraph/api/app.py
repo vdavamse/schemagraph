@@ -1,12 +1,15 @@
 """FastAPI backend: connections, builds, graph browsing, linking, glossary, join hints.
 
-Serves the built frontend from ``web/dist`` at ``/`` when present.
+Serves the MCP server (streamable HTTP) at ``/mcp`` over the same Engine, and the built
+frontend from ``web/dist`` at ``/`` when present.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from schemagraph.engine import Engine
+from schemagraph.mcp.server import DEFAULT_HOST, create_server
 from schemagraph.model import BusinessTerm, Edge, LinkResult, Table
 
 log = logging.getLogger("schemagraph.api")
@@ -76,25 +80,44 @@ class JoinHintIn(BaseModel):
     description: str | None = None
 
 
-def create_app(engine: Engine | None = None, *, web_dist: str | Path | None = None) -> FastAPI:
+def create_app(
+    engine: Engine | None = None,
+    *,
+    web_dist: str | Path | None = None,
+    host: str = DEFAULT_HOST,
+) -> FastAPI:
     """Build the FastAPI app over ``engine`` (a new default Engine when None).
 
     Args:
         engine: The engine every route reads and writes.
         web_dist: Built frontend directory; default ``$SCHEMAGRAPH_WEB_DIST`` or the repo's
             ``web/dist``. The UI is mounted only when it exists.
+        host: Host the app is served on; on a loopback host the ``/mcp`` endpoint accepts only
+            loopback ``Host``/``Origin`` headers (see :func:`create_server`).
 
     Returns:
-        The app, with the engine at ``app.state.engine``.
+        The app, with the engine at ``app.state.engine`` and the MCP server at
+        ``app.state.mcp``.
     """
     engine = engine or Engine()
-    app = FastAPI(title="schemagraph", version="0.1.0")
+    mcp_server = create_server(engine, host=host)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        # a mounted app's lifespan never runs, so the MCP session manager starts here
+        async with mcp_server.session_manager.run():
+            yield
+
+    app = FastAPI(title="schemagraph", version="0.1.0", lifespan=lifespan)
     app.state.engine = engine
+    app.state.mcp = mcp_server
     _add_health_route(app, engine)
     _add_connection_routes(app, engine)
     _add_graph_routes(app, engine)
     _add_linking_routes(app, engine)
     _add_glossary_routes(app, engine)
+    # plain Starlette routes, so not in the OpenAPI schema; before the frontend's catch-all "/"
+    app.router.routes.extend(mcp_server.streamable_http_app().routes)
     _mount_frontend(app, _resolve_web_dist(web_dist))
     return app
 

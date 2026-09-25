@@ -10,8 +10,9 @@ import logging
 import os
 import threading
 import time
+from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from schemagraph import connectors  # noqa: F401  (registers connector types)
 from schemagraph.connectors.base import config_schema, connector_types, make_connector
@@ -20,13 +21,44 @@ from schemagraph.linking.linker import Linker, LinkOptions
 from schemagraph.model import BusinessTerm, Edge, LinkResult, SchemaSnapshot, Table
 from schemagraph.store import Store, substitute_env
 
+if TYPE_CHECKING:
+    from schemagraph.agent.results import AgentConfig, AnswerResult
+
 log = logging.getLogger("schemagraph")
 
 DEFAULT_HOME = Path(os.environ.get("SCHEMAGRAPH_HOME", ".schemagraph"))
 
 
+_AGENT_EXTRA_HINT = "schemagraph answers need the agent extra: uv sync --extra agent"
+
 # Values of ``SCHEMAGRAPH_EMBED`` that turn embeddings on (anything else but ``auto`` is off).
 _EMBED_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def find_join_paths(schema_graph: SchemaGraph, a: str, b: str) -> list[list[str]]:
+    """Shortest join path(s) between two tables of ``schema_graph``, as lists of table FQNs.
+
+    Tables are looked up by FQN or unambiguous suffix. Falls back to lineage routes when no join
+    route exists, so "how do these connect" still answers. :meth:`Engine.join_path` and the MCP
+    server's :class:`~schemagraph.mcp.source.LinkerSource` both call this.
+
+    Raises:
+        KeyError: Either table is unknown.
+    """
+    from schemagraph.graph.pathfinding import union_of_shortest_paths
+
+    table_a, table_b = schema_graph.find_table(a), schema_graph.find_table(b)
+    if not table_a or not table_b:
+        raise KeyError(a if not table_a else b)
+    paths, _ = union_of_shortest_paths(schema_graph, [table_a.fqn], [table_b.fqn])
+    if not paths:  # no join route: fall back to lineage
+        paths, _ = union_of_shortest_paths(
+            schema_graph,
+            [table_a.fqn],
+            [table_b.fqn],
+            kinds=None,
+        )
+    return [[schema_graph.graph.nodes[node]["fqn"] for node in path] for path in paths]
 
 
 class Engine:
@@ -334,6 +366,10 @@ class Engine:
         """Every relation edge in the graph."""
         return self.graph.all_edges()
 
+    def terms(self) -> list[BusinessTerm]:
+        """Every merged glossary term (the user glossary and the catalogs')."""
+        return list(self.graph.terms.values())
+
     def join_path(self, a: str, b: str) -> list[list[str]]:
         """Shortest join path(s) between two tables, as lists of table FQNs.
 
@@ -343,20 +379,7 @@ class Engine:
         Raises:
             KeyError: Either table is unknown.
         """
-        from schemagraph.graph.pathfinding import union_of_shortest_paths
-
-        table_a, table_b = self.graph.find_table(a), self.graph.find_table(b)
-        if not table_a or not table_b:
-            raise KeyError(a if not table_a else b)
-        paths, _ = union_of_shortest_paths(self.graph, [table_a.fqn], [table_b.fqn])
-        if not paths:  # no join route: fall back to lineage
-            paths, _ = union_of_shortest_paths(
-                self.graph,
-                [table_a.fqn],
-                [table_b.fqn],
-                kinds=None,
-            )
-        return [[self.graph.graph.nodes[node]["fqn"] for node in path] for path in paths]
+        return find_join_paths(self.graph, a, b)
 
     def stats(self) -> dict[str, Any]:
         """Graph counts plus the engine's ``llm``, ``embed`` and ``home`` settings."""
@@ -365,3 +388,106 @@ class Engine:
         stats["embed"] = self.has_embed
         stats["home"] = str(self.home)
         return stats
+
+    # ----------------------------------------------------------- answers (optional `agent` extra)
+    def answer(
+        self,
+        question: str,
+        *,
+        connection: str | None = None,
+        db: str | Path | None = None,
+        config: AgentConfig | None = None,
+        evidence: str | None = None,
+    ) -> AnswerResult:
+        """Write, run and pick SQL for ``question`` (:mod:`schemagraph.agent`).
+
+        A sync wrapper of :meth:`answer_async`, which takes the same arguments; inside an event
+        loop, await that instead.
+
+        Raises:
+            RuntimeError: Called inside a running event loop.
+        """
+        import asyncio
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(
+                self.answer_async(
+                    question, connection=connection, db=db, config=config, evidence=evidence
+                )
+            )
+        raise RuntimeError(
+            "Engine.answer() called inside a running event loop; await Engine.answer_async()"
+        )
+
+    async def answer_async(
+        self,
+        question: str,
+        *,
+        connection: str | None = None,
+        db: str | Path | None = None,
+        config: AgentConfig | None = None,
+        evidence: str | None = None,
+    ) -> AnswerResult:
+        """Write, run and pick SQL for ``question``, executing read-only.
+
+        The agents read the schema over MCP: from ``config.mcp_url`` when it is set, else from
+        this engine, served on an ephemeral localhost port for the call and scoped to the
+        connection. The MCP tools link in a worker thread, so the engine lock is held only
+        inside :meth:`link`, never across an ``await``.
+
+        Args:
+            question: The question.
+            connection: The ``duckdb`` connection to run on (default: the only one). With
+                ``db``, it only scopes the schema.
+            db: A ``.duckdb``/``.sqlite`` file to run on instead of the connection's database.
+            config: The agent settings (default ``AgentConfig()``).
+            evidence: External knowledge for the question.
+
+        Returns:
+            The chosen query, its result and every candidate.
+
+        Raises:
+            ImportError: The ``agent`` extra is not installed.
+            AgentError: The connection is unknown or cannot execute.
+            ValueError: No connection was given and there is not exactly one ``duckdb`` one.
+            FileNotFoundError: ``db`` does not exist.
+        """
+        try:
+            from schemagraph.agent.answer import Answerer
+            from schemagraph.agent.execute import executor_for_connection
+            from schemagraph.agent.results import AgentConfig
+            from schemagraph.agent.schema_client import SchemaClient
+        except ImportError as error:  # pragma: no cover - depends on the installed extras
+            raise ImportError(_AGENT_EXTRA_HINT) from error
+        from schemagraph.mcp import create_server, serve_http_async
+
+        cfg = config or AgentConfig()
+        name = connection  # with db and no connection: run on the file, schema unscoped
+        if connection is None and db is None:
+            name = self._exec_connection()  # the only duckdb connection
+        executor = executor_for_connection(self, name, db=db)
+        try:
+            async with AsyncExitStack() as stack:
+                mcp_url = cfg.mcp_url or await stack.enter_async_context(
+                    serve_http_async(create_server(self, connection=name))
+                )
+                answerer = Answerer(SchemaClient(mcp_url), executor, cfg)
+                return await answerer.answer(question, evidence=evidence)
+        finally:
+            executor.close()
+
+    def _exec_connection(self) -> str:
+        """Return the only duckdb connection.
+
+        Raises:
+            ValueError: There is not exactly one.
+        """
+        names = [c["name"] for c in self.store.connections() if c["type"] == "duckdb"]
+        if len(names) != 1:
+            raise ValueError(
+                f"pass a connection: {len(names)} duckdb connections "
+                f"({', '.join(names) or 'none'}); only duckdb connections execute"
+            )
+        return names[0]

@@ -54,10 +54,25 @@ Every table, edge and glossary term remembers which source it came from, and sou
 ## Use it from an agent
 
 ```bash
-uv run schemagraph mcp        # stdio MCP server: link_schema, get_table, find_join_path, ...
+uv run schemagraph mcp                    # stdio MCP server: link_schema, get_table, find_join_path, ...
+uv run schemagraph mcp --transport http   # the same tools over streamable HTTP at http://127.0.0.1:8766/mcp
 ```
 
-Or `POST /api/link {"question": "..."}` and paste the returned `ddl` into your prompt.
+`schemagraph serve` also serves the MCP server at `http://127.0.0.1:8765/mcp`, over the same graph as the API and UI. The tools are read-only and never execute SQL. Or `POST /api/link {"question": "..."}` and paste the returned `ddl` into your prompt.
+
+## Answer questions (optional)
+
+```bash
+uv sync --extra agent
+export DASHSCOPE_API_KEY=...        # Qwen generator + critic (alibaba:qwen3.8-max)
+export TYPESAFE_API_KEY=...         # Jev judge + selector (typesafe:jev-1.13.0)
+uv run schemagraph add-duckdb shop.duckdb -n shop
+uv run schemagraph ask "revenue by product category for customers in california" -c shop --strategy abmcts --budget 16
+```
+
+`ask` reads the schema through schemagraph's own MCP server, writes SQL with Qwen, runs it **read-only** against the DuckDB file (guard + engine statement check + hardened connection, timeout and row caps), scores each candidate with deterministic checks and a Jev rubric, and searches with TreeQuest AB-MCTS (`--strategy best_of_n | refine | single` for the baselines). Any pydantic-ai model string works per role via `SCHEMAGRAPH_GEN_MODEL`, `SCHEMAGRAPH_JUDGE_MODEL`, `SCHEMAGRAPH_CRITIC_MODEL`. Cost scales with `--budget` (generator nodes).
+
+By default `ask` serves this home's schema, scoped to the connection, on an ephemeral localhost port for the length of the call. `--mcp-url http://127.0.0.1:8765/mcp` points the agents at a running server instead (`serve`'s `/mcp`, or `mcp --transport http`); that server is not scoped, so `-c` then only picks the database the SQL runs on. The generator gets the server's `link_schema`, `search_tables`, `get_table`, `find_join_path` and `list_glossary` tools; `sample_values` and `run_query`, the two that execute, stay local to the agent.
 
 ## Layout
 
@@ -69,9 +84,12 @@ src/schemagraph/
   linking/          lexical (LinearRAG activation), linker (pipeline), render (DDL)
   llm/anchors.py    optional Claude anchor-table pass
   store.py          DuckDB persistence   engine.py  the one object everything drives
-  api/  mcp/  cli.py
+  mcp/              MCP server over a SchemaSource (Engine, LinkerSource, ScopedSource); stdio or streamable HTTP
+  agent/            optional: read-only execution, checks, Qwen/Jev agents, TreeQuest search (`ask`)
+  api/  cli.py      FastAPI (with MCP at /mcp) and Typer
+  bench/            Spider 2.0 / Spider benchmarks, execution accuracy and the judge study
 web/                Vite + React UI
-tests/              33 tests, no network (catalog connectors run against canned payloads)
+tests/              no network (catalog connectors run against canned payloads, agents against scripted models)
 ```
 
 ## Benchmark
@@ -84,4 +102,4 @@ uv run schemagraph bench-spider2-lite /path/to/Spider2   # gold-table recall on 
 
 ## Status
 
-v1. No SQL execution and no governance by design — the agent calling `link_schema` owns that boundary. Catalog connectors are written against the documented Unity Catalog 2.1, Glue and Collibra 2.0 APIs and tested with recorded payloads; run **check** on a real connection before trusting a build.
+v1. No writes and no governance by design — the agent calling `link_schema` owns that boundary; SQL runs only in the optional `ask` loop, read-only. Catalog connectors are written against the documented Unity Catalog 2.1, Glue and Collibra 2.0 APIs and tested with recorded payloads; run **check** on a real connection before trusting a build.

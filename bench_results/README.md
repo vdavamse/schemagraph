@@ -327,6 +327,33 @@ absolute level is the real finding: with FKs in the graph, bridge tables with no
 of 10, so 47 % of these multi-join questions get all their tables within 6. Join-implied tables are the next
 ranking problem on every suite.
 
+## Execution accuracy on the local SQLite tasks (`bench-spider2-exec`, agent extra)
+
+The answer loop (`schemagraph.agent`, issue #6): Qwen generator (`alibaba:qwen3.8-max`), Jev judge and selector (`typesafe:jev-1.13.0`), TreeQuest AB-MCTS against its baselines at equal budget, on the 135 `local*` Spider 2.0-Lite tasks (SQLite; `local_sqlite.zip` unpacked into `spider2-lite/resource/databases/spider2-localdb/`). EX uses `bench/spider2_eval.py`, a plain-Python port of the official comparison.
+
+The agents read the schema over MCP, as `schemagraph ask` does: each database's linker (built as in `bench-spider2-lite`, but with partition families off so the generator sees real table names) is wrapped in a `LinkerSource` and served on its own in-process streamable-HTTP MCP server from its first task to its last. Rows carry a `config_hash` of the strategy, budget, models, seed and agent settings; `AgentConfig.mcp_url` is left out of it (the benchmark always serves each database itself), so rows written before that field existed still resume. The judge study (`--judge-only`) lives in `bench/spider2_judge.py` and uses the same servers.
+
+**Comparator validation (2026-09-24).** The port agrees with the official `compare_pandas_table` / `compare_multi_pandas_table` on all 24 local tasks with public gold SQL (gold SQL executed read-only through `SQLiteExecutor`) and on 300 random tables (`tests/test_spider2_eval.py` repeats 200 when pandas and a Spider2 clone are present). Note that the official evaluator itself scores 8 of those 24 gold SQL files 0 against their own gold CSVs (local003, 023, 029, 066, 131, 210, 219, 309): the public gold SQL does not always reproduce the gold result, so an oracle below 100 % is expected.
+
+**Judge study (`--judge-only`, pool of 8 best-of-N candidates per task).** _Pending the live run (needs `DASHSCOPE_API_KEY` and `TYPESAFE_API_KEY`)._
+
+| judge | n | AUROC mean | AUROC combined | pick accuracy | tokens in | p50 ms |
+|---|---|---|---|---|---|---|
+| typesafe:jev-1.13.0 | | | | | | |
+| alibaba:qwen3.8-max (same rubric) | | | | | | |
+
+**Strategies at equal budget.** _Pending the live run._
+
+| strategy | budget | EX | EX (top score) | oracle | nodes | refinements | tokens in / out | p50 s |
+|---|---|---|---|---|---|---|---|---|
+| single | 1 | | | | | | | |
+| best_of_n | 8 | | | | | | | |
+| refine | 8 | | | | | | | |
+| abmcts | 8 | | | | | | | |
+| best_of_n | 16 | | | | | | | |
+| refine | 16 | | | | | | | |
+| abmcts | 16 | | | | | | | |
+
 ## Reading the numbers against the literature
 
 The Spider 2.0 leaderboard scores execution accuracy of end-to-end text-to-SQL. schemagraph

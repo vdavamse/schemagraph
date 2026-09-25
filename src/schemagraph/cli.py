@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import json
 import logging
+from importlib.util import find_spec
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import typer
 
+from schemagraph.agent.results import Strategy
 from schemagraph.engine import Engine
+
+if TYPE_CHECKING:
+    from schemagraph.agent.results import AgentConfig, AnswerResult
 
 app = typer.Typer(
     help="schemagraph: graph-native schema context engine for text-to-SQL.",
@@ -23,6 +28,16 @@ OptOpt = Annotated[
     list[str] | None,
     typer.Option("--opt", help="extra LinkOptions as key=value (repeatable)"),
 ]
+# Result rows and characters per cell ``ask`` prints.
+ASK_PREVIEW_ROWS = 20
+ASK_PREVIEW_CELL_CHARS = 40
+# The judge study reports its progress every this many tasks.
+JUDGE_PROGRESS_EVERY = 10
+# Loggers that log every in-process MCP request at INFO.
+_MCP_LOGGERS = ("httpx", "mcp")
+# Packages of the agent extra that ``ask`` and ``bench-spider2-exec`` import (fastmcp comes with
+# pydantic-ai-slim[mcp] and is the orchestrator's MCP client).
+_AGENT_EXTRA_MODULES = ("pydantic_ai", "treequest", "fastmcp")
 
 
 def _parse_opt(v: str):
@@ -224,12 +239,12 @@ def stats(home: HomeOpt = None):
 
 @app.command()
 def serve(host: str = "127.0.0.1", port: int = 8765, home: HomeOpt = None):
-    """Run the HTTP API + frontend."""
+    """Run the HTTP API + frontend, with the MCP server (streamable HTTP) at /mcp."""
     import uvicorn
 
     from schemagraph.api.app import create_app
 
-    uvicorn.run(create_app(_engine(home)), host=host, port=port)
+    uvicorn.run(create_app(_engine(home), host=host), host=host, port=port)
 
 
 @app.command()
@@ -350,13 +365,292 @@ def bench_spider2_lite(
     typer.echo(f"\nresults written to {out}/")
 
 
+def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
+    """Build the agent settings of ``ask`` and ``bench-spider2-exec``.
+
+    Exits with the install hint, before anything imports them, when a package of the agent
+    extra is missing.
+    """
+    from schemagraph.agent.results import AgentConfig
+
+    missing = [module for module in _AGENT_EXTRA_MODULES if find_spec(module) is None]
+    if missing:
+        typer.echo(
+            f"missing {', '.join(missing)}; install the agent extra: uv sync --extra agent",
+            err=True,
+        )
+        raise typer.Exit(1)
+    return AgentConfig(strategy=strategy, **settings)
+
+
+def _quiet_mcp_logs() -> None:
+    """Log the in-process MCP traffic only from WARNING up."""
+    for name in _MCP_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+def _answer_errors() -> tuple[type[Exception], ...]:
+    """Errors ``ask`` reports as one line, without a traceback: bad input, not bugs.
+
+    A missing model key is pydantic-ai's ``UserError``, raised before any node runs. Without
+    pydantic-ai the tuple leaves it out, so evaluating it never raises.
+    """
+    from schemagraph.agent.execute import AgentError
+
+    errors: tuple[type[Exception], ...] = (AgentError, ImportError, ValueError, FileNotFoundError)
+    try:
+        from pydantic_ai.exceptions import UserError
+    except ImportError:
+        return errors
+    return (*errors, UserError)
+
+
+def _print_answer(result: AnswerResult) -> None:
+    """Print the chosen query, a result preview, the score and the usage per role."""
+    from schemagraph.agent.prompts import preview
+
+    typer.echo(result.sql or "-- no query")
+    typer.echo(f"\n{preview(result.result, ASK_PREVIEW_ROWS, cell_chars=ASK_PREVIEW_CELL_CHARS)}")
+    early = ", stopped early" if result.stopped_early else ""
+    typer.echo(
+        f"\nscore {result.score:.2f} ({result.chosen_by}), {result.nodes} nodes{early}, "
+        f"{result.ms / 1000:.1f}s"
+    )
+    for role, usage in result.usage.by_role.items():
+        errors = "" if usage.ok else " (errors)"
+        typer.echo(
+            f"  {role:9} {usage.model:24} calls={usage.calls} requests={usage.requests} "
+            f"tokens={usage.input_tokens}/{usage.output_tokens} {usage.ms / 1000:.1f}s{errors}"
+        )
+
+
+StrategyOpt = Annotated[Strategy, typer.Option(help="abmcts | best_of_n | refine | single")]
+SelectorOpt = Annotated[
+    bool, typer.Option(help="final pairwise pick among the top candidates")
+]
+
+
 @app.command()
-def mcp(home: HomeOpt = None, transport: str = "stdio"):
-    """Run the MCP server (stdio by default)."""
+def ask(
+    question: str,
+    connection: Annotated[
+        str | None,
+        typer.Option(
+            "--connection", "-c", help="duckdb connection to run on (default: the only one)"
+        ),
+    ] = None,
+    db: Annotated[
+        Path | None,
+        typer.Option(help="run on this .duckdb/.sqlite file instead of the connection's"),
+    ] = None,
+    mcp_url: Annotated[
+        str | None,
+        typer.Option(
+            help=(
+                "schemagraph MCP server (streamable HTTP) the agents read the schema from, e.g. "
+                "http://127.0.0.1:8765/mcp (default: serve this home's schema for the call)"
+            )
+        ),
+    ] = None,
+    strategy: StrategyOpt = "abmcts",
+    budget: Annotated[int, typer.Option(help="generator nodes")] = 16,
+    batch: Annotated[int, typer.Option(help="nodes generated concurrently")] = 4,
+    seed: int = 0,
+    gen_model: Annotated[
+        str | None,
+        typer.Option(
+            help="generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max)"
+        ),
+    ] = None,
+    judge_model: Annotated[
+        str | None,
+        typer.Option(
+            help="judge/selector model (default $SCHEMAGRAPH_JUDGE_MODEL or typesafe:jev-1.13.0)"
+        ),
+    ] = None,
+    judge: Annotated[bool, typer.Option(help="score candidates with the judge")] = True,
+    selector: SelectorOpt = True,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="print the full AnswerResult as JSON")
+    ] = False,
+    home: HomeOpt = None,
+):
+    """Write, run (read-only) and pick SQL for a question (needs the agent extra and model keys)."""
+    cfg = _agent_config(
+        strategy,
+        budget=budget,
+        batch_size=batch,
+        seed=seed,
+        gen_model=gen_model,
+        judge_model=judge_model,
+        judge=judge,
+        selector=selector,
+        mcp_url=mcp_url,
+    )
+    engine = _engine(home)
+    _quiet_mcp_logs()
+    try:
+        result = engine.answer(question, connection=connection, db=db, config=cfg)
+    except _answer_errors() as error:
+        typer.echo(f"error: {error}", err=True)
+        raise typer.Exit(1) from None
+    finally:
+        engine.close()
+    if as_json:
+        typer.echo(result.model_dump_json(indent=2))
+    else:
+        _print_answer(result)
+
+
+def _judge_study_progress(what: str, done: int, total: int) -> None:
+    """Report the judge study's progress every :data:`JUDGE_PROGRESS_EVERY` tasks."""
+    if done % JUDGE_PROGRESS_EVERY == 0 or done == total:
+        typer.echo(f"  {what} {done}/{total}", err=True)
+
+
+def _task_progress(done: int, total: int, row: dict[str, Any]) -> None:
+    """Report one finished execution-benchmark task."""
+    typer.echo(
+        f"  {done}/{total}  {row['instance_id']} ex={row.get('ex')} nodes={row.get('nodes')} "
+        f"{row.get('error') or ''}",
+        err=True,
+    )
+
+
+@app.command()
+def bench_spider2_exec(
+    spider2_root: Annotated[
+        Path,
+        typer.Argument(
+            help="path to the xlang-ai/Spider2 clone (with the local SQLite databases unpacked)"
+        ),
+    ],
+    strategy: StrategyOpt = "abmcts",
+    budget: int = 16,
+    batch: int = 4,
+    seed: int = 0,
+    gen_model: str | None = None,
+    judge_model: str | None = None,
+    selector: SelectorOpt = True,
+    judge_only: Annotated[
+        bool,
+        typer.Option(
+            "--judge-only",
+            help=(
+                "judge study: AUROC of each --compare-judge against execution match on one "
+                "candidate pool"
+            ),
+        ),
+    ] = False,
+    compare_judge: Annotated[
+        list[str] | None,
+        typer.Option(help="judge models for --judge-only (repeatable; default Jev and Qwen)"),
+    ] = None,
+    pool: Annotated[
+        Path | None, typer.Option(help="--judge-only: reuse this candidate pool (jsonl)")
+    ] = None,
+    pool_size: Annotated[
+        int, typer.Option(help="--judge-only: candidates generated per task")
+    ] = 8,
+    docs: Annotated[bool, typer.Option(help="pass the task's external-knowledge document")] = True,
+    concurrency: Annotated[
+        int,
+        typer.Option(
+            help="tasks in parallel (>1 is faster but AB-MCTS runs are not reproducible)"
+        ),
+    ] = 1,
+    limit: int | None = None,
+    only: Annotated[
+        list[str] | None, typer.Option(help="only these instance ids (repeatable)")
+    ] = None,
+    out: Path = Path("bench_results"),
+    tag: Annotated[
+        str | None,
+        typer.Option(help="output file tag (default <strategy>_n<budget>, or judge)"),
+    ] = None,
+    resume: Annotated[bool, typer.Option(help="skip tasks already in the rows file")] = True,
+):
+    """Execution accuracy of the agent loop on the 135 Spider 2.0-Lite local (SQLite) tasks."""
+    from schemagraph.bench import spider2_exec
+
+    cfg = _agent_config(
+        strategy,
+        budget=budget,
+        batch_size=batch,
+        seed=seed,
+        gen_model=gen_model,
+        judge_model=judge_model,
+        judge=True,
+        selector=selector,
+    )
+    ids = set(only) if only else None
+    _quiet_mcp_logs()
+    if judge_only:
+        from schemagraph.agent.models import DEFAULT_GEN_MODEL, DEFAULT_JUDGE_MODEL
+        from schemagraph.bench import spider2_judge
+
+        judges = compare_judge or [DEFAULT_JUDGE_MODEL, gen_model or DEFAULT_GEN_MODEL]
+        report = spider2_judge.judge_only(
+            spider2_root,
+            judges=judges,
+            cfg=cfg,
+            pool_size=pool_size,
+            pool=pool,
+            limit=limit,
+            only=ids,
+            tag=tag or "judge",
+            out_dir=out,
+            use_docs=docs,
+            progress=_judge_study_progress,
+        )
+        typer.echo(json.dumps(report, indent=2))
+        return
+    result = spider2_exec.run(
+        spider2_root,
+        cfg=cfg,
+        limit=limit,
+        only=ids,
+        tag=tag,
+        out_dir=out,
+        seed=seed,
+        use_docs=docs,
+        resume=resume,
+        concurrency=concurrency,
+        progress=_task_progress,
+    )
+    typer.echo(spider2_exec.format_table(result["summary"]))
+    typer.echo(f"\nresults written to {out}/")
+
+
+TransportOpt = Annotated[
+    Literal["stdio", "http", "streamable-http", "sse"],
+    typer.Option(help="stdio, http (streamable HTTP at /mcp; alias streamable-http) or sse"),
+]
+
+
+@app.command()
+def mcp(
+    home: HomeOpt = None,
+    transport: TransportOpt = "stdio",
+    host: Annotated[
+        str,
+        typer.Option(help="Interface to bind with --transport http or sse"),
+    ] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Port with --transport http or sse")] = 8766,
+):
+    """Run the MCP server (stdio by default; --transport http serves http://HOST:PORT/mcp)."""
+    from schemagraph.mcp.http import run_http
     from schemagraph.mcp.server import create_server
 
     logging.basicConfig(level=logging.WARNING)
-    create_server(Engine(home)).run(transport=transport)  # type: ignore[arg-type]
+    server = create_server(Engine(home), host=host)
+    if transport in ("http", "streamable-http"):
+        run_http(server, host=host, port=port)
+    elif transport == "sse":
+        server.settings.port = port
+        server.run(transport="sse")
+    else:
+        server.run()
 
 
 if __name__ == "__main__":  # pragma: no cover
