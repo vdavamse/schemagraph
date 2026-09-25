@@ -124,10 +124,20 @@ class RubricBase(BaseModel):
 
 RUBRIC_FIELDS: tuple[str, ...] = tuple(RubricBase.model_fields)
 MISSING_DESCRIPTION = "Which of these tables does the question need that the query does not use?"
+# Opt-in rubric field (AgentConfig.judge_ambiguity): a question with two readings should not be
+# judged against only one of them.
+READINGS_FIELD = "covers_readings"
+READINGS_DESCRIPTION = (
+    "If the question can reasonably be read in more than one way (for example, a list of rows "
+    "and a figure per group), does the result give what every reasonable reading asks for? "
+    "If the question has only one reading, answer yes."
+)
 
 
 @lru_cache(maxsize=256)
-def rubric_type(missing_options: tuple[str, ...] = ()) -> type[RubricBase]:
+def rubric_type(
+    missing_options: tuple[str, ...] = (), *, readings: bool = False
+) -> type[RubricBase]:
     """Build the judge's output type.
 
     Jev picks from candidates better than it extracts, so the rubric asks which of the linked and
@@ -136,21 +146,23 @@ def rubric_type(missing_options: tuple[str, ...] = ()) -> type[RubricBase]:
     Args:
         missing_options: Candidate table names; blanks and duplicates are dropped and at most
             `MAX_OPTIONS` are kept.
+        readings: Add the :data:`READINGS_FIELD` probability, which counts in the judge's mean.
 
     Returns:
-        `RubricBase` itself when fewer than two options remain, else a ``Rubric`` subclass with
-        a ``missing: list[Literal[...]]`` field.
+        `RubricBase` itself when fewer than two options remain and ``readings`` is off, else a
+        ``Rubric`` subclass with a ``missing: list[Literal[...]]`` field and/or the readings
+        field.
     """
     options = tuple(dict.fromkeys(option for option in missing_options if option))[:MAX_OPTIONS]
-    if len(options) < _MIN_OPTIONS:
+    extra: dict[str, Any] = {}
+    if readings:
+        extra[READINGS_FIELD] = (float, _probability(READINGS_DESCRIPTION))
+    if len(options) >= _MIN_OPTIONS:
+        missing_field = Field(default_factory=list, description=MISSING_DESCRIPTION)
+        extra["missing"] = (list[Literal[options]], missing_field)  # type: ignore[valid-type]
+    if not extra:
         return RubricBase
-    missing_field = Field(default_factory=list, description=MISSING_DESCRIPTION)
-    return create_model(
-        "Rubric",
-        __base__=RubricBase,
-        __doc__=RubricBase.__doc__,
-        missing=(list[Literal[options]], missing_field),  # type: ignore[valid-type]
-    )
+    return create_model("Rubric", __base__=RubricBase, __doc__=RubricBase.__doc__, **extra)
 
 
 class Pick(BaseModel):
@@ -444,6 +456,13 @@ class AgentConfig:
         preview_rows: Result rows shown to the judge.
         evidence_chars: External-knowledge characters shown to the generator.
         judge_evidence_chars: External-knowledge characters shown to the judge.
+        judge_schema: Show the judge the tables the query reads: columns, keys, relations and
+            row counts, so it can see a join that repeats rows.
+        judge_findings: Show the judge the deterministic checks' findings.
+        judge_stats: Show the judge per-column statistics of the fetched result (distinct
+            values, NULLs, range), so it can see the result's grain.
+        judge_ambiguity: Ask the judge whether the result covers every reasonable reading of
+            the question (an extra rubric field, counted in its mean).
         exec_limit: Rows fetched per execution.
         exec_timeout_s: Execution timeout in seconds.
         count_cap: Rows counted per execution before counting stops.
@@ -475,6 +494,10 @@ class AgentConfig:
     preview_rows: int = 10
     evidence_chars: int = 4000
     judge_evidence_chars: int = 1000
+    judge_schema: bool = False
+    judge_findings: bool = False
+    judge_stats: bool = False
+    judge_ambiguity: bool = False
     exec_limit: int = 1000
     exec_timeout_s: float = 30.0
     count_cap: int = 100_000

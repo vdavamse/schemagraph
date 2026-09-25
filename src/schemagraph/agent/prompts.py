@@ -49,6 +49,15 @@ PREVIEW_CELL_CHARS = 60
 ATTEMPT_PREVIEW_ROWS = 5
 # SQL characters shown to the judge, and per candidate to the selector.
 JUDGE_SQL_CHARS = 6000
+# Characters of the schema section shown to the judge (AgentConfig.judge_schema).
+JUDGE_SCHEMA_CHARS = 8000
+# Characters of a column description, and sample values per column, in that section.
+JUDGE_DESCRIPTION_CHARS = 100
+JUDGE_SAMPLES = 3
+# Longer sample values (ids, hashes, free text) are left out of the judge's schema.
+JUDGE_SAMPLE_CHARS = 20
+# Result columns summarised for the judge (AgentConfig.judge_stats).
+JUDGE_STATS_COLUMNS = 20
 PICK_SQL_CHARS = 4000
 # Result rows shown per candidate to the selector.
 PICK_PREVIEW_ROWS = 6
@@ -152,8 +161,11 @@ def judge_material(
     rows: int,
     evidence: str | None = None,
     evidence_chars: int,
+    schema: str | None = None,
+    findings: list[str] | None = None,
+    stats: bool = False,
 ) -> str:
-    """Build what the judge reads: the question, optional notes, the SQL and a result preview.
+    """Build what the judge reads: the question, notes, schema, SQL, result and checks.
 
     Args:
         question: The user's question.
@@ -163,6 +175,9 @@ def judge_material(
         evidence: External knowledge for the question, if any.
         evidence_chars: Characters of ``evidence`` kept; 0 leaves it out
             (``AgentConfig.judge_evidence_chars``).
+        schema: The tables the query reads (:func:`judge_schema`), if shown.
+        findings: The deterministic checks' messages, if shown.
+        stats: Add per-column statistics of the fetched rows (:func:`result_stats`).
 
     Returns:
         The material's sections, separated by blank lines.
@@ -170,9 +185,115 @@ def judge_material(
     sections = [f"Question: {question}"]
     if evidence and evidence_chars > 0:
         sections.append(f"Notes: {evidence[:evidence_chars]}")
+    if schema:
+        sections.append(f"Tables the query reads:\n{schema[:JUDGE_SCHEMA_CHARS]}")
     sections.append(f"SQL:\n{sql[:JUDGE_SQL_CHARS]}")
     sections.append(f"Result: {preview(result, rows)}")
+    if stats and (summary := result_stats(result)):
+        sections.append(f"Result columns:\n{summary}")
+    if findings:
+        sections.append("Checks:\n" + "\n".join(f"- {line}" for line in findings))
     return "\n\n".join(sections)
+
+
+def judge_schema(
+    tables: list[dict],
+    row_counts: dict[str, int | None],
+    join_keys: list[tuple[str, str, str, str, int, int, int, int]] | None = None,
+) -> str:
+    """Describe the tables a query reads for the judge: rows, key, columns and relations.
+
+    Row counts, relations and above all the join-key lines are what let the judge see a join
+    that repeats rows, such as counting reviews through a table with one row per order item.
+
+    Args:
+        tables: ``get_table`` details of the tables the query reads.
+        row_counts: Row count per table FQN, where known.
+        join_keys: The query's join conditions as ``(table_a, column_a, table_b, column_b,
+            rows_a, distinct_a, rows_b, distinct_b)`` (:func:`join_key_lines`).
+    """
+    blocks = []
+    for table in tables:
+        count = row_counts.get(table["fqn"])
+        rows = f"{count:,} rows" if count is not None else "row count unknown"
+        key = ", ".join(table.get("primary_key") or []) or "none declared"
+        lines = [f"{table['fqn']} ({rows}; primary key: {key})"]
+        if table.get("description"):
+            lines.append(f"  {table['description'][:JUDGE_DESCRIPTION_CHARS]}")
+        for column in table.get("columns", []):
+            line = f"  {column['name']} {column.get('data_type') or ''}".rstrip()
+            if column.get("description"):
+                line += f" -- {column['description'][:JUDGE_DESCRIPTION_CHARS]}"
+            samples = [
+                value
+                for value in column.get("sample_values", [])
+                if len(value) <= JUDGE_SAMPLE_CHARS  # ids and hashes say nothing
+            ][:JUDGE_SAMPLES]
+            if samples:
+                line += f" (e.g. {', '.join(samples)})"
+            lines.append(line)
+        for edge in table.get("relations", []):
+            if edge.get("kind") == "lineage":
+                continue
+            left = f"{edge['from_table']}({', '.join(edge.get('from_columns') or [])})"
+            right = f"{edge['to_table']}({', '.join(edge.get('to_columns') or [])})"
+            lines.append(f"  relation: {left} -> {right} [{edge['kind']}]")
+        blocks.append("\n".join(lines))
+    if join_keys:
+        blocks.append("Joins in the query:\n" + "\n".join(join_key_lines(join_keys)))
+    return "\n\n".join(blocks)
+
+
+def join_key_lines(join_keys: list[tuple[str, str, str, str, int, int, int, int]]) -> list[str]:
+    """State, per join condition, whether each side's key is unique and what that does.
+
+    A join repeats the rows of one side once per matching row of the other; when the other
+    side's key is not unique, ``COUNT(*)`` and ``SUM`` over the joined rows count those rows
+    more than once. Spelled out because a fast judge does not derive it from row counts.
+    """
+    lines = []
+    for table_a, column_a, table_b, column_b, rows_a, distinct_a, rows_b, distinct_b in join_keys:
+        lines.append(f"- {table_a}.{column_a} = {table_b}.{column_b}")
+        for table, column, rows, distinct, other in (
+            (table_a, column_a, rows_a, distinct_a, table_b),
+            (table_b, column_b, rows_b, distinct_b, table_a),
+        ):
+            if distinct and rows > distinct:
+                lines.append(
+                    f"  {table}.{column} is not unique ({rows:,} rows, {distinct:,} values, "
+                    f"{rows / distinct:.2f} rows per value): each {other} row is repeated once "
+                    f"per matching {table} row, so COUNT(*) or SUM over {other} values after "
+                    "this join counts them more than once"
+                )
+            elif distinct:
+                lines.append(f"  {table}.{column} is unique ({rows:,} rows)")
+    return lines
+
+
+def result_stats(result: ExecResult | None) -> str:
+    """Summarise each fetched column: distinct values, NULLs and range, plus distinct rows.
+
+    Distinct counts next to the row count show the result's grain: 600 rows with 200 distinct
+    actors is three rows per actor. Only the fetched rows are counted (``exec_limit``).
+    """
+    if result is None or not result.ok or not result.rows:
+        return ""
+    fetched = result.rows
+    lines = [
+        f"{len(fetched):,} rows fetched, {len({tuple(map(repr, row)) for row in fetched}):,} "
+        "distinct"
+    ]
+    for index, name in enumerate(result.columns[:JUDGE_STATS_COLUMNS]):
+        values = [row[index] for row in fetched]
+        present = [value for value in values if value is not None]
+        line = f"{name}: {len({repr(value) for value in present}):,} distinct"
+        if nulls := len(values) - len(present):
+            line += f", {nulls:,} NULL"
+        numbers = [v for v in present if isinstance(v, int | float) and not isinstance(v, bool)]
+        if numbers and len(numbers) == len(present):
+            line += f", min {min(numbers):g}, max {max(numbers):g}"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _pick_section(label: str, candidate: Candidate, rows: int) -> str:

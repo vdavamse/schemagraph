@@ -239,6 +239,8 @@ def test_config_hash_ignores_the_mcp_url_and_concurrency():
         AgentConfig(mcp_url="http://127.0.0.1:1/mcp"), models, seed=0, use_docs=True, concurrency=4
     )
     assert plain["config_hash"] == served["config_hash"] == PRE_REFACTOR_DEFAULT_HASH
+    schema = _run_config(AgentConfig(judge_schema=True), models, seed=0, use_docs=True, concurrency=1)
+    assert schema["config_hash"] != PRE_REFACTOR_DEFAULT_HASH  # a judge option changes answers
 
 
 def test_config_records_the_reasoning_effort_only_for_openrouter_models(monkeypatch):

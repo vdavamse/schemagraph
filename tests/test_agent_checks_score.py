@@ -268,6 +268,53 @@ def test_rubric_type():
     assert properties["answers_question"]["maximum"] == 1
     assert properties["answers_question"]["minimum"] == 0
     assert rubric_type(("a", "b")) is rubric_type(("a", "b"))
+    readings = rubric_type((), readings=True).model_json_schema()["properties"]
+    assert "covers_readings" in readings and "missing" not in readings
+
+
+def test_judge_material_shows_the_schema_stats_and_findings():
+    from schemagraph.agent import prompts
+
+    table = {
+        "fqn": "main.order_items",
+        "primary_key": ["order_id", "item_id"],
+        "columns": [
+            {"name": "order_id", "data_type": "TEXT", "description": "the order"},
+            {"name": "price", "data_type": "REAL", "sample_values": ["9.5", "12"]},
+        ],
+        "relations": [
+            {"kind": "fk", "from_table": "main.order_items", "from_columns": ["order_id"],
+             "to_table": "main.orders", "to_columns": ["id"]},
+            {"kind": "lineage", "from_table": "main.x", "to_table": "main.order_items"},
+        ],
+    }  # fmt: skip
+    schema = prompts.judge_schema([table], {"main.order_items": 1200})
+    assert "main.order_items (1,200 rows; primary key: order_id, item_id)" in schema
+    assert "price REAL (e.g. 9.5, 12)" in schema and "order_id TEXT -- the order" in schema
+    assert "main.order_items(order_id) -> main.orders(id) [fk]" in schema
+    assert "lineage" not in schema  # provenance, not a join
+
+    result = ExecResult(
+        ok=True,
+        columns=["actor", "film", "revenue"],
+        rows=[[1, "a", 10.0], [1, "b", 5.0], [2, "a", None]],
+        row_count=3,
+    )
+    stats = prompts.result_stats(result)
+    assert stats.splitlines()[0] == "3 rows fetched, 3 distinct"
+    assert "actor: 2 distinct, min 1, max 2" in stats
+    assert "revenue: 2 distinct, 1 NULL, min 5, max 10" in stats
+
+    material = prompts.judge_material(
+        "q", "SELECT 1", result, rows=2, evidence_chars=0, schema=schema,
+        findings=["fan-out join"], stats=True,
+    )  # fmt: skip
+    sections = [section.split(":")[0] for section in material.split("\n\n")]
+    assert sections == [
+        "Question", "Tables the query reads", "SQL", "Result", "Result columns", "Checks"
+    ]  # fmt: skip
+    plain = prompts.judge_material("q", "SELECT 1", result, rows=2, evidence_chars=0)
+    assert "Tables the query reads" not in plain and "Result columns" not in plain
 
 
 def test_sqlite_specifics(store_sqlite):
@@ -295,3 +342,26 @@ def test_sqlite_specifics(store_sqlite):
     assert report.det == pytest.approx(0.4)
     assert "silently becomes a string" in report.findings[0].message
     lite.close()
+
+
+def test_join_keys_are_the_on_conditions_between_base_tables():
+    from schemagraph.agent.checks import join_keys
+
+    sql = (
+        "WITH d AS (SELECT i.seller_id, o.id FROM order_items i JOIN orders o ON i.order_id = o.id)"
+        " SELECT r.score, d.seller_id FROM reviews r JOIN orders o2 ON r.order_id = o2.id"
+        " JOIN d ON d.id = o2.id"  # a CTE side: not measurable
+    )
+    known = {"order_items", "orders", "reviews"}
+    keys = join_keys(guard_sql(sql, "sqlite"), lambda name: name if name in known else None)
+    assert keys == [("reviews", "order_id", "orders", "id"), ("order_items", "order_id", "orders", "id")]
+
+
+def test_join_key_lines_spell_out_the_repeated_rows():
+    from schemagraph.agent.prompts import join_key_lines
+
+    lines = join_key_lines([("items", "order_id", "orders", "id", 120, 100, 100, 100)])
+    assert lines[0] == "- items.order_id = orders.id"
+    assert "items.order_id is not unique (120 rows, 100 values, 1.20 rows per value)" in lines[1]
+    assert "COUNT(*) or SUM over orders values after this join counts them more than once" in lines[1]
+    assert lines[2] == "  orders.id is unique (100 rows)"

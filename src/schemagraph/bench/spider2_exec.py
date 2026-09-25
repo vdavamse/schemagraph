@@ -73,6 +73,10 @@ _ROW_USAGE_FIELDS = {
     "calls", "requests", "input_tokens", "output_tokens", "reasoning_tokens", "cache_read_tokens",
     "tool_calls", "cost_usd", "unpriced", "ms",
 }  # fmt: skip
+# AgentConfig fields added after runs were recorded: in the config hash only when not default.
+_OPTIONAL_JUDGE_FIELDS = frozenset(
+    {"judge_schema", "judge_findings", "judge_stats", "judge_ambiguity"}
+)
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6
 
@@ -381,12 +385,18 @@ def _run_config(
     ``mcp_url`` is left out of ``agent_config``: the benchmark always serves each database
     itself, so the field would be None-valued noise, and leaving it out keeps the hash of rows
     written before the field existed. ``trace`` is left out too: it records, it changes no
-    answer.
+    answer. The optional judge-context fields count only when switched on, for the same reason
+    as ``mcp_url``.
     """
+    from schemagraph.agent.models import reasoning_level
+    from schemagraph.agent.results import AgentConfig
+
+    defaults = asdict(AgentConfig())
     agent_config = {
         key: value
         for key, value in asdict(cfg).items()
         if key not in {"weights", "mcp_url", "trace"}
+        and not (key in _OPTIONAL_JUDGE_FIELDS and value == defaults[key])
     }
     config: dict[str, Any] = {
         "strategy": cfg.strategy,
@@ -399,8 +409,6 @@ def _run_config(
         "agent_config": agent_config,
         "weights": asdict(cfg.weights),
     }
-    from schemagraph.agent.models import reasoning_level
-
     if any(name.startswith("openrouter:") for name in models.names.values()):
         # the reasoning effort changes the answers; recorded only when a model reads it, so the
         # hash of runs on other providers is unchanged

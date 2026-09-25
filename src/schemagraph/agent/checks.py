@@ -167,6 +167,43 @@ def tables_read(guarded: GuardedSQL, resolve_table: Callable[[str], str | None])
     return used
 
 
+def join_keys(
+    guarded: GuardedSQL, resolve_table: Callable[[str], str | None]
+) -> list[tuple[str, str, str, str]]:
+    """Return the ``a.x = b.y`` join conditions between two base tables of a query.
+
+    Each is ``(table_a, column_a, table_b, column_b)`` in catalog keys, deduplicated in first-use
+    order. Only conditions of ``ON`` clauses whose two sides are columns qualified by the alias
+    of a base table (not a CTE or a derived table) count: those are the joins whose key
+    uniqueness can be measured on the database.
+    """
+    tree = guarded.tree
+    cte_names = {_norm(cte.alias_or_name) for cte in tree.find_all(exp.CTE)}
+    found: list[tuple[str, str, str, str]] = []
+    for select in tree.find_all(exp.Select):
+        aliases: dict[str, str] = {}
+        for table in select.find_all(exp.Table):
+            if table.find_ancestor(exp.Select) is not select or _table_name(table) in cte_names:
+                continue
+            key = resolve_table(_table_name(table))
+            if key:
+                aliases[_norm(table.alias_or_name)] = key
+        for join in select.args.get("joins") or []:
+            condition = join.args.get("on")
+            if condition is None:
+                continue
+            for equality in condition.find_all(exp.EQ):
+                left, right = equality.this, equality.expression
+                if not (isinstance(left, exp.Column) and isinstance(right, exp.Column)):
+                    continue
+                table_a, table_b = aliases.get(_norm(left.table)), aliases.get(_norm(right.table))
+                if table_a and table_b and table_a != table_b:
+                    pair = (table_a, left.name, table_b, right.name)
+                    if pair not in found:
+                        found.append(pair)
+    return found
+
+
 def _reads_table_function(tree: exp.Expression) -> bool:
     """Return whether the query reads a table function or a row generator in FROM/JOIN.
 

@@ -2375,6 +2375,15 @@
      "print the full AnswerResult as JSON"
     ],
     [
+     "trace",
+     [
+      "--trace"
+     ],
+     "False",
+     "boolean",
+     "keep every model call's messages (prompt, reasoning, tool calls) in --json"
+    ],
+    [
      "home",
      [
       "--home",
@@ -2654,6 +2663,15 @@
      "True",
      "boolean",
      "skip tasks already in the rows file"
+    ],
+    [
+     "trace",
+     [
+      "--trace"
+     ],
+     "True",
+     "boolean",
+     "write every model call's messages to spider2_exec_<tag>_messages.jsonl"
     ]
    ]
   },
