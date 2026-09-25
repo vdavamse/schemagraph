@@ -73,7 +73,6 @@ max-complexity = 12
 "src/schemagraph/cli.py" = ["D", "C901"]
 "src/schemagraph/connectors/**" = ["D", "C901"]
 "src/schemagraph/engine.py" = ["D", "C901"]
-"src/schemagraph/linking/**" = ["D", "C901"]
 "src/schemagraph/llm/**" = ["D", "C901"]
 "src/schemagraph/mcp/**" = ["D", "C901"]
 "src/schemagraph/model.py" = ["D", "C901"]
