@@ -45,6 +45,7 @@ from schemagraph.linking.render import render_ddl
 from schemagraph.model import Column, JoinPath, LinkedColumn, LinkedTable, LinkResult, Table
 
 if TYPE_CHECKING:
+    from schemagraph.linking.bm25s_backend import BM25SIndex
     from schemagraph.linking.embed import EmbeddingActivator
 
 # Direct lexical evidence on a table (or one of its columns) is added on top of its PPR score,
@@ -121,10 +122,16 @@ class LinkOptions:
             PPR alone, 95.66) | ``"bm25"`` (BM25F alone, 94.91).
         rrf_k: Reciprocal-rank fusion constant: score = sum 1/(k + rank); smaller k weights the
             head of each ranking more.
-        seed_bm25: SPRIG seed-side fusion: top ``seed_k`` BM25F tables also seed PPR
+        bm25_backend: Sparse ranker behind ``ranker`` and ``seed_bm25``: ``"bm25f"`` (the
+            hand-rolled BM25F, linking/bm25.py) | ``"bm25s"`` (the bm25s library over one
+            field-repeated document per table, linking/bm25s_backend.py; needs the ``bm25s``
+            extra; an ablation, see bench_results/README.md).
+        bm25_method: bm25s scoring method with ``bm25_backend="bm25s"`` (``"lucene"``,
+            ``"bm25+"``, ...); ignored by BM25F.
+        seed_bm25: SPRIG seed-side fusion: top ``seed_k`` sparse-ranker tables also seed PPR
             (personalization only). Rejected 2026-09-23: +1-2 strict, -0.3 strict@7 with embed.
-        seed_k: BM25F tables used as PPR seeds (SPRIG: 5-10).
-        seed_w: BM25F seed weight at rank r (0-based) = seed_w / (r + 1); a name hit is 1.0.
+        seed_k: Sparse-ranker tables used as PPR seeds (SPRIG: 5-10).
+        seed_w: Sparse-ranker seed weight at rank r (0-based) = seed_w / (r + 1); a name hit is 1.0.
         embed: Add paraphrase seeds from a small static embedding model (linking/embed.py;
             needs the ``embed`` extra).
         embed_model: The model2vec model name.
@@ -166,6 +173,8 @@ class LinkOptions:
     ppr_edge_attr: str = "weight"
     ranker: str = "rrf"
     rrf_k: int = 60
+    bm25_backend: str = "bm25f"
+    bm25_method: str = "lucene"
     seed_bm25: bool = False
     seed_k: int = 5
     seed_w: float = 1.0
@@ -348,6 +357,7 @@ class Linker:
         self._spec = specificity_weights(schema_graph)
         self._matrices: dict[str, PPRMatrix] = {}  # per edge attribute
         self._bm25: BM25Index | None = None
+        self._bm25s: dict[str, BM25SIndex] = {}  # per bm25s method
         self._embedder = None  # EmbeddingActivator, built on first use with embed=True
 
     def _matrix(self, edge_attr: str) -> PPRMatrix:
@@ -362,6 +372,21 @@ class Linker:
         if self._bm25 is None:
             self._bm25 = build_bm25(self.schema_graph)
         return self._bm25
+
+    def _sparse_scores(self, question: str, opts: LinkOptions) -> dict[str, float]:
+        """Sparse table scores from ``opts.bm25_backend``; each index is built on first use."""
+        if opts.bm25_backend == "bm25f":
+            return bm25_scores(self._bm25_index(), question)
+        if opts.bm25_backend == "bm25s":
+            index = self._bm25s.get(opts.bm25_method)
+            if index is None:
+                from schemagraph.linking.bm25s_backend import BM25SIndex
+
+                index = self._bm25s[opts.bm25_method] = BM25SIndex(
+                    self.schema_graph, opts.bm25_method
+                )
+            return index.scores(question)
+        raise ValueError(f"unknown bm25_backend {opts.bm25_backend!r} (bm25f | bm25s)")
 
     def embedder(self, model_name: str) -> EmbeddingActivator:
         """The embedding activator for ``model_name``, built on first use.
@@ -402,13 +427,13 @@ class Linker:
         question: str,
         opts: LinkOptions,
     ) -> dict[str, float]:
-        """The PPR personalization: the activation's seeds, plus top BM25F tables if asked.
+        """The PPR personalization: the activation's seeds, plus top sparse-ranker tables if asked.
 
         With ``opts.seed_bm25`` the result is a copy; the activation is never changed.
         """
         if not opts.seed_bm25:
             return activation.seeds
-        top = _by_score(bm25_scores(self._bm25_index(), question))[: opts.seed_k]
+        top = _by_score(self._sparse_scores(question, opts))[: opts.seed_k]
         seeds = dict(activation.seeds)
         for rank, (fqn, _) in enumerate(top):
             seeds[tnode(fqn)] = seeds.get(tnode(fqn), 0.0) + opts.seed_w / (rank + 1)
@@ -453,7 +478,7 @@ class Linker:
             scores = self._route_by_schema(scores, opts.schema_routing)
         evidence = _relative(scores)
         if opts.ranker in {"bm25", "rrf"}:
-            sparse = bm25_scores(self._bm25_index(), question)
+            sparse = self._sparse_scores(question, opts)
             if opts.ranker == "bm25":
                 scores = sparse
                 evidence = _relative(sparse)

@@ -27,6 +27,7 @@ from schemagraph.linking.lexical import (
     lemma,
     tokenize,
 )
+from schemagraph.model import Table
 
 # Per-field weight, mirroring the lexical index's posting weights.
 FIELD_WEIGHT = {"name": 1.0, "columns": 1.0, "business": 0.9, "tags": 0.5, "desc": 0.35}
@@ -58,25 +59,34 @@ class BM25Index:
         return math.log((self.n_docs - doc_freq + 0.5) / (doc_freq + 0.5) + 1.0)
 
 
+def table_fields(table: Table) -> dict[str, list[str]]:
+    """A table's BM25F document: field name -> its tokens, in schema order.
+
+    Keys are a subset of ``FIELD_WEIGHT``; ``name`` and ``desc`` are always present, maybe empty.
+    """
+    fields: dict[str, list[str]] = defaultdict(list)
+    fields["name"] += _name_tokens(table.name)
+    fields["desc"] += tokenize(table.description or "")
+    for tag in table.tags:
+        fields["tags"] += tokenize(tag)
+    for key, value in table.properties.items():
+        if key in BUSINESS_NAME_PROPERTIES:
+            fields["business"] += _name_tokens(value)
+    for column in table.columns:
+        fields["columns"] += _name_tokens(column.name)
+        fields["desc"] += tokenize(column.description or "")
+        for tag in column.tags:
+            fields["tags"] += tokenize(tag)
+        if column.properties.get("business_name"):
+            fields["business"] += _name_tokens(column.properties["business_name"])
+    return dict(fields)
+
+
 def build_bm25(schema_graph: SchemaGraph) -> BM25Index:
     """Build the BM25F index with one document per table of the graph."""
     index = BM25Index()
     for table in schema_graph.tables.values():
-        fields: dict[str, list[str]] = defaultdict(list)
-        fields["name"] += _name_tokens(table.name)
-        fields["desc"] += tokenize(table.description or "")
-        for tag in table.tags:
-            fields["tags"] += tokenize(tag)
-        for key, value in table.properties.items():
-            if key in BUSINESS_NAME_PROPERTIES:
-                fields["business"] += _name_tokens(value)
-        for column in table.columns:
-            fields["columns"] += _name_tokens(column.name)
-            fields["desc"] += tokenize(column.description or "")
-            for tag in column.tags:
-                fields["tags"] += tokenize(tag)
-            if column.properties.get("business_name"):
-                fields["business"] += _name_tokens(column.properties["business_name"])
+        fields = table_fields(table)
         index.tf[table.fqn] = {name: Counter(tokens) for name, tokens in fields.items()}
         index.length[table.fqn] = {name: len(tokens) for name, tokens in fields.items()}
         for token in dict.fromkeys(token for tokens in fields.values() for token in tokens):
