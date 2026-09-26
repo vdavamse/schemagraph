@@ -11,7 +11,7 @@ schemagraph is a schema context engine for text-to-SQL: catalog metadata in (pas
 ## Commands
 
 ```bash
-uv sync --all-extras                       # Python 3.11+, installs anthropic + boto3 + model2vec (embed) + bm25s + agent (pydantic-ai, treequest) extras and dev deps
+uv sync --all-extras                       # Python 3.11+, installs anthropic + boto3 + model2vec (embed) + bm25s + agent (pydantic-ai, treequest) + abmcts-m (PyMC, NumPyro, JAX) extras and dev deps
 uv run pytest -q                           # whole suite, ~40 s on the Windows mount (agent tests ~20 s of it), no network
 uv run pytest -q tests/test_linking.py     # one file
 uv run pytest -q tests/test_linking.py -k bypass   # one test by keyword

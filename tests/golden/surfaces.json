@@ -2366,6 +2366,51 @@
      "final pairwise pick among the top candidates"
     ],
     [
+     "algorithm",
+     [
+      "--algorithm"
+     ],
+     "'a'",
+     "choice",
+     "AB-MCTS variant: a (wide) or m (deeper; needs the abmcts-m extra)"
+    ],
+    [
+     "rolling",
+     [
+      "--rolling"
+     ],
+     "False",
+     "boolean",
+     "AB-MCTS: ask for the next node as each one finishes (--batch in flight)"
+    ],
+    [
+     "early_stop_min_nodes",
+     [
+      "--early-stop-min-nodes"
+     ],
+     "0",
+     "int",
+     "nodes generated before the search may stop early"
+    ],
+    [
+     "early_stop_agree",
+     [
+      "--early-stop-agree"
+     ],
+     "1",
+     "int",
+     "high-scoring nodes that must return the same result to stop early"
+    ],
+    [
+     "draft_temperature",
+     [
+      "--draft-temperature"
+     ],
+     "0.8",
+     "float",
+     "generator temperature for fresh drafts (refinements: 0.4)"
+    ],
+    [
      "as_json",
      [
       "--json"
@@ -2564,6 +2609,51 @@
      "True",
      "boolean",
      "final pairwise pick among the top candidates"
+    ],
+    [
+     "algorithm",
+     [
+      "--algorithm"
+     ],
+     "'a'",
+     "choice",
+     "AB-MCTS variant: a (wide) or m (deeper; needs the abmcts-m extra)"
+    ],
+    [
+     "rolling",
+     [
+      "--rolling"
+     ],
+     "False",
+     "boolean",
+     "AB-MCTS: ask for the next node as each one finishes (--batch in flight)"
+    ],
+    [
+     "early_stop_min_nodes",
+     [
+      "--early-stop-min-nodes"
+     ],
+     "0",
+     "int",
+     "nodes generated before the search may stop early"
+    ],
+    [
+     "early_stop_agree",
+     [
+      "--early-stop-agree"
+     ],
+     "1",
+     "int",
+     "high-scoring nodes that must return the same result to stop early"
+    ],
+    [
+     "draft_temperature",
+     [
+      "--draft-temperature"
+     ],
+     "0.8",
+     "float",
+     "generator temperature for fresh drafts (refinements: 0.4)"
     ],
     [
      "judge_only",

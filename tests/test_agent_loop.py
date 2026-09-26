@@ -987,3 +987,72 @@ def test_early_stop_can_require_agreeing_results():
     assert _agreed(agreed, AgentConfig(early_stop_agree=2))  # n0 and n3 return the same result
     echo = [*split, node("n3", 0.91, 1, sql=" select 1  -- n0")]
     assert not _agreed(echo, AgentConfig(early_stop_agree=2))  # n3 repeats n0's SQL: one vote
+
+
+def test_early_stop_waits_for_the_minimum_nodes():
+    pytest.importorskip("treequest")
+    log: list[tuple] = []
+    cfg = AgentConfig(budget=16, early_stop_min_nodes=8)
+    trace = asyncio.run(run_search(fake_generate([0.95] * 16, log), cfg))
+    assert trace.nodes == 8 and trace.stopped_early  # two batches, not one
+
+
+def test_rolling_abmcts_spends_the_budget_and_refines():
+    pytest.importorskip("treequest")
+    log: list[tuple] = []
+    scores = [0.5, 0.6, 0.2, 0.7, 0.8, 0.1, 0.4, 0.3, 0.5, 0.6, 0.2, 0.7]
+    cfg = AgentConfig(budget=12, batch_size=4, rolling=True, seed=3)
+    trace = asyncio.run(run_search(fake_generate(scores, log), cfg))
+    assert trace.nodes == 12 == len(log)
+    assert sorted(c.id for c in trace.candidates) == sorted(f"n{i}" for i in range(12))
+    ids = {c.id for c in trace.candidates}
+    assert all(parent in ids for _, parent, _ in log if parent)  # refinements of real nodes
+    assert any(parent is not None for _, parent, _ in log)
+
+    stopped = asyncio.run(
+        run_search(fake_generate([0.95] * 16, []), AgentConfig(budget=16, rolling=True))
+    )
+    assert stopped.nodes == 4 and stopped.stopped_early  # the in-flight nodes are kept
+
+
+def test_abmcts_m_runs_when_installed():
+    pytest.importorskip("pymc")
+    log: list[tuple] = []
+    cfg = AgentConfig(budget=2, batch_size=1, abmcts_algorithm="m")  # each step fits by MCMC
+    trace = asyncio.run(run_search(fake_generate([0.4, 0.6], log), cfg))
+    assert trace.nodes == 2
+
+
+def test_a_reasoning_generator_gets_the_longer_node_timeout(monkeypatch):
+    monkeypatch.delenv("SCHEMAGRAPH_REASONING", raising=False)
+    names = {"generator": "openrouter:qwen/qwen3.8-max", "judge": "typesafe:jev"}
+    reasoning = SimpleNamespace(cfg=AgentConfig(), models=AgentModels(None, None, None, None, names))
+    assert Answerer.search_config(reasoning).node_timeout_s == 600.0
+    plain = SimpleNamespace(cfg=AgentConfig(), models=AgentModels(None, None, None, None, NAMES))
+    assert Answerer.search_config(plain).node_timeout_s == 300.0
+    off = SimpleNamespace(
+        cfg=AgentConfig(reasoning_node_timeout_s=None),
+        models=AgentModels(None, None, None, None, names),
+    )
+    assert Answerer.search_config(off).node_timeout_s == 300.0
+
+
+def test_a_refinement_sees_the_rubric_the_rationale_and_earlier_siblings():
+    from schemagraph.agent.prompts import generator_prompt
+    from schemagraph.agent.results import Judgement
+
+    judged = Judgement(model="jev", fields={"right_grain": 0.24, "answers_question": 0.9}, mean=0.57)
+    result = ExecResult(ok=True, columns=["a"], rows=[[1]], row_count=600)
+    parent = Candidate(id="n2", sql="select a from t", score=0.8, exec=result,
+                       judgement=judged, rationale="one row per actor and film")  # fmt: skip
+    sibling = Candidate(id="n5", parent_id="n2", sql="select a from t group by a", score=0.9,
+                        exec=ExecResult(ok=True, columns=["a"], rows=[[1]], row_count=200))  # fmt: skip
+    prompt = generator_prompt("q", None, "tight", "create table t (a int);", 1, parent,
+                              evidence_chars=0, siblings=[sibling])  # fmt: skip
+    assert "Judge, weakest first (1 = yes): right_grain 0.24, answers_question 0.90" in prompt
+    assert "Its author's reasoning: one row per actor and film" in prompt
+    assert "already tried (do not repeat them)" in prompt
+    assert "score 0.90; 200 rows" in prompt and "select a from t group by a" in prompt
+    assert "already tried" not in generator_prompt(
+        "q", None, "tight", "ddl", 1, parent, evidence_chars=0
+    )

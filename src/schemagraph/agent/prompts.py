@@ -61,6 +61,11 @@ JUDGE_STATS_COLUMNS = 20
 PICK_SQL_CHARS = 4000
 # Result rows shown per candidate to the selector.
 PICK_PREVIEW_ROWS = 6
+# Characters of a parent's rationale, and of each earlier refinement's SQL, shown to a refinement;
+# earlier refinements of the same parent shown at most.
+RATIONALE_CHARS = 1000
+SIBLING_SQL_CHARS = 1500
+MAX_SIBLINGS = 3
 # Schema DDL characters shown to the critic.
 CRITIC_SCHEMA_CHARS = 6000
 
@@ -103,19 +108,45 @@ def _problems(feedback: list[str]) -> str:
     return "Problems found:\n" + "\n".join(f"- {line}" for line in feedback)
 
 
-def _refine_sections(parent: Candidate) -> list[str]:
-    """Show the generator a previous attempt and what was wrong with it."""
-    sections = [
+def _rubric_line(candidate: Candidate) -> str:
+    """The judge's rubric of a candidate, weakest first, e.g. ``right_grain 0.24, ...``."""
+    if not candidate.judgement or not candidate.judgement.fields:
+        return ""
+    fields = sorted(candidate.judgement.fields.items(), key=lambda item: item[1])
+    return ", ".join(f"{name} {value:.2f}" for name, value in fields)
+
+
+def _refine_sections(parent: Candidate, siblings: list[Candidate] | None = None) -> list[str]:
+    """Show the generator a previous attempt, what was wrong with it and what was tried on it.
+
+    ``siblings`` are earlier refinements of the same parent: shown so that a new refinement does
+    not repeat a change that already failed.
+    """
+    attempt = (
         f"Previous attempt (score {parent.score:.2f}):\n"
         f"SQL:\n{parent.sql or '(none)'}\n"
         f"Result: {preview(parent.exec, ATTEMPT_PREVIEW_ROWS)}"
-    ]
+    )
+    if rubric := _rubric_line(parent):
+        attempt += f"\nJudge, weakest first (1 = yes): {rubric}"
+    if parent.rationale:
+        attempt += f"\nIts author's reasoning: {parent.rationale[:RATIONALE_CHARS]}"
+    sections = [attempt]
     if parent.error:
         sections.append(f"The attempt failed: {parent.error}")
     if parent.feedback:
         sections.append(_problems(parent.feedback))
     if parent.advice:
         sections.append(f"Reviewer advice:\n{parent.advice}")
+    tried = [sibling for sibling in siblings or [] if sibling.sql][-MAX_SIBLINGS:]
+    if tried:
+        lines = ["Other refinements of this attempt, already tried (do not repeat them):"]
+        for sibling in tried:
+            lines.append(
+                f"- score {sibling.score:.2f}; {preview(sibling.exec, 0)}\n"
+                f"  SQL: {' '.join(sibling.sql.split())[:SIBLING_SQL_CHARS]}"
+            )
+        sections.append("\n".join(lines))
     sections.append("Write an improved query.")
     return sections
 
@@ -129,6 +160,7 @@ def generator_prompt(
     parent: Candidate | None = None,
     *,
     evidence_chars: int,
+    siblings: list[Candidate] | None = None,
 ) -> str:
     """Build the generator's user prompt for a fresh draft, or a refinement of ``parent``.
 
@@ -139,6 +171,7 @@ def generator_prompt(
         ddl: The linked schema's DDL.
         n_tables: Tables in ``ddl``.
         parent: The attempt to refine; None for a fresh draft.
+        siblings: Earlier refinements of ``parent``.
         evidence_chars: Characters of ``evidence`` kept (``AgentConfig.evidence_chars``).
 
     Returns:
@@ -149,7 +182,7 @@ def generator_prompt(
         sections.append(f"External knowledge:\n{evidence[:evidence_chars]}")
     sections.append(f"Schema ({action} context, {n_tables} tables):\n{ddl.strip()}")
     if parent is not None:
-        sections.extend(_refine_sections(parent))
+        sections.extend(_refine_sections(parent, siblings))
     return "\n\n".join(sections)
 
 

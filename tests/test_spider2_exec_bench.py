@@ -239,11 +239,12 @@ PRE_REFACTOR_DEFAULT_HASH = "396f29d01a5b"
 
 
 def _legacy_config(**settings):
-    """AgentConfig with the judge material those runs had (before the schema context)."""
+    """AgentConfig with the judge material and node timeout those runs had."""
     from schemagraph.agent.results import AgentConfig
 
     legacy = dict(preview_rows=10, judge_evidence_chars=1000, judge_schema=False,
-                  judge_findings=False, judge_stats=False)  # fmt: skip
+                  judge_findings=False, judge_stats=False,
+                  reasoning_node_timeout_s=None)  # fmt: skip
     return AgentConfig(**{**legacy, **settings})
 
 

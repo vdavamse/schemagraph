@@ -446,6 +446,13 @@ class AgentConfig:
         early_stop: Stop the search once a candidate scores at least this.
         early_stop_agree: Nodes scoring at least ``early_stop`` that must return the same
             result before the search stops; 1 stops on one high score.
+        early_stop_min_nodes: Nodes generated before the search may stop early; 0 lets the
+            first batch stop it.
+        abmcts_algorithm: TreeQuest's AB-MCTS variant: ``a`` (per-node Thompson sampling,
+            wide trees) or ``m`` (a Bayesian mixed model shared across the tree, deeper trees;
+            needs the ``abmcts-m`` extra).
+        rolling: Keep ``batch_size`` AB-MCTS nodes in flight and ask for the next one as each
+            finishes, so every choice sees every result so far; off asks in lockstep batches.
         top_k: Candidates the pairwise selector compares.
         selector: Run the pairwise selector over the top candidates.
         judge: Run the judge. Off, the score is the checks alone, so the first clean executed
@@ -471,6 +478,9 @@ class AgentConfig:
         draft_temperature: Generator temperature for fresh drafts.
         refine_temperature: Generator temperature for refinements.
         node_timeout_s: Timeout of one generator node in seconds.
+        reasoning_node_timeout_s: The node timeout when the generator reasons, which covers a
+            refinement's critic call and a reasoning generator run; None keeps
+            ``node_timeout_s``.
         output_retries: Retries when a model's structured output fails validation.
         weights: Weights of the candidate score.
         mcp_url: URL of a schemagraph MCP server (streamable HTTP); None starts one in-process
@@ -486,6 +496,9 @@ class AgentConfig:
     wide_tables: int = 20
     early_stop: float = 0.9
     early_stop_agree: int = 1
+    early_stop_min_nodes: int = 0
+    abmcts_algorithm: Literal["a", "m"] = "a"
+    rolling: bool = False
     top_k: int = 4
     selector: bool = True
     judge: bool = True
@@ -507,6 +520,7 @@ class AgentConfig:
     draft_temperature: float = 0.8
     refine_temperature: float = 0.4
     node_timeout_s: float = 300.0
+    reasoning_node_timeout_s: float | None = 600.0
     output_retries: int = 2
     weights: ScoreWeights = field(default_factory=ScoreWeights)
     mcp_url: str | None = None

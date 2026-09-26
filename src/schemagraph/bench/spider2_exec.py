@@ -81,6 +81,10 @@ _LEGACY_VALUES = {
     "judge_stats": False,
     "judge_ambiguity": False,
     "early_stop_agree": 1,
+    "early_stop_min_nodes": 0,
+    "abmcts_algorithm": "a",
+    "rolling": False,
+    "reasoning_node_timeout_s": None,
 }
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6

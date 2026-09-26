@@ -8,9 +8,10 @@ budget the strategy is the only variable:
   context actions);
 * ``refine``    a chain, each node refining the previous one with its feedback (deep only; the
   pattern of DSPy's Refine, implemented here; DSPy is not a dependency);
-* ``abmcts``    TreeQuest ``ABMCTSA``: Thompson sampling per node decides between a new child (a
-  draft at the root, "wider") and expanding an existing one (a refinement, "deeper"), and between
-  the ``tight`` and ``wide`` context actions.
+* ``abmcts``    TreeQuest AB-MCTS, ``ABMCTSA`` or ``ABMCTSM`` (``AgentConfig.abmcts_algorithm``):
+  decides between a new child (a draft at the root, "wider") and expanding an existing one (a
+  refinement, "deeper"), and between the ``tight`` and ``wide`` context actions. Lockstep batches,
+  or a rolling loop that asks for the next trial as each node finishes (``AgentConfig.rolling``).
 
 The final pick is the same for every multi-node strategy: top-k by score, deduplicated by result,
 then a round-robin both-order pairwise selector.
@@ -148,11 +149,13 @@ def _actions(cfg: AgentConfig) -> list[Action]:
 def _searching(trace: SearchTrace, cfg: AgentConfig, budget: int) -> bool:
     """Whether budget is left and the early stop has not been reached.
 
-    The early stop needs ``cfg.early_stop_agree`` nodes that score at least ``cfg.early_stop``
-    and return the same result (:func:`fingerprint`) from different SQL; with 1, one high score
-    is enough.
+    The early stop needs ``cfg.early_stop_min_nodes`` nodes, and ``cfg.early_stop_agree`` of
+    them scoring at least ``cfg.early_stop`` and returning the same result (:func:`fingerprint`)
+    from different SQL; with 1, one high score is enough.
     """
-    return trace.nodes < budget and not _agreed(trace.candidates, cfg)
+    if trace.nodes >= budget:
+        return False
+    return trace.nodes < cfg.early_stop_min_nodes or not _agreed(trace.candidates, cfg)
 
 
 def _agreed(candidates: list[Candidate], cfg: AgentConfig) -> bool:
@@ -229,17 +232,19 @@ async def _abmcts(
     ids: _NodeIds,
     budget: int,
 ) -> None:
-    """TreeQuest AB-MCTS-A in batches: each trial is a draft or a refinement of a sampled node."""
+    """TreeQuest AB-MCTS: each trial is a draft or a refinement of a sampled node."""
     import numpy as np
-    import treequest as tq
 
     np.random.seed(cfg.seed)  # TreeQuest samples from the global numpy RNG
-    algorithm = tq.ABMCTSA()
+    algorithm = _abmcts_algorithm(cfg)
+    if cfg.rolling:
+        await _abmcts_rolling(algorithm, generate, cfg, trace, ids, budget)
+        return
     state = algorithm.init_tree()
     actions = _actions(cfg)
     while _searching(trace, cfg, budget):
         size = min(cfg.batch_size, budget - trace.nodes)
-        state, trials = algorithm.ask_batch(state, size, actions)
+        state, trials = await asyncio.to_thread(algorithm.ask_batch, state, size, actions)
         batch = [(ids(), trial) for trial in trials]
         nodes = await asyncio.gather(
             *(_trial_node(generate, node_id, trial, cfg.node_timeout_s) for node_id, trial in batch)
@@ -248,6 +253,66 @@ async def _abmcts(
             reward = min(1.0, max(0.0, node.score))
             state = algorithm.tell(state, trial.trial_id, (node, reward))
         trace.candidates += nodes
+
+
+def _abmcts_algorithm(cfg: AgentConfig) -> Any:
+    """Return TreeQuest's AB-MCTS-A or AB-MCTS-M.
+
+    Raises:
+        ImportError: ``m`` without the ``abmcts-m`` extra (PyMC, NumPyro).
+    """
+    import treequest as tq
+
+    if cfg.abmcts_algorithm == "a":
+        return tq.ABMCTSA()
+    try:
+        import pymc  # noqa: F401  # TreeQuest exports a placeholder ABMCTSM without it
+    except ImportError as error:
+        raise ImportError(
+            "AB-MCTS-M needs PyMC and NumPyro: uv sync --extra agent --extra abmcts-m"
+        ) from error
+    return tq.ABMCTSM()
+
+
+async def _abmcts_rolling(
+    algorithm: Any,
+    generate: GenerateFn,
+    cfg: AgentConfig,
+    trace: SearchTrace,
+    ids: _NodeIds,
+    budget: int,
+) -> None:
+    """Keep ``cfg.batch_size`` nodes in flight; tell each result and ask again as it lands.
+
+    Every trial after the first batch is chosen with every finished node in the tree, which a
+    lockstep batch only has at its start. Nodes join ``trace`` in completion order; their ids
+    are issued in ask order. Once the search stops, the nodes still in flight are awaited and
+    kept: they are paid for.
+    """
+    state = algorithm.init_tree()
+    actions = _actions(cfg)
+    running: dict[asyncio.Future[Candidate], Any] = {}
+
+    async def launch(count: int) -> None:
+        nonlocal state
+        state, trials = await asyncio.to_thread(algorithm.ask_batch, state, count, actions)
+        for trial in trials:
+            task = asyncio.ensure_future(_trial_node(generate, ids(), trial, cfg.node_timeout_s))
+            running[task] = trial
+
+    await launch(min(max(1, cfg.batch_size), budget))
+    while running:
+        done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            trial = running.pop(task)
+            node = task.result()  # _safe turns every failure into a score-0 node
+            reward = min(1.0, max(0.0, node.score))
+            state = await asyncio.to_thread(algorithm.tell, state, trial.trial_id, (node, reward))
+            trace.candidates.append(node)
+        launched = trace.nodes + len(running)
+        free = max(1, cfg.batch_size) - len(running)
+        if free > 0 and launched < budget and _searching(trace, cfg, budget):
+            await launch(min(free, budget - launched))
 
 
 def fingerprint(candidate: Candidate) -> str | None:

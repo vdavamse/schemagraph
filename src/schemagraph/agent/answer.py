@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import permutations
 from typing import Any
 
@@ -134,6 +134,7 @@ class Answerer:
         self.records = []
         self.transcripts = [] if self.cfg.trace else None
         self._advice_locks = {}
+        self._children: dict[str, list[Candidate]] = {}
         self.question = question
         self.evidence = evidence
         self._link_text = question
@@ -150,7 +151,7 @@ class Answerer:
         started = time.perf_counter()
         async with self.schema, self._toolset:
             await self.prepare(question, evidence=evidence)
-            trace = await run_search(self.generate, self.cfg)
+            trace = await run_search(self.generate, self.search_config())
             pick = self._pick if self.cfg.selector else None
             chosen, chosen_by, matrix = await select_final(trace.candidates, self.cfg, pick)
         return AnswerResult(
@@ -193,6 +194,18 @@ class Answerer:
         )
 
     # ----------------------------------------------------------- one node
+    def search_config(self) -> AgentConfig:
+        """The settings the search runs with: a reasoning generator gets its longer node timeout.
+
+        A refinement at high reasoning is a critic call and a multi-request generator run; under
+        the plain node timeout it was cut off, and the tree read the score-0 node as "refining
+        does not pay".
+        """
+        extended = self.cfg.reasoning_node_timeout_s
+        if extended is None or not self.models.reasoning("generator"):
+            return self.cfg
+        return replace(self.cfg, node_timeout_s=max(self.cfg.node_timeout_s, extended))
+
     async def generate(self, node_id: str, parent: Candidate | None, action: Action) -> Candidate:
         """Generate and score one search node: a draft, or a refinement of ``parent``."""
         started = time.perf_counter()
@@ -216,6 +229,8 @@ class Answerer:
             if record.node_id == node_id and record.role in _NODE_ROLES
         ]
         candidate.ms = (time.perf_counter() - started) * 1000
+        if parent is not None:
+            self._children.setdefault(parent.id, []).append(candidate)
         return candidate
 
     async def _write_sql(
@@ -238,6 +253,7 @@ class Answerer:
             len(linked.tables),
             parent,
             evidence_chars=self.cfg.evidence_chars,
+            siblings=list(self._children.get(parent.id, [])) if parent else None,
         )
         temperature = self.cfg.refine_temperature if parent else self.cfg.draft_temperature
         output, _, _ = await agents.run_agent(
