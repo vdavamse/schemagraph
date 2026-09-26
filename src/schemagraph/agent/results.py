@@ -444,6 +444,8 @@ class AgentConfig:
         tight_tables: ``max_tables`` of the tight context.
         wide_tables: ``max_tables`` of the wide context.
         early_stop: Stop the search once a candidate scores at least this.
+        early_stop_agree: Nodes scoring at least ``early_stop`` that must return the same
+            result before the search stops; 1 stops on one high score.
         top_k: Candidates the pairwise selector compares.
         selector: Run the pairwise selector over the top candidates.
         judge: Run the judge. Off, the score is the checks alone, so the first clean executed
@@ -483,6 +485,7 @@ class AgentConfig:
     tight_tables: int = 7
     wide_tables: int = 20
     early_stop: float = 0.9
+    early_stop_agree: int = 1
     top_k: int = 4
     selector: bool = True
     judge: bool = True

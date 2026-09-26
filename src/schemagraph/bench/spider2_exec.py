@@ -74,8 +74,8 @@ _ROW_USAGE_FIELDS = {
     "tool_calls", "cost_usd", "unpriced", "ms",
 }  # fmt: skip
 # AgentConfig fields added after runs were recorded: in the config hash only when not default.
-_OPTIONAL_JUDGE_FIELDS = frozenset(
-    {"judge_schema", "judge_findings", "judge_stats", "judge_ambiguity"}
+_OPTIONAL_FIELDS = frozenset(
+    {"judge_schema", "judge_findings", "judge_stats", "judge_ambiguity", "early_stop_agree"}
 )
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6
@@ -385,8 +385,8 @@ def _run_config(
     ``mcp_url`` is left out of ``agent_config``: the benchmark always serves each database
     itself, so the field would be None-valued noise, and leaving it out keeps the hash of rows
     written before the field existed. ``trace`` is left out too: it records, it changes no
-    answer. The optional judge-context fields count only when switched on, for the same reason
-    as ``mcp_url``.
+    answer. Fields added later (:data:`_OPTIONAL_FIELDS`) count only when not at their default,
+    for the same reason as ``mcp_url``.
     """
     from schemagraph.agent.models import reasoning_level
     from schemagraph.agent.results import AgentConfig
@@ -396,7 +396,7 @@ def _run_config(
         key: value
         for key, value in asdict(cfg).items()
         if key not in {"weights", "mcp_url", "trace"}
-        and not (key in _OPTIONAL_JUDGE_FIELDS and value == defaults[key])
+        and not (key in _OPTIONAL_FIELDS and value == defaults[key])
     }
     config: dict[str, Any] = {
         "strategy": cfg.strategy,
