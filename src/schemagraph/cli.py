@@ -645,7 +645,8 @@ def bench_spider2_exec(
         draft_temperature=draft_temperature,
         trace=trace,
     )
-    ids = set(only) if only else None
+    # ids read from a file can carry a stray "\r" (CRLF checkouts); it would match no task
+    ids = {task.strip() for task in only if task.strip()} if only else None
     _quiet_mcp_logs()
     if judge_only:
         from schemagraph.agent.models import DEFAULT_GEN_MODEL, DEFAULT_JUDGE_MODEL
