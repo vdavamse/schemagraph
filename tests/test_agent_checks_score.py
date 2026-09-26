@@ -356,12 +356,30 @@ def test_join_keys_are_the_on_conditions_between_base_tables():
     keys = join_keys(guard_sql(sql, "sqlite"), lambda name: name if name in known else None)
     assert keys == [("reviews", "order_id", "orders", "id"), ("order_items", "order_id", "orders", "id")]
 
+    nested = (
+        "SELECT * FROM reviews r JOIN orders o ON (r.order_id = o.id OR r.score = o.id)"
+        " JOIN order_items i ON (i.order_id = o.id)"
+        " AND EXISTS (SELECT 1 FROM order_items o WHERE o.seller_id = i.order_id)"
+    )  # OR branches and an inner query's equalities are not join keys
+    keys = join_keys(guard_sql(nested, "sqlite"), lambda name: name if name in known else None)
+    assert keys == [("order_items", "order_id", "orders", "id")]
+    grouped = (
+        "SELECT * FROM order_items i JOIN orders o ON (i.order_id = o.id AND (i.seller_id = o.id))"
+        " AND (i.order_id = o.customer_id)"
+    )
+    keys = join_keys(guard_sql(grouped, "sqlite"), lambda name: name if name in known else None)
+    assert keys == [
+        ("order_items", "order_id", "orders", "id"),
+        ("order_items", "seller_id", "orders", "id"),
+        ("order_items", "order_id", "orders", "customer_id"),
+    ]
+
 
 def test_join_key_lines_spell_out_the_repeated_rows():
     from schemagraph.agent.prompts import join_key_lines
 
     lines = join_key_lines([("items", "order_id", "orders", "id", 120, 100, 100, 100)])
     assert lines[0] == "- items.order_id = orders.id"
-    assert "items.order_id is not unique (120 rows, 100 values, 1.20 rows per value)" in lines[1]
+    assert "items.order_id is not unique (120 non-NULL rows, 100 values, 1.20 rows per value)" in lines[1]
     assert "COUNT(*) or SUM over orders values after this join counts them more than once" in lines[1]
-    assert lines[2] == "  orders.id is unique (100 rows)"
+    assert lines[2] == "  orders.id is unique (100 non-NULL rows)"

@@ -185,6 +185,15 @@ def test_run_scores_with_the_official_comparison_and_resumes(tmp_path):
     again = spider2_exec.run(root, cfg=cfg, models=models, out_dir=out, tag="t")
     assert len(again["rows"]) == 2  # resume: nothing to do
     assert len((out / "spider2_exec_t.rows.jsonl").read_text().splitlines()) == 2
+    with (out / "spider2_exec_t_candidates.jsonl").open("a") as handle:
+        handle.write('{"instance_id": "local901", "sq')  # a run killed mid-write
+    spider2_exec.run(root, cfg=cfg, models=models, out_dir=out, tag="t")
+    assert len((out / "spider2_exec_t_candidates.jsonl").read_text().splitlines()) == 4
+    spider2_exec.append_record(out / "cut.jsonl", {"instance_id": "a"})
+    with (out / "cut.jsonl").open("a") as handle:
+        handle.write('{"instance_id": "b", "e')
+    spider2_exec.append_record(out / "cut.jsonl", {"instance_id": "c"})
+    assert [row["instance_id"] for row in spider2_exec.read_rows(out / "cut.jsonl")] == ["a", "c"]
     with pytest.raises(ValueError, match="another configuration"):  # one configuration per tag
         spider2_exec.run(root, cfg=_config(selector=False), models=models, out_dir=out, tag="t")
 

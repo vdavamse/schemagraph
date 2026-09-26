@@ -212,7 +212,8 @@ def judge_schema(
         join_keys: The query's join conditions as ``(table_a, column_a, table_b, column_b,
             rows_a, distinct_a, rows_b, distinct_b)`` (:func:`join_key_lines`).
     """
-    blocks = []
+    # The join lines go first: they matter most, and ``judge_material`` cuts the section's end.
+    blocks = ["Joins in the query:\n" + "\n".join(join_key_lines(join_keys))] if join_keys else []
     for table in tables:
         count = row_counts.get(table["fqn"])
         rows = f"{count:,} rows" if count is not None else "row count unknown"
@@ -239,8 +240,6 @@ def judge_schema(
             right = f"{edge['to_table']}({', '.join(edge.get('to_columns') or [])})"
             lines.append(f"  relation: {left} -> {right} [{edge['kind']}]")
         blocks.append("\n".join(lines))
-    if join_keys:
-        blocks.append("Joins in the query:\n" + "\n".join(join_key_lines(join_keys)))
     return "\n\n".join(blocks)
 
 
@@ -260,13 +259,13 @@ def join_key_lines(join_keys: list[tuple[str, str, str, str, int, int, int, int]
         ):
             if distinct and rows > distinct:
                 lines.append(
-                    f"  {table}.{column} is not unique ({rows:,} rows, {distinct:,} values, "
-                    f"{rows / distinct:.2f} rows per value): each {other} row is repeated once "
-                    f"per matching {table} row, so COUNT(*) or SUM over {other} values after "
-                    "this join counts them more than once"
+                    f"  {table}.{column} is not unique ({rows:,} non-NULL rows, "
+                    f"{distinct:,} values, {rows / distinct:.2f} rows per value): each {other} "
+                    f"row is repeated once per matching {table} row, so COUNT(*) or SUM over "
+                    f"{other} values after this join counts them more than once"
                 )
             elif distinct:
-                lines.append(f"  {table}.{column} is unique ({rows:,} rows)")
+                lines.append(f"  {table}.{column} is unique ({rows:,} non-NULL rows)")
     return lines
 
 

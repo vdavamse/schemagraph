@@ -59,6 +59,9 @@ REASONING_MAX_TOKENS = 8192
 REASONING_TIMEOUT_S = 180.0
 # Timeout of counting one join key's rows and distinct values for the judge, in seconds.
 KEY_COUNT_TIMEOUT_S = 10.0
+# Budget of all the row and key counts behind one judge call's schema, in seconds; past it the
+# judge sees the tables without counts, so a slow database cannot time the whole node out.
+JUDGE_COUNTS_TIMEOUT_S = 30.0
 # Usage roles whose records are attached to the node they ran for.
 _NODE_ROLES = frozenset({"generator", "judge"})
 
@@ -345,19 +348,34 @@ class Answerer:
         return tuple(dict.fromkeys(option for option in options if option not in used))
 
     async def _judge_schema(self, candidate: Candidate) -> str:
-        """Describe the tables ``candidate`` reads, their row counts and its join keys."""
+        """Describe the tables ``candidate`` reads, their row counts and its join keys.
+
+        The counts run within :data:`JUDGE_COUNTS_TIMEOUT_S`; past it they are left out.
+        """
         read = candidate.checks.tables if candidate.checks else []
         fetched = await asyncio.gather(*map(self.schema.table, read))
         details = [detail for detail in fetched if detail]
         unique = list({detail["fqn"]: detail for detail in details}.values())
-        counts = await asyncio.to_thread(self._row_counts, [detail["fqn"] for detail in unique])
+        try:
+            counts, measured = await asyncio.wait_for(
+                self._judge_counts(candidate, [detail["fqn"] for detail in unique]),
+                JUDGE_COUNTS_TIMEOUT_S,
+            )
+        except TimeoutError:  # the count thread runs on; what it finishes is memoised
+            counts, measured = {}, []
+        return prompts.judge_schema(unique, counts, measured)
+
+    async def _judge_counts(
+        self, candidate: Candidate, tables: list[str]
+    ) -> tuple[dict[str, int | None], list[tuple[str, str, str, str, int, int, int, int]]]:
+        """Row counts of ``tables`` and the measured join keys of ``candidate``'s query."""
+        counts = await asyncio.to_thread(self._row_counts, tables)
         try:
             guarded = guard_sql(candidate.sql, self.executor.dialect)
         except GuardError:
-            return prompts.judge_schema(unique, counts)
+            return counts, []
         joins = await asyncio.to_thread(join_keys, guarded, self.executor.resolve_table)
-        measured = await asyncio.to_thread(self._join_key_stats, joins)
-        return prompts.judge_schema(unique, counts, measured)
+        return counts, await asyncio.to_thread(self._join_key_stats, joins)
 
     def _join_key_stats(
         self, joins: list[tuple[str, str, str, str]]
@@ -372,13 +390,16 @@ class Answerer:
         return measured
 
     def _key_stats(self, table: str, column: str) -> tuple[int, int] | None:
-        """Return (rows, distinct values) of a table column, or None when the count fails."""
+        """Return (non-NULL rows, distinct values) of a table column, or None when the count fails.
+
+        NULLs are left out of both: they match no row of an equality join.
+        """
         key = (table, column.lower())
         if key not in self._key_counts:
             quoted = exp.column(column, quoted=True).sql(self.executor.dialect)
-            source = exp.to_table(table).sql(self.executor.dialect)
             result = self.executor.execute(
-                f"SELECT COUNT(*), COUNT(DISTINCT {quoted}) FROM {source}",
+                f"SELECT COUNT({quoted}), COUNT(DISTINCT {quoted}) "
+                f"FROM {self.executor.quoted_name(table)}",
                 timeout_s=KEY_COUNT_TIMEOUT_S,
             )
             self._key_counts[key] = (

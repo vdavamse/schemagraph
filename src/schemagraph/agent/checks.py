@@ -192,7 +192,9 @@ def join_keys(
             condition = join.args.get("on")
             if condition is None:
                 continue
-            for equality in condition.find_all(exp.EQ):
+            for equality in _conjuncts(condition):
+                if not isinstance(equality, exp.EQ):
+                    continue
                 left, right = equality.this, equality.expression
                 if not (isinstance(left, exp.Column) and isinstance(right, exp.Column)):
                     continue
@@ -202,6 +204,17 @@ def join_keys(
                     if pair not in found:
                         found.append(pair)
     return found
+
+
+def _conjuncts(condition: exp.Expression) -> list[exp.Expression]:
+    """Return the AND-ed terms of a condition, through parentheses.
+
+    An equality under OR or inside a nested query is not a conjunct, so it is no join key.
+    """
+    condition = condition.unnest()
+    if isinstance(condition, exp.And):
+        return _conjuncts(condition.this) + _conjuncts(condition.expression)
+    return [condition]
 
 
 def _reads_table_function(tree: exp.Expression) -> bool:

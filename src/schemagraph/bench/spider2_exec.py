@@ -346,10 +346,18 @@ def read_rows(path: Path) -> list[dict]:
         return []
     by_id: dict[str, dict] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            row = json.loads(line)
+        if (row := _parse_record(line)) is not None:
             by_id[row["instance_id"]] = row
     return list(by_id.values())
+
+
+def _parse_record(line: str) -> dict | None:
+    """Return one jsonl record, or None for a blank line or one cut short by a killed run."""
+    try:
+        record = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    return record if isinstance(record, dict) and "instance_id" in record else None
 
 
 def done_ids(path: Path, config_hash: str | None = None) -> set[str]:
@@ -372,9 +380,14 @@ def config_hash(config: dict) -> str:
 
 
 def append_record(path: Path, record: dict) -> None:
-    """Append one JSON record to a jsonl file."""
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, default=str) + "\n")
+    """Append one JSON record to a jsonl file, on a line of its own after a cut-short one."""
+    text = json.dumps(record, default=str) + "\n"
+    with path.open("a+b") as handle:
+        if handle.seek(0, 2) > 0:
+            handle.seek(-1, 2)
+            if handle.read(1) != b"\n":  # a run killed mid-write
+                text = "\n" + text
+        handle.write(text.encode("utf-8"))
 
 
 def _run_config(
@@ -445,9 +458,13 @@ def _resume(
     for path in per_task_paths:  # drop records of tasks that run again (a crash, an error row)
         if not path.exists():
             continue
-        lines = path.read_text(encoding="utf-8").splitlines()
-        keep = [line for line in lines if line.strip() and json.loads(line)["instance_id"] in done]
-        path.write_text("".join(line + "\n" for line in keep), encoding="utf-8")
+        kept = path.with_name(path.name + ".tmp")
+        with path.open(encoding="utf-8") as source, kept.open("w", encoding="utf-8") as target:
+            for line in source:
+                record = _parse_record(line)
+                if record is not None and record["instance_id"] in done:
+                    target.write(line if line.endswith("\n") else line + "\n")
+        kept.replace(path)
     return done
 
 

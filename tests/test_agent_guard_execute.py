@@ -329,3 +329,24 @@ def test_sqlite_catalog_skips_a_broken_view(tmp_path):
         assert executor.execute("SELECT a FROM t").ok
     finally:
         executor.close()
+
+
+def test_join_key_counts_quote_reserved_names_and_leave_out_nulls(tmp_path):
+    from types import SimpleNamespace
+
+    from schemagraph.agent.answer import Answerer
+
+    path = tmp_path / "keys.sqlite"
+    con = sqlite3.connect(path)
+    con.execute('CREATE TABLE "order" (id INTEGER, coupon INTEGER)')
+    con.executemany('INSERT INTO "order" VALUES (?, ?)', [(1, 7), (2, None), (3, None), (4, 8)])
+    con.commit()
+    con.close()
+    executor = SQLiteExecutor(path)
+    try:
+        host = SimpleNamespace(executor=executor, _key_counts={})
+        # coupon is unique among the rows that can match a join; the NULLs match nothing
+        assert Answerer._key_stats(host, executor.resolve_table("order"), "coupon") == (2, 2)
+        assert Answerer._key_stats(host, executor.resolve_table("order"), "id") == (4, 4)
+    finally:
+        executor.close()
