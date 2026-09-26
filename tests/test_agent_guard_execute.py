@@ -312,3 +312,20 @@ def test_duckdb_resolves_like_the_search_path(tmp_path):
 def test_sqlite_placeholder_is_a_syntax_error_not_a_guard_reject(store_sqlite):
     lite = SQLiteExecutor(store_sqlite)
     assert lite.execute("select * from orders where id = ?").error_kind == "syntax"
+
+
+def test_sqlite_catalog_skips_a_broken_view(tmp_path):
+    path = tmp_path / "broken.sqlite"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE t (a INTEGER, b TEXT)")
+    con.execute("CREATE VIEW v AS SELECT a, b FROM t")
+    con.execute("DROP TABLE t")  # v now names a column that is gone
+    con.execute("CREATE TABLE t (a INTEGER)")
+    con.commit()
+    con.close()
+    executor = SQLiteExecutor(path)
+    try:
+        assert executor.catalog() == {"t": ["a"]}
+        assert executor.execute("SELECT a FROM t").ok
+    finally:
+        executor.close()

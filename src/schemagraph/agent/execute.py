@@ -658,7 +658,12 @@ class SQLiteExecutor(_CatalogExecutor):
             names = [row[0] for row in con.execute(_SQLITE_TABLES_SQL)]
             tables: list[_TableColumns] = []
             for name in names:
-                columns = [row[0] for row in con.execute(_SQLITE_COLUMNS_SQL, (name,))]
+                try:
+                    columns = [row[0] for row in con.execute(_SQLITE_COLUMNS_SQL, (name,))]
+                except sqlite3.OperationalError:
+                    # a view over a column that no longer exists cannot be listed or queried
+                    # (Spider 2.0's oracle_sql has one); leave it out rather than fail every query
+                    continue
                 tables.append((None, name, columns))
             return tables
 
