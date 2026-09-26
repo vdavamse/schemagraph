@@ -1,0 +1,212 @@
+[
+ {
+  "instance_id": "local004",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.000861
+ },
+ {
+  "instance_id": "local008",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.0020057520000000004
+ },
+ {
+  "instance_id": "local015",
+  "top_score_ex": 0,
+  "bare": 0,
+  "bare_by": "selector",
+  "context": 0,
+  "context_by": "selector",
+  "oracle": 0,
+  "cost": 0.0024580080000000002
+ },
+ {
+  "instance_id": "local019",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 0,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.000575904
+ },
+ {
+  "instance_id": "local032",
+  "top_score_ex": 0,
+  "bare": 0,
+  "bare_by": "selector",
+  "context": 0,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.001615656
+ },
+ {
+  "instance_id": "local039",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.000474432
+ },
+ {
+  "instance_id": "local055",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "score",
+  "context": 1,
+  "context_by": "score",
+  "oracle": 1,
+  "cost": 0
+ },
+ {
+  "instance_id": "local064",
+  "top_score_ex": 0,
+  "bare": 0,
+  "bare_by": "selector",
+  "context": 0,
+  "context_by": "selector",
+  "oracle": 0,
+  "cost": 0.00022889999999999998
+ },
+ {
+  "instance_id": "local081",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.00030534000000000003
+ },
+ {
+  "instance_id": "local114",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.000314832
+ },
+ {
+  "instance_id": "local141",
+  "top_score_ex": 0,
+  "bare": 0,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.003476844
+ },
+ {
+  "instance_id": "local152",
+  "top_score_ex": 0,
+  "bare": 0,
+  "bare_by": "selector",
+  "context": 0,
+  "context_by": "selector",
+  "oracle": 0,
+  "cost": 0.0014859600000000001
+ },
+ {
+  "instance_id": "local169",
+  "top_score_ex": 1,
+  "bare": 0,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.001899828
+ },
+ {
+  "instance_id": "local194",
+  "top_score_ex": 0,
+  "bare": 0,
+  "bare_by": "selector",
+  "context": 0,
+  "context_by": "selector",
+  "oracle": 0,
+  "cost": 0.0037454760000000006
+ },
+ {
+  "instance_id": "local201",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "score",
+  "context": 1,
+  "context_by": "score",
+  "oracle": 1,
+  "cost": 0
+ },
+ {
+  "instance_id": "local210",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.0031633560000000004
+ },
+ {
+  "instance_id": "local275",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.0008484000000000001
+ },
+ {
+  "instance_id": "local283",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 1,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.002918412
+ },
+ {
+  "instance_id": "local286",
+  "top_score_ex": 0,
+  "bare": 0,
+  "bare_by": "selector",
+  "context": 0,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.005292756
+ },
+ {
+  "instance_id": "local330",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "selector",
+  "context": 0,
+  "context_by": "selector",
+  "oracle": 1,
+  "cost": 0.000448728
+ },
+ {
+  "instance_id": "local354",
+  "top_score_ex": 1,
+  "bare": 1,
+  "bare_by": "score",
+  "context": 1,
+  "context_by": "score",
+  "oracle": 1,
+  "cost": 0
+ }
+]

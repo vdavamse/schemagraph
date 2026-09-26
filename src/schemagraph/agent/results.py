@@ -455,6 +455,9 @@ class AgentConfig:
             finishes, so every choice sees every result so far; off asks in lockstep batches.
         top_k: Candidates the pairwise selector compares.
         selector: Run the pairwise selector over the top candidates.
+        selector_context: Show the selector what the judge sees (notes, tables read with
+            join-key facts, result statistics, checks); off shows the SQL and a few rows. Off by
+            default: replayed on the 21-task run it fixed two picks and broke two.
         judge: Run the judge. Off, the score is the checks alone, so the first clean executed
             candidate scores 1.0 and stops the search.
         seed: Random seed of the search.
@@ -501,6 +504,7 @@ class AgentConfig:
     rolling: bool = False
     top_k: int = 4
     selector: bool = True
+    selector_context: bool = False
     judge: bool = True
     seed: int = 0
     gen_model: str | None = None

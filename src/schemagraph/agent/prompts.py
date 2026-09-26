@@ -328,21 +328,57 @@ def result_stats(result: ExecResult | None) -> str:
     return "\n".join(lines)
 
 
-def _pick_section(label: str, candidate: Candidate, rows: int) -> str:
+def _pick_section(
+    label: str,
+    candidate: Candidate,
+    rows: int,
+    *,
+    stats: bool = False,
+    findings: bool = False,
+) -> str:
     """Show one candidate of a pairwise comparison."""
-    return (
+    text = (
         f"Candidate {label} SQL:\n{candidate.sql[:PICK_SQL_CHARS]}\n"
         f"Candidate {label} result: {preview(candidate.exec, rows)}"
     )
+    if stats and (summary := result_stats(candidate.exec)):
+        text += f"\nCandidate {label} result columns:\n{summary}"
+    if findings and candidate.checks and candidate.checks.findings:
+        lines = "\n".join(f"- {finding.message}" for finding in candidate.checks.findings)
+        text += f"\nCandidate {label} checks:\n{lines}"
+    return text
 
 
-def pick_material(question: str, a: Candidate, b: Candidate) -> str:
-    """Build what the selector reads to compare candidates ``a`` and ``b``."""
-    sections = [
-        f"Question: {question}",
-        _pick_section("A", a, PICK_PREVIEW_ROWS),
-        _pick_section("B", b, PICK_PREVIEW_ROWS),
-    ]
+def pick_material(
+    question: str,
+    a: Candidate,
+    b: Candidate,
+    *,
+    evidence: str | None = None,
+    evidence_chars: int = 0,
+    schema_a: str | None = None,
+    schema_b: str | None = None,
+    rows: int = PICK_PREVIEW_ROWS,
+    stats: bool = False,
+    findings: bool = False,
+) -> str:
+    """Build what the selector reads to compare candidates ``a`` and ``b``.
+
+    With context (``AgentConfig.selector_context``) it reads what the judge reads: the notes, the
+    tables each query reads with their join-key facts (once when both read the same), result
+    statistics and the checks' findings. Without it, the question, the SQL and a few rows.
+    """
+    sections = [f"Question: {question}"]
+    if evidence and evidence_chars > 0:
+        sections.append(f"Notes: {evidence[:evidence_chars]}")
+    if schema_a and schema_a == schema_b:
+        sections.append(f"Tables both queries read:\n{schema_a[:JUDGE_SCHEMA_CHARS]}")
+    else:
+        for label, schema in (("A", schema_a), ("B", schema_b)):
+            if schema:
+                sections.append(f"Tables query {label} reads:\n{schema[:JUDGE_SCHEMA_CHARS]}")
+    sections.append(_pick_section("A", a, rows, stats=stats, findings=findings))
+    sections.append(_pick_section("B", b, rows, stats=stats, findings=findings))
     return "\n\n".join(sections)
 
 

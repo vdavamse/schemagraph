@@ -85,6 +85,7 @@ _LEGACY_VALUES = {
     "abmcts_algorithm": "a",
     "rolling": False,
     "reasoning_node_timeout_s": None,
+    "selector_context": False,
 }
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6

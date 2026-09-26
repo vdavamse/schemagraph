@@ -492,13 +492,31 @@ class Answerer:
             else:
                 parent.advice = str(output).strip()
 
+    async def _pick_material(self, a: Candidate, b: Candidate) -> str:
+        """What the selector reads: the judge's context for both candidates, or the bare pair."""
+        if not self.cfg.selector_context:
+            return prompts.pick_material(self.question, a, b)
+        schema_a, schema_b = await asyncio.gather(self._judge_schema(a), self._judge_schema(b))
+        return prompts.pick_material(
+            self.question,
+            a,
+            b,
+            evidence=self.evidence,
+            evidence_chars=self.cfg.judge_evidence_chars,
+            schema_a=schema_a,
+            schema_b=schema_b,
+            rows=self.cfg.preview_rows,
+            stats=True,
+            findings=True,
+        )
+
     async def _pick(self, a: Candidate, b: Candidate) -> float:
         """Return the selector's p(``a`` is better than ``b``); 0.5 when the call failed."""
         try:
             output, _, _ = await agents.run_agent(
                 "selector",
                 agents.selector(),
-                prompts.pick_material(self.question, a, b),
+                await self._pick_material(a, b),
                 model=self.models.selector,
                 model_name=self.models.names["selector"],
                 sink=self.records,

@@ -244,7 +244,7 @@ def _legacy_config(**settings):
 
     legacy = dict(preview_rows=10, judge_evidence_chars=1000, judge_schema=False,
                   judge_findings=False, judge_stats=False,
-                  reasoning_node_timeout_s=None)  # fmt: skip
+                  reasoning_node_timeout_s=None, selector_context=False)  # fmt: skip
     return AgentConfig(**{**legacy, **settings})
 
 
