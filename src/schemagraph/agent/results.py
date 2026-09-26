@@ -494,12 +494,12 @@ class AgentConfig:
     judge_model: str | None = None
     critic_model: str | None = None
     probe_limit: int = 3
-    preview_rows: int = 10
+    preview_rows: int = 20
     evidence_chars: int = 4000
-    judge_evidence_chars: int = 1000
-    judge_schema: bool = False
-    judge_findings: bool = False
-    judge_stats: bool = False
+    judge_evidence_chars: int = 4000
+    judge_schema: bool = True
+    judge_findings: bool = True
+    judge_stats: bool = True
     judge_ambiguity: bool = False
     exec_limit: int = 1000
     exec_timeout_s: float = 30.0
