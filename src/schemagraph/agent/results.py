@@ -124,10 +124,20 @@ class RubricBase(BaseModel):
 
 RUBRIC_FIELDS: tuple[str, ...] = tuple(RubricBase.model_fields)
 MISSING_DESCRIPTION = "Which of these tables does the question need that the query does not use?"
+# Opt-in rubric field (AgentConfig.judge_ambiguity): a question with two readings should not be
+# judged against only one of them.
+READINGS_FIELD = "covers_readings"
+READINGS_DESCRIPTION = (
+    "If the question can reasonably be read in more than one way (for example, a list of rows "
+    "and a figure per group), does the result give what every reasonable reading asks for? "
+    "If the question has only one reading, answer yes."
+)
 
 
 @lru_cache(maxsize=256)
-def rubric_type(missing_options: tuple[str, ...] = ()) -> type[RubricBase]:
+def rubric_type(
+    missing_options: tuple[str, ...] = (), *, readings: bool = False
+) -> type[RubricBase]:
     """Build the judge's output type.
 
     Jev picks from candidates better than it extracts, so the rubric asks which of the linked and
@@ -136,21 +146,23 @@ def rubric_type(missing_options: tuple[str, ...] = ()) -> type[RubricBase]:
     Args:
         missing_options: Candidate table names; blanks and duplicates are dropped and at most
             `MAX_OPTIONS` are kept.
+        readings: Add the :data:`READINGS_FIELD` probability, which counts in the judge's mean.
 
     Returns:
-        `RubricBase` itself when fewer than two options remain, else a ``Rubric`` subclass with
-        a ``missing: list[Literal[...]]`` field.
+        `RubricBase` itself when fewer than two options remain and ``readings`` is off, else a
+        ``Rubric`` subclass with a ``missing: list[Literal[...]]`` field and/or the readings
+        field.
     """
     options = tuple(dict.fromkeys(option for option in missing_options if option))[:MAX_OPTIONS]
-    if len(options) < _MIN_OPTIONS:
+    extra: dict[str, Any] = {}
+    if readings:
+        extra[READINGS_FIELD] = (float, _probability(READINGS_DESCRIPTION))
+    if len(options) >= _MIN_OPTIONS:
+        missing_field = Field(default_factory=list, description=MISSING_DESCRIPTION)
+        extra["missing"] = (list[Literal[options]], missing_field)  # type: ignore[valid-type]
+    if not extra:
         return RubricBase
-    missing_field = Field(default_factory=list, description=MISSING_DESCRIPTION)
-    return create_model(
-        "Rubric",
-        __base__=RubricBase,
-        __doc__=RubricBase.__doc__,
-        missing=(list[Literal[options]], missing_field),  # type: ignore[valid-type]
-    )
+    return create_model("Rubric", __base__=RubricBase, __doc__=RubricBase.__doc__, **extra)
 
 
 class Pick(BaseModel):
@@ -267,6 +279,27 @@ class UsageRecord(BaseModel):
         self.ok = self.ok and other.ok
 
 
+class Transcript(BaseModel):
+    """The messages of one model call attempt, kept when ``AgentConfig.trace`` is on.
+
+    Attributes:
+        role: The agent's role (``generator``, ``judge``, ``selector`` or ``critic``).
+        model: The model's name.
+        node_id: The search node the call belongs to, if any.
+        attempt: 1 for the first try, higher for retries after a rate limit or server error.
+        ok: Whether the attempt succeeded.
+        messages: pydantic-ai's messages in JSON form: the prompt, the reasoning, the tool
+            calls and their results, and the output.
+    """
+
+    role: str
+    model: str = ""
+    node_id: str | None = None
+    attempt: int = 1
+    ok: bool = True
+    messages: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class UsageSummary(BaseModel):
     """Usage records summed per role, per model and overall.
 
@@ -357,6 +390,7 @@ class AnswerResult(BaseModel):
         linked_tables: Tables of the wide context linked for the question.
         models: Model name by role.
         ms: Wall time of the answer.
+        transcripts: The messages of every model call, when ``AgentConfig.trace`` is on.
     """
 
     question: str
@@ -375,6 +409,7 @@ class AnswerResult(BaseModel):
     linked_tables: list[str] = Field(default_factory=list)
     models: dict[str, str] = Field(default_factory=dict)
     ms: float = 0.0
+    transcripts: list[Transcript] = Field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -409,6 +444,8 @@ class AgentConfig:
         tight_tables: ``max_tables`` of the tight context.
         wide_tables: ``max_tables`` of the wide context.
         early_stop: Stop the search once a candidate scores at least this.
+        early_stop_agree: Nodes scoring at least ``early_stop`` that must return the same
+            result before the search stops; 1 stops on one high score.
         top_k: Candidates the pairwise selector compares.
         selector: Run the pairwise selector over the top candidates.
         judge: Run the judge. Off, the score is the checks alone, so the first clean executed
@@ -421,6 +458,13 @@ class AgentConfig:
         preview_rows: Result rows shown to the judge.
         evidence_chars: External-knowledge characters shown to the generator.
         judge_evidence_chars: External-knowledge characters shown to the judge.
+        judge_schema: Show the judge the tables the query reads: columns, keys, relations and
+            row counts, so it can see a join that repeats rows.
+        judge_findings: Show the judge the deterministic checks' findings.
+        judge_stats: Show the judge per-column statistics of the fetched result (distinct
+            values, NULLs, range), so it can see the result's grain.
+        judge_ambiguity: Ask the judge whether the result covers every reasonable reading of
+            the question (an extra rubric field, counted in its mean).
         exec_limit: Rows fetched per execution.
         exec_timeout_s: Execution timeout in seconds.
         count_cap: Rows counted per execution before counting stops.
@@ -431,6 +475,7 @@ class AgentConfig:
         weights: Weights of the candidate score.
         mcp_url: URL of a schemagraph MCP server (streamable HTTP); None starts one in-process
             for the call.
+        trace: Keep every model call's messages on ``AnswerResult.transcripts``.
     """
 
     strategy: Strategy = "abmcts"
@@ -440,6 +485,7 @@ class AgentConfig:
     tight_tables: int = 7
     wide_tables: int = 20
     early_stop: float = 0.9
+    early_stop_agree: int = 1
     top_k: int = 4
     selector: bool = True
     judge: bool = True
@@ -448,9 +494,13 @@ class AgentConfig:
     judge_model: str | None = None
     critic_model: str | None = None
     probe_limit: int = 3
-    preview_rows: int = 10
+    preview_rows: int = 20
     evidence_chars: int = 4000
-    judge_evidence_chars: int = 1000
+    judge_evidence_chars: int = 4000
+    judge_schema: bool = True
+    judge_findings: bool = True
+    judge_stats: bool = True
+    judge_ambiguity: bool = False
     exec_limit: int = 1000
     exec_timeout_s: float = 30.0
     count_cap: int = 100_000
@@ -460,3 +510,4 @@ class AgentConfig:
     output_retries: int = 2
     weights: ScoreWeights = field(default_factory=ScoreWeights)
     mcp_url: str | None = None
+    trace: bool = False

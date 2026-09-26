@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from itertools import combinations
@@ -145,8 +146,25 @@ def _actions(cfg: AgentConfig) -> list[Action]:
 
 
 def _searching(trace: SearchTrace, cfg: AgentConfig, budget: int) -> bool:
-    """Whether budget is left and no node has reached ``cfg.early_stop`` yet."""
-    return trace.nodes < budget and trace.best < cfg.early_stop
+    """Whether budget is left and the early stop has not been reached.
+
+    The early stop needs ``cfg.early_stop_agree`` nodes that score at least ``cfg.early_stop``
+    and return the same result (:func:`fingerprint`) from different SQL; with 1, one high score
+    is enough.
+    """
+    return trace.nodes < budget and not _agreed(trace.candidates, cfg)
+
+
+def _agreed(candidates: list[Candidate], cfg: AgentConfig) -> bool:
+    """Whether enough high-scoring nodes share one result to stop early."""
+    high = [candidate for candidate in candidates if candidate.score >= cfg.early_stop]
+    if cfg.early_stop_agree <= 1:
+        return bool(high)
+    # One vote per distinct query: a refinement that repeats its parent's SQL is no second opinion.
+    votes = {(fingerprint(candidate), " ".join(candidate.sql.split())) for candidate in high}
+    groups = Counter(result for result, _ in votes)
+    groups.pop(None, None)
+    return max(groups.values(), default=0) >= cfg.early_stop_agree
 
 
 async def _single(

@@ -354,6 +354,26 @@ The agents read the schema over MCP, as `schemagraph ask` does: each database's 
 | refine | 16 | | | | | | | |
 | abmcts | 16 | | | | | | | |
 
+**First live run: a 21-task subset, AB-MCTS, budget 16, Qwen at high reasoning (2026-09-26).** Generator and critic `openrouter:qwen/qwen3.8-max-0902` (`SCHEMAGRAPH_REASONING=high`), judge and selector `typesafe:typesafe/jev-1.13` through OpenRouter, one task at a time (new OpenRouter accounts are held to 20 requests a minute on this model). The subset (`spider2_exec_subset21.txt`) takes 7 tasks from each third of the local tasks by schema size (4–10, 11–17, 17–38 tables), round-robin over databases. Files: `spider2_exec_abmcts16_high_qwen.*`. local275 ran after the broken-view fix (PR #13); its first attempt lost all 16 nodes to the `oracle_sql` view and is not in the rows. Its gold result is empty, so a pass there is weak evidence.
+
+| n | EX | EX (top score) | oracle | table recall | avg nodes | early stop | cost / task (mean, p50, p90, max) | total | p50 s |
+|---|---|---|---|---|---|---|---|---|---|
+| 21 | 71.43 | 57.14 | 80.95 | 85.41 | 8.38 | 76 % | $0.31, $0.17, $0.69, $0.78 | $6.46 | 153 |
+
+By schema size: 4–10 tables 4/7 (oracle 5), 11–17 tables 6/7 (6), 17–38 tables 5/7 (6), at $0.29, $0.23 and $0.41 a task. Qwen is 97 % of the cost (generator $0.285, critic $0.021 a task); Jev is $0.0012 a task. Two of the six misses had a correct node that was not picked (local032, local064); four stopped early or ended on candidates Jev scored above the right ones (local032, local152, local194, local330).
+
+**Judge context study (offline, same candidates).** The 168 executed candidates of that run, re-executed and re-checked without any model call, re-judged by Jev with more material. Scripts and per-candidate scores in `judge_context_study/`. Jev is not deterministic (mean |Δ| of its mean 0.015, max 0.13 on a repeat), so A and D were run twice.
+
+| judge material | AUROC (run 1, run 2) | within-task AUROC | top-score pick (of 17) | mixed tasks (of 10) | tokens / call |
+|---|---|---|---|---|---|
+| A: question, 1,000 chars of notes, SQL, 10 result rows (the old default) | 0.557, 0.554 | 0.666, 0.621 | 12, 12 | 5, 5 | 2,606 |
+| B: A + tables read (columns, keys, relations, row counts) and join-key uniqueness | 0.621 | 0.716 | 14 | 7 | 3,451 |
+| C: B + 4,000 chars of notes + the checks' findings | 0.588 | 0.649 | 14 | 7 | 3,479 |
+| **D: C + 20 result rows and per-column statistics (the new default)** | **0.640, 0.642** | **0.742, 0.784** | **14, 15** | **7, 8** | 3,688 |
+| E: D + a `covers_readings` rubric field | 0.636 | 0.744 | 14 | 7 | 3,814 |
+
+B to E differ by less than the repeat noise; the readings field is kept as an option (`judge_ambiguity`), off. Two selection rules were replayed on the same scores and rejected: execution-consensus voting (Launer et al. 2026, arXiv 2604.15618) picks 9/17 against 12/17 for the old top score, because with 4–16 candidates from one model a shared misreading is the majority; an agreement tie-break among near-top scores does not beat D's plain top score at any margin (12–15/17). Early stop on agreement (`early_stop_agree=2`) would still stop on 7 tasks, all right, and search on in 9 (4 wrong, 5 right) for up to 88 more nodes; whether the 4 recover needs a paid rerun, so it ships off.
+
 ## Reading the numbers against the literature
 
 The Spider 2.0 leaderboard scores execution accuracy of end-to-end text-to-SQL. schemagraph

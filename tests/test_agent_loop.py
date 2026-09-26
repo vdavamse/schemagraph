@@ -971,3 +971,19 @@ def test_answer_errors_without_pydantic_ai(monkeypatch):
 
     monkeypatch.setattr(builtins, "__import__", no_pydantic_ai)
     assert ImportError in cli._answer_errors()
+
+
+def test_early_stop_can_require_agreeing_results():
+    from schemagraph.agent.search import _agreed
+
+    def node(node_id: str, score: float, value: int, sql: str | None = None) -> Candidate:
+        result = ExecResult(ok=True, columns=["v"], rows=[[value]], row_count=1)
+        return Candidate(id=node_id, sql=sql or f"select {value} -- {node_id}", score=score, exec=result)
+
+    split = [node("n0", 0.95, 1), node("n1", 0.93, 2), node("n2", 0.5, 1)]
+    assert _agreed(split, AgentConfig())  # one high score stops, as before
+    assert not _agreed(split, AgentConfig(early_stop_agree=2))  # the high scores disagree
+    agreed = [*split, node("n3", 0.91, 1)]
+    assert _agreed(agreed, AgentConfig(early_stop_agree=2))  # n0 and n3 return the same result
+    echo = [*split, node("n3", 0.91, 1, sql=" select 1  -- n0")]
+    assert not _agreed(echo, AgentConfig(early_stop_agree=2))  # n3 repeats n0's SQL: one vote

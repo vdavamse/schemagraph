@@ -73,6 +73,15 @@ _ROW_USAGE_FIELDS = {
     "calls", "requests", "input_tokens", "output_tokens", "reasoning_tokens", "cache_read_tokens",
     "tool_calls", "cost_usd", "unpriced", "ms",
 }  # fmt: skip
+# AgentConfig fields added after runs were recorded, with the behaviour those runs had: a field
+# at that value is left out of the config hash, so the earlier runs still resume.
+_LEGACY_VALUES = {
+    "judge_schema": False,
+    "judge_findings": False,
+    "judge_stats": False,
+    "judge_ambiguity": False,
+    "early_stop_agree": 1,
+}
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6
 
@@ -337,10 +346,18 @@ def read_rows(path: Path) -> list[dict]:
         return []
     by_id: dict[str, dict] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            row = json.loads(line)
+        if (row := _parse_record(line)) is not None:
             by_id[row["instance_id"]] = row
     return list(by_id.values())
+
+
+def _parse_record(line: str) -> dict | None:
+    """Return one jsonl record, or None for a blank line or one cut short by a killed run."""
+    try:
+        record = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    return record if isinstance(record, dict) and "instance_id" in record else None
 
 
 def done_ids(path: Path, config_hash: str | None = None) -> set[str]:
@@ -363,9 +380,14 @@ def config_hash(config: dict) -> str:
 
 
 def append_record(path: Path, record: dict) -> None:
-    """Append one JSON record to a jsonl file."""
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, default=str) + "\n")
+    """Append one JSON record to a jsonl file, on a line of its own after a cut-short one."""
+    text = json.dumps(record, default=str) + "\n"
+    with path.open("a+b") as handle:
+        if handle.seek(0, 2) > 0:
+            handle.seek(-1, 2)
+            if handle.read(1) != b"\n":  # a run killed mid-write
+                text = "\n" + text
+        handle.write(text.encode("utf-8"))
 
 
 def _run_config(
@@ -380,10 +402,17 @@ def _run_config(
 
     ``mcp_url`` is left out of ``agent_config``: the benchmark always serves each database
     itself, so the field would be None-valued noise, and leaving it out keeps the hash of rows
-    written before the field existed.
+    written before the field existed. ``trace`` is left out too: it records, it changes no
+    answer. Fields added later (:data:`_LEGACY_VALUES`) count only when they differ from the
+    behaviour earlier runs had, for the same reason as ``mcp_url``.
     """
+    from schemagraph.agent.models import reasoning_level
+
     agent_config = {
-        key: value for key, value in asdict(cfg).items() if key not in {"weights", "mcp_url"}
+        key: value
+        for key, value in asdict(cfg).items()
+        if key not in {"weights", "mcp_url", "trace"}
+        and not (key in _LEGACY_VALUES and value == _LEGACY_VALUES[key])
     }
     config: dict[str, Any] = {
         "strategy": cfg.strategy,
@@ -396,8 +425,6 @@ def _run_config(
         "agent_config": agent_config,
         "weights": asdict(cfg.weights),
     }
-    from schemagraph.agent.models import reasoning_level
-
     if any(name.startswith("openrouter:") for name in models.names.values()):
         # the reasoning effort changes the answers; recorded only when a model reads it, so the
         # hash of runs on other providers is unchanged
@@ -406,15 +433,20 @@ def _run_config(
     return config
 
 
-def _resume(rows_path: Path, candidates_path: Path, chash: str, *, resume: bool) -> set[str]:
+def _resume(
+    rows_path: Path, per_task_paths: tuple[Path, ...], chash: str, *, resume: bool
+) -> set[str]:
     """Prepare the results files and return the tasks already done under ``chash``.
+
+    ``per_task_paths`` are the files keyed by ``instance_id`` (candidates, transcripts); their
+    records of tasks that run again are dropped.
 
     Raises:
         ValueError: The rows file holds rows of another configuration; the summary would
             describe numbers it did not produce.
     """
     if not resume:
-        for path in (rows_path, candidates_path):
+        for path in (rows_path, *per_task_paths):
             path.unlink(missing_ok=True)
     other = {row.get("config_hash") for row in read_rows(rows_path)} - {chash}
     if other:
@@ -423,10 +455,16 @@ def _resume(rows_path: Path, candidates_path: Path, chash: str, *, resume: bool)
             f"({', '.join(sorted(map(str, other)))}); use a different --tag or --no-resume"
         )
     done = done_ids(rows_path, chash)
-    if candidates_path.exists():  # drop candidates of tasks that run again (a crash, an error row)
-        lines = candidates_path.read_text(encoding="utf-8").splitlines()
-        keep = [line for line in lines if line.strip() and json.loads(line)["instance_id"] in done]
-        candidates_path.write_text("".join(line + "\n" for line in keep), encoding="utf-8")
+    for path in per_task_paths:  # drop records of tasks that run again (a crash, an error row)
+        if not path.exists():
+            continue
+        kept = path.with_name(path.name + ".tmp")
+        with path.open(encoding="utf-8") as source, kept.open("w", encoding="utf-8") as target:
+            for line in source:
+                record = _parse_record(line)
+                if record is not None and record["instance_id"] in done:
+                    target.write(line if line.endswith("\n") else line + "\n")
+        kept.replace(path)
     return done
 
 
@@ -496,8 +534,11 @@ def run(
     out.mkdir(parents=True, exist_ok=True)
     rows_path = out / f"spider2_exec_{tag}.rows.jsonl"
     candidates_path = out / f"spider2_exec_{tag}_candidates.jsonl"
+    messages_path = out / f"spider2_exec_{tag}_messages.jsonl"
     config = _run_config(cfg, models, seed=seed, use_docs=use_docs, concurrency=concurrency)
-    done = _resume(rows_path, candidates_path, config["config_hash"], resume=resume)
+    done = _resume(
+        rows_path, (candidates_path, messages_path), config["config_hash"], resume=resume
+    )
     bench = _ExecBench(
         runner=Runner(root, use_docs=use_docs),
         cfg=cfg,
@@ -505,6 +546,7 @@ def run(
         standard=standard,
         rows_path=rows_path,
         candidates_path=candidates_path,
+        messages_path=messages_path,
         config_hash=config["config_hash"],
         seed=seed,
         total=len(tasks),
@@ -531,6 +573,8 @@ class _ExecBench:
         standard: The evaluation standard per instance id.
         rows_path: The rows file (one row per task attempt).
         candidates_path: The candidates file (one record per candidate).
+        messages_path: The transcripts file (one record per model call attempt), written when
+            ``cfg.trace`` is on.
         config_hash: Stamped on every row.
         seed: The run seed.
         total: Tasks in the run, done ones included.
@@ -544,6 +588,7 @@ class _ExecBench:
     standard: dict[str, dict]
     rows_path: Path
     candidates_path: Path
+    messages_path: Path
     config_hash: str
     seed: int
     total: int
@@ -586,6 +631,9 @@ class _ExecBench:
                 for candidate in result.candidates:
                     match = row["candidate_ex"].get(candidate.id)
                     append_record(self.candidates_path, _candidate_record(task, candidate, match))
+                for transcript in result.transcripts:
+                    record = {"instance_id": task.instance_id, **transcript.model_dump(mode="json")}
+                    append_record(self.messages_path, record)
             append_record(self.rows_path, row)
             self.finished += 1
             if self.progress:
@@ -614,6 +662,9 @@ def _candidate_record(task: Instance, candidate: Candidate, match: int | None) -
         "depth": candidate.depth,
         "action": candidate.action,
         "sql": candidate.sql,
+        "rationale": candidate.rationale,
+        "advice": candidate.advice,
+        "feedback": candidate.feedback,
         "score": candidate.score,
         "score_parts": candidate.score_parts,
         "rubric": judgement.fields if judgement else None,

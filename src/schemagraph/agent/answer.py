@@ -16,8 +16,10 @@ from dataclasses import dataclass, field
 from itertools import permutations
 from typing import Any
 
+from sqlglot import exp
+
 from schemagraph.agent import agents, prompts
-from schemagraph.agent.checks import det_of, result_checks, static_checks, tables_read
+from schemagraph.agent.checks import det_of, join_keys, result_checks, static_checks, tables_read
 from schemagraph.agent.execute import Executor
 from schemagraph.agent.guard import GuardedSQL, GuardError, guard_sql
 from schemagraph.agent.models import AgentModels
@@ -32,6 +34,7 @@ from schemagraph.agent.results import (
     Judgement,
     RubricBase,
     SqlCandidate,
+    Transcript,
     UsageRecord,
     UsageSummary,
     rubric_type,
@@ -54,6 +57,11 @@ CRITIC_MAX_TOKENS = 800
 # the whole node, ``AgentConfig.node_timeout_s``).
 REASONING_MAX_TOKENS = 8192
 REASONING_TIMEOUT_S = 180.0
+# Timeout of counting one join key's rows and distinct values for the judge, in seconds.
+KEY_COUNT_TIMEOUT_S = 10.0
+# Budget of all the row and key counts behind one judge call's schema, in seconds; past it the
+# judge sees the tables without counts, so a slow database cannot time the whole node out.
+JUDGE_COUNTS_TIMEOUT_S = 30.0
 # Usage roles whose records are attached to the node they ran for.
 _NODE_ROLES = frozenset({"generator", "judge"})
 
@@ -107,6 +115,8 @@ class Answerer:
         self.cfg = cfg or AgentConfig()
         self.models = models or AgentModels.resolve(self.cfg)
         self.records: list[UsageRecord] = []
+        self.transcripts: list[Transcript] | None = [] if self.cfg.trace else None
+        self._key_counts: dict[tuple[str, str], tuple[int, int] | None] = {}
         self.question = ""
         self.evidence: str | None = None
         self._toolset = agents.schema_toolset(schema.mcp_url)
@@ -122,6 +132,7 @@ class Answerer:
         candidates.
         """
         self.records = []
+        self.transcripts = [] if self.cfg.trace else None
         self._advice_locks = {}
         self.question = question
         self.evidence = evidence
@@ -156,6 +167,7 @@ class Answerer:
             candidates=trace.candidates,
             selector_matrix=matrix,
             usage=UsageSummary.of(self.records),
+            transcripts=self.transcripts or [],
             linked_tables=list(self._wide.tables),
             models=self.models.names,
             ms=(time.perf_counter() - started) * 1000,
@@ -236,6 +248,7 @@ class Answerer:
             model_name=self.models.names["generator"],
             node_id=node_id,
             sink=self.records,
+            transcripts=self.transcripts,
             deps=agents.AgentDeps(self.executor, self.cfg, probes_left=self.cfg.probe_limit),
             toolsets=[self._toolset],
             model_settings={
@@ -334,9 +347,72 @@ class Answerer:
             options += await self.schema.neighbours(table)
         return tuple(dict.fromkeys(option for option in options if option not in used))
 
+    async def _judge_schema(self, candidate: Candidate) -> str:
+        """Describe the tables ``candidate`` reads, their row counts and its join keys.
+
+        The counts run within :data:`JUDGE_COUNTS_TIMEOUT_S`; past it they are left out.
+        """
+        read = candidate.checks.tables if candidate.checks else []
+        fetched = await asyncio.gather(*map(self.schema.table, read))
+        details = [detail for detail in fetched if detail]
+        unique = list({detail["fqn"]: detail for detail in details}.values())
+        try:
+            counts, measured = await asyncio.wait_for(
+                self._judge_counts(candidate, [detail["fqn"] for detail in unique]),
+                JUDGE_COUNTS_TIMEOUT_S,
+            )
+        except TimeoutError:  # the count thread runs on; what it finishes is memoised
+            counts, measured = {}, []
+        return prompts.judge_schema(unique, counts, measured)
+
+    async def _judge_counts(
+        self, candidate: Candidate, tables: list[str]
+    ) -> tuple[dict[str, int | None], list[tuple[str, str, str, str, int, int, int, int]]]:
+        """Row counts of ``tables`` and the measured join keys of ``candidate``'s query."""
+        counts = await asyncio.to_thread(self._row_counts, tables)
+        try:
+            guarded = guard_sql(candidate.sql, self.executor.dialect)
+        except GuardError:
+            return counts, []
+        joins = await asyncio.to_thread(join_keys, guarded, self.executor.resolve_table)
+        return counts, await asyncio.to_thread(self._join_key_stats, joins)
+
+    def _join_key_stats(
+        self, joins: list[tuple[str, str, str, str]]
+    ) -> list[tuple[str, str, str, str, int, int, int, int]]:
+        """Rows and distinct values of each join key (blocking; memoised per column)."""
+        measured = []
+        for table_a, column_a, table_b, column_b in joins:
+            side_a = self._key_stats(table_a, column_a)
+            side_b = self._key_stats(table_b, column_b)
+            if side_a and side_b:
+                measured.append((table_a, column_a, table_b, column_b, *side_a, *side_b))
+        return measured
+
+    def _key_stats(self, table: str, column: str) -> tuple[int, int] | None:
+        """Return (non-NULL rows, distinct values) of a table column, or None when the count fails.
+
+        NULLs are left out of both: they match no row of an equality join.
+        """
+        key = (table, column.lower())
+        if key not in self._key_counts:
+            quoted = exp.column(column, quoted=True).sql(self.executor.dialect)
+            result = self.executor.execute(
+                f"SELECT COUNT({quoted}), COUNT(DISTINCT {quoted}) "
+                f"FROM {self.executor.quoted_name(table)}",
+                timeout_s=KEY_COUNT_TIMEOUT_S,
+            )
+            self._key_counts[key] = (
+                (int(result.rows[0][0]), int(result.rows[0][1])) if result.ok else None
+            )
+        return self._key_counts[key]
+
     async def judge(self, candidate: Candidate) -> Judgement | None:
         """Judge an executed candidate; None when the judge call failed (it is in the records)."""
-        rubric = rubric_type(await self.missing_options(candidate))
+        rubric = rubric_type(
+            await self.missing_options(candidate), readings=self.cfg.judge_ambiguity
+        )
+        findings = candidate.checks.findings if candidate.checks else []
         material = prompts.judge_material(
             self.question,
             candidate.sql,
@@ -344,6 +420,9 @@ class Answerer:
             rows=self.cfg.preview_rows,
             evidence=self.evidence,
             evidence_chars=self.cfg.judge_evidence_chars,
+            schema=await self._judge_schema(candidate) if self.cfg.judge_schema else None,
+            findings=[finding.message for finding in findings] if self.cfg.judge_findings else None,
+            stats=self.cfg.judge_stats,
         )
         model_name = self.models.names["judge"]
         try:
@@ -355,6 +434,7 @@ class Answerer:
                 model_name=model_name,
                 node_id=candidate.id,
                 sink=self.records,
+                transcripts=self.transcripts,
                 output_type=rubric,
                 model_settings=self._limits("judge", None, JUDGE_TIMEOUT_S),
             )
@@ -388,6 +468,7 @@ class Answerer:
                     model_name=self.models.names["critic"],
                     node_id=parent.id,
                     sink=self.records,
+                    transcripts=self.transcripts,
                     model_settings=self._limits("critic", CRITIC_MAX_TOKENS, GEN_TIMEOUT_S),
                 )
             except Exception:
@@ -405,6 +486,7 @@ class Answerer:
                 model=self.models.selector,
                 model_name=self.models.names["selector"],
                 sink=self.records,
+                transcripts=self.transcripts,
                 model_settings=self._limits("selector", None, JUDGE_TIMEOUT_S),
             )
         except Exception:

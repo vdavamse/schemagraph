@@ -19,7 +19,7 @@ from typing import Any
 from pydantic_ai import Agent, ModelRetry, RunContext, capture_run_messages
 from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 from pydantic_ai.mcp import CallToolFunc, MCPToolset, ToolResult
-from pydantic_ai.messages import ModelMessage, ModelResponse
+from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, ModelResponse
 from pydantic_ai.tools import ToolDefinition
 from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.usage import RunUsage, UsageLimits
@@ -27,7 +27,14 @@ from pydantic_ai.usage import RunUsage, UsageLimits
 from schemagraph.agent import prompts
 from schemagraph.agent.execute import Executor
 from schemagraph.agent.guard import GuardError, guard_sql
-from schemagraph.agent.results import AgentConfig, Pick, RubricBase, SqlCandidate, UsageRecord
+from schemagraph.agent.results import (
+    AgentConfig,
+    Pick,
+    RubricBase,
+    SqlCandidate,
+    Transcript,
+    UsageRecord,
+)
 from schemagraph.linking.linker import LinkOptions
 
 # The MCP tools the generator may call; the server's other tools repeat these for other clients.
@@ -292,6 +299,7 @@ async def _run_with_backoff(
     model: Any,
     usage: RunUsage,
     record: UsageRecord,
+    transcripts: list[Transcript] | None,
     run_options: dict[str, Any],
 ) -> Any:
     """Run ``agent``, retrying after each of :data:`RETRY_DELAYS` on a retryable error.
@@ -300,11 +308,14 @@ async def _run_with_backoff(
         Exception: The last error, once it is not retryable or the retries are spent; its
             message is also stored on ``record``.
     """
+    attempt = 0
     for delay in RETRY_DELAYS:
+        attempt += 1
         try:
             return await _priced_run(
-                agent, prompt, model=model, usage=usage, record=record, **run_options
-            )
+                agent, prompt, record=record, transcripts=transcripts, attempt=attempt,
+                model=model, usage=usage, **run_options,
+            )  # fmt: skip
         except Exception as error:
             if not _retryable(error):
                 record.error = _error_text(error)
@@ -312,26 +323,47 @@ async def _run_with_backoff(
         await asyncio.sleep(delay * (1 + random.random() / 4))
     try:
         return await _priced_run(
-            agent, prompt, model=model, usage=usage, record=record, **run_options
-        )
+            agent, prompt, record=record, transcripts=transcripts, attempt=attempt + 1,
+            model=model, usage=usage, **run_options,
+        )  # fmt: skip
     except Exception as error:
         record.error = _error_text(error)
         raise
 
 
 async def _priced_run(
-    agent: Agent[Any, Any], prompt: str, *, record: UsageRecord, **options: Any
+    agent: Agent[Any, Any],
+    prompt: str,
+    *,
+    record: UsageRecord,
+    transcripts: list[Transcript] | None,
+    attempt: int,
+    **options: Any,
 ) -> Any:
     """Run ``agent`` once and add the cost of every response it got to ``record``.
 
     The messages are captured so that a run that fails or is cancelled after some responses is
-    still charged for them.
+    still charged for them, and, when ``transcripts`` is a list, kept there.
     """
+    ok = False
     with capture_run_messages() as messages:
         try:
-            return await agent.run(prompt, **options)
+            result = await agent.run(prompt, **options)
+            ok = True
+            return result
         finally:
             _add_cost(record, messages)
+            if transcripts is not None:
+                transcripts.append(
+                    Transcript(
+                        role=record.role,
+                        model=record.model,
+                        node_id=record.node_id,
+                        attempt=attempt,
+                        ok=ok,
+                        messages=ModelMessagesTypeAdapter.dump_python(messages, mode="json"),
+                    )
+                )
 
 
 def _add_cost(record: UsageRecord, messages: list[ModelMessage]) -> None:
@@ -363,6 +395,7 @@ async def run_agent(
     model_name: str,
     node_id: str | None = None,
     sink: list[UsageRecord] | None = None,
+    transcripts: list[Transcript] | None = None,
     **run_options: Any,
 ) -> tuple[Any, Any, UsageRecord]:
     """Run one agent call with backoff on rate limits and server errors.
@@ -378,6 +411,7 @@ async def run_agent(
         model_name: The model's name, for the usage record.
         node_id: The search node the call belongs to, if any.
         sink: Where the usage record is appended.
+        transcripts: Where each attempt's messages are appended; None keeps none.
         **run_options: Passed to ``agent.run`` (deps, toolsets, model settings, ...).
 
     Returns:
@@ -393,7 +427,13 @@ async def run_agent(
     )
     try:
         result = await _run_with_backoff(
-            agent, prompt, model=model, usage=usage, record=record, run_options=run_options
+            agent,
+            prompt,
+            model=model,
+            usage=usage,
+            record=record,
+            transcripts=transcripts,
+            run_options=run_options,
         )
         record.ok = True
         record.error = None
