@@ -374,6 +374,18 @@ By schema size: 4–10 tables 4/7 (oracle 5), 11–17 tables 6/7 (6), 17–38 ta
 
 B to E differ by less than the repeat noise; the readings field is kept as an option (`judge_ambiguity`), off. Two selection rules were replayed on the same scores and rejected: execution-consensus voting (Launer et al. 2026, arXiv 2604.15618) picks 9/17 against 12/17 for the old top score, because with 4–16 candidates from one model a shared misreading is the majority; an agreement tie-break among near-top scores does not beat D's plain top score at any margin (12–15/17). Early stop on agreement (`early_stop_agree=2`) would still stop on 7 tasks, all right, and search on in 9 (4 wrong, 5 right) for up to 88 more nodes; whether the 4 recover needs a paid rerun, so it ships off.
 
+**Deeper search: runs A and B on the same 21 tasks (2026-09-27).** Both with PR #14's judge context and the 600 s reasoning node timeout, Qwen at high reasoning, budget 16, batches of 4. Run A keeps the old search (AB-MCTS-A, lockstep batches, early stop at the first node scoring 0.9); run B uses `--algorithm m --rolling --early-stop-min-nodes 8 --early-stop-agree 2 --draft-temperature 1.0`. Script: `run_depth_ab.sh`. Files: `spider2_exec_abmcts16_high_ctx.*` (A) and `spider2_exec_abmcts16_high_m_deep.*` (B); traces in the `_messages.jsonl.gz` files.
+
+| run | EX | EX (top score) | oracle | correct node not picked | refinements / nodes | tasks at depth ≥ 2 | stopped after 4 | cost | $ / task | p50 min |
+|---|---|---|---|---|---|---|---|---|---|---|
+| first run (old judge context, 300 s timeout) | 15 | 12 | 17 | 2 | 20 / 176 (11 %) | 0 | 11 | $6.46 | 0.31 | 2.6 |
+| A: new judge context, old search | 14 | 14 | 17 | 3 | 24 / 184 (13 %) | 2 | 11 | $6.75 | 0.32 | 3.3 |
+| B: + AB-MCTS-M, rolling, min 8 nodes, agree 2 | 14 | 14 | **18** | 4 | **151 / 288 (52 %)** | **9** | 0 | $13.93 | 0.66 | 9.6 |
+
+The judge context lifted the top-score pick from 12 to 14, as the offline study predicted, but the pairwise selector that added three tasks in the first run added nothing in A (it rescued local141 and overruled a correct top score on local169). Run B searches the way AB-MCTS is meant to (half its nodes are refinements, nine trees reach depth 2, no search ends on its first batch) and finds a correct query on 18 tasks, the most of any run (it fixes local032, local169 and local286), but picks one on only 14 (it loses local019, local064, local283 and local330), at twice A's cost. Refinements in B turned a wrong node right 20 times (30 % of refinements of wrong nodes) and a right node wrong 21 times, with a mean score change of +0.014: Jev cannot tell a refinement that fixed a query from one that broke it. Search depth is no longer the bottleneck; scoring and picking are (a perfect pick on B's candidates would be 18/21).
+
+Replaying the final pick on run A's candidates with Jev re-deciding every pair (`judge_context_study/selector_replay_run_a.json`): top score alone 14, the selector with its old material 13, with the judge's context 13 (fixes local141 and local169, breaks local019 and local330). `selector_context` ships off.
+
 ## Reading the numbers against the literature
 
 The Spider 2.0 leaderboard scores execution accuracy of end-to-end text-to-SQL. schemagraph
