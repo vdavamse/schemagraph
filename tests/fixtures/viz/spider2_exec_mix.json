@@ -1,0 +1,21 @@
+{
+  "summary": {},
+  "rows": [],
+  "config": {
+    "strategy": "abmcts",
+    "budget": 8,
+    "models": {
+      "generator": "openrouter:z-ai/glm-5.3",
+      "judge": "typesafe:typesafe/jev-1.13"
+    },
+    "agent_config": {
+      "strategy": "abmcts",
+      "gen_models": [
+        "openrouter:z-ai/glm-5.3",
+        "openrouter:qwen/qwen3.8-max",
+        "openrouter:google/gemini-3.8-flash"
+      ]
+    },
+    "config_hash": "abc"
+  }
+}

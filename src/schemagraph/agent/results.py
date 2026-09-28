@@ -415,6 +415,45 @@ class AnswerResult(BaseModel):
     transcripts: list[Transcript] = Field(default_factory=list)
 
 
+def exec_error_text(result: ExecResult | None) -> str | None:
+    """Return why a query failed to run (``kind: message``), or None when it ran or never did."""
+    if result is None or result.ok:
+        return None
+    return f"{result.error_kind or 'error'}: {result.error or ''}".rstrip(": ")
+
+
+def candidate_record(candidate: Candidate) -> dict[str, Any]:
+    """Return one candidate as a flat JSON-safe record, the form candidates files store.
+
+    The exec benchmark writes it with ``instance_id``, ``fingerprint`` and ``ex`` added;
+    :mod:`schemagraph.agent.viz` reads it back, from a file or straight from an `AnswerResult`.
+    """
+    judgement = candidate.judgement
+    result = candidate.exec
+    return {
+        "id": candidate.id,
+        "parent_id": candidate.parent_id,
+        "depth": candidate.depth,
+        "action": candidate.action,
+        "generator": candidate.generator,
+        "sql": candidate.sql,
+        "rationale": candidate.rationale,
+        "advice": candidate.advice,
+        "feedback": candidate.feedback,
+        "score": candidate.score,
+        "score_parts": candidate.score_parts,
+        "rubric": judgement.fields if judgement else None,
+        "missing": judgement.missing if judgement else None,
+        "findings": [finding.code for finding in candidate.checks.findings]
+        if candidate.checks
+        else [],
+        "ok": bool(result and result.ok),
+        "row_count": result.row_count if result else None,
+        "error": candidate.error,
+        "exec_error": exec_error_text(result),
+    }
+
+
 @dataclass(frozen=True)
 class ScoreWeights:
     """Weights of the candidate score (see `schemagraph.agent.score`).

@@ -1,0 +1,13 @@
+{
+  "config": {
+    "strategy": "best_of_n",
+    "budget": 2,
+    "models": {
+      "generator": "openrouter:qwen/qwen3.8-max"
+    },
+    "agent_config": {
+      "strategy": "best_of_n",
+      "gen_model": "openrouter:qwen/qwen3.8-max"
+    }
+  }
+}

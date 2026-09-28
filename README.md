@@ -76,6 +76,8 @@ Or both models through one OpenRouter key: copy `.env.example` to `.env`, fill i
 
 By default `ask` serves this home's schema, scoped to the connection, on an ephemeral localhost port for the length of the call. `--mcp-url http://127.0.0.1:8765/mcp` points the agents at a running server instead (`serve`'s `/mcp`, or `mcp --transport http`); that server is not scoped, so `-c` then only picks the database the SQL runs on. The generator gets the server's `link_schema`, `search_tables`, `get_table`, `find_join_path` and `list_glossary` tools; `sample_values` and `run_query`, the two that execute, stay local to the agent.
 
+`--viz tree.html` also writes the search as a standalone HTML page (no script, readable on a phone): an indented outline of every node, depth-first with each node under the one it refines and siblings in the order the search asked for them, coloured by the generator model (so a Multi-LLM search with repeated `--gen-model` shows which model wrote what), with each node's score, the chosen node ringed, failed and exec-error nodes marked, and a section per node with its rubric, findings, feedback, critic advice and SQL. The path is checked before the search spends anything. For a benchmark run, `schemagraph viz-search bench_results/spider2_exec_<tag>_candidates.jsonl` draws the same page per task, plus an index, from the saved candidates (with each node's EX against the gold result), with no model call.
+
 ## Layout
 
 ```
