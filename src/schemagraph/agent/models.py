@@ -141,11 +141,6 @@ def _roles_used(cfg: AgentConfig) -> dict[str, bool]:
     }
 
 
-def _searches_generators(cfg: AgentConfig) -> bool:
-    """Whether ``cfg`` searches several generator models (``single``, ``refine`` use the first)."""
-    return len(cfg.gen_models) > 1 and cfg.strategy in {"best_of_n", "abmcts"}
-
-
 @dataclass
 class AgentModels:
     """The resolved model of each role.
@@ -187,14 +182,13 @@ class AgentModels:
         def model_for(role: str) -> Any:
             return resolved(names[role]) if used[role] else None
 
-        searched = cfg.gen_models if _searches_generators(cfg) else ()
         return cls(
             model_for("generator"),
             model_for("judge"),
             model_for("selector"),
             model_for("critic"),
             names,
-            {name: resolved(name) for name in searched},
+            {name: resolved(name) for name in cfg.searched_generators()},
         )
 
     def reasoning(self, role: str) -> bool:

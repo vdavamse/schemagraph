@@ -730,12 +730,7 @@ def _score_task(runner: Runner, task: Instance, result: AnswerResult, standard: 
         "ex_error": ex_error,
         "ex_by_score": candidate_ex.get(by_score.id, 0) if by_score else 0,
         "oracle": int(any(candidate_ex.values())),
-        # the paper's Pass@k counts generator calls: the task is solved within k calls when
-        # first_correct_node < k (node ids are issued in the order the search asked for them)
-        "first_correct_node": min(
-            (_node_number(node_id) for node_id, match in candidate_ex.items() if match),
-            default=None,
-        ),
+        "first_correct_node": first_correct_node(candidate_ex),
         "chosen_by": result.chosen_by,
         "chosen_id": result.chosen_id,
         "score": round(result.score, 4),
@@ -764,9 +759,22 @@ def _score_task(runner: Runner, task: Instance, result: AnswerResult, standard: 
     }
 
 
-def _node_number(node_id: str) -> int:
-    """Return the position of a node id (``"n7"`` -> 7) in the order the search issued it."""
-    return int(node_id.removeprefix("n"))
+def first_correct_node(candidate_ex: dict[str, int]) -> int | None:
+    """Return the position of the earliest correct node, in the order the search asked for them.
+
+    The paper's Pass@k counts generator calls: a task is solved within k calls when this is
+    below k. A Pass@k curve needs the whole budget spent; a search that stopped early at
+    node 10 without a correct node counts as unsolved for every k, k = 64 included.
+
+    Args:
+        candidate_ex: Execution match (1 or 0) by node id (``"n7"``); ids are issued in ask
+            order, rolling or lockstep.
+
+    Returns:
+        The position (``"n7"`` -> 7), or None when no node is correct.
+    """
+    correct = [int(node_id.removeprefix("n")) for node_id, match in candidate_ex.items() if match]
+    return min(correct, default=None)
 
 
 def _mean(rows: list[dict], key: str) -> float:

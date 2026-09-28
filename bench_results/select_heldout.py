@@ -16,6 +16,7 @@ database dominates, until N are picked.
 import sqlite3
 import sys
 from collections import defaultdict
+from contextlib import closing
 from pathlib import Path
 
 from schemagraph.bench.spider2_exec import load_tasks, sqlite_path
@@ -28,7 +29,7 @@ PER_THIRD = 20
 
 def table_count(database: Path) -> int:
     """Return the number of tables (not views) in a SQLite database."""
-    with sqlite3.connect(f"file:{database}?mode=ro", uri=True) as connection:
+    with closing(sqlite3.connect(f"file:{database}?mode=ro", uri=True)) as connection:
         query = "select count(*) from sqlite_master where type = 'table'"
         return connection.execute(query).fetchone()[0]
 
@@ -48,9 +49,12 @@ def main(spider2_root: Path, per_third: int) -> None:
     """Write the held-out task list and print how it splits by third."""
     subset = {line.strip() for line in SUBSET.read_text().splitlines() if line.strip()}
     tasks, _ = load_tasks(spider2_root)
-    sizes = {task.db: table_count(sqlite_path(spider2_root, task.db)) for task in tasks}
+    databases = {task.db for task in tasks}
+    sizes = {db: table_count(sqlite_path(spider2_root, db)) for db in databases}
     ranked = sorted(tasks, key=lambda task: (sizes[task.db], task.instance_id))
-    third = len(ranked) // 3
+    third, remainder = divmod(len(ranked), 3)
+    if remainder:  # the subset's thirds were even; a remainder would silently drop tasks
+        raise SystemExit(f"{len(ranked)} local tasks do not split into equal thirds")
     held_out: list[str] = []
     for index in range(3):
         tier = ranked[index * third : (index + 1) * third]

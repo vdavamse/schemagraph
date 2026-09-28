@@ -437,3 +437,29 @@ def test_a_database_build_blocks_neither_another_server_nor_an_executor(tmp_path
             runner.close()
 
     asyncio.run(scenario())
+
+
+def test_first_correct_node_counts_calls_in_ask_order():
+    from schemagraph.bench.spider2_exec import first_correct_node
+
+    assert first_correct_node({"n0": 0, "n2": 1, "n10": 1}) == 2  # by position, not as text
+    assert first_correct_node({"n9": 0, "n10": 1}) == 10
+    assert first_correct_node({"n0": 0}) is None and first_correct_node({}) is None
+
+
+def test_a_run_with_several_generators_records_each_nodes_model(tmp_path):
+    scripted = _Models()  # skips without the agent extra, before importing from it
+    from dataclasses import replace
+
+    from pydantic_ai.models.function import FunctionModel
+
+    from schemagraph.bench import spider2_exec
+
+    generators = {name: FunctionModel(scripted.generator) for name in ("g", "g2")}
+    models = replace(scripted.agent_models(), generators=generators)
+    root, out = _spider2(tmp_path / "s2"), tmp_path / "out"
+    cfg = _config(gen_models=("g", "g2"), early_stop=1.01)  # best_of_n: one draft from each
+    result = spider2_exec.run(root, cfg=cfg, models=models, out_dir=out, tag="mixed")
+    assert [row["nodes_by_generator"] for row in result["rows"]] == [{"g": 1, "g2": 1}] * 2
+    lines = (out / "spider2_exec_mixed_candidates.jsonl").read_text().splitlines()
+    assert sorted(json.loads(line)["generator"] for line in lines) == ["g", "g", "g2", "g2"]

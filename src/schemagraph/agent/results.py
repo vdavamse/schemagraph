@@ -466,19 +466,19 @@ class AgentConfig:
         seed: Random seed of the search (AB-MCTS-A; AB-MCTS-M samples unseeded).
         gen_model: Generator model; None reads the environment, then the default.
         gen_models: Generator models searched together, the paper's Multi-LLM AB-MCTS
-            (arXiv 2503.04412, appendix D). With two or more, the search's actions are these
-            models instead of the context widths, every node links the wide context, and
-            ``gen_model`` is ignored; the first model is the default generator (``single``,
-            ``refine``) and critic. Meant for AB-MCTS-M (``abmcts_algorithm="m"``), which
-            decides between a new node and a refinement, then samples a new node's model with
-            the generators as groups of its mixed model (the paper's generator selection
-            algorithm I, eq. 22); AB-MCTS-A samples it by independent per-model Thompson
-            sampling instead.
-        generator_selection: The paper's generator selection algorithm (appendix D.1) when
-            several models are searched: 1 decides between a new node and a refinement, then
-            samples the new node's model; 2 gives every model its own GEN node at every node
-            (the paper's ARC-AGI-2 setup, with AB-MCTS-A). With one generator it applies to
-            the context actions the same way.
+            (arXiv 2503.04412, appendix D). When set, ``gen_model`` is ignored and the first
+            model is the default generator (``single``, ``refine``) and critic. With two or
+            more, ``best_of_n`` and ``abmcts`` search these models instead of the context
+            widths (:meth:`searched_generators`) and every node links the wide context. It
+            works with both AB-MCTS variants and both ``generator_selection`` modes; this
+            project's focus is AB-MCTS-M with algorithm I, where a mixed model with the
+            generators as groups (eq. 22) samples each new node's model, and the paper's
+            measured setup is AB-MCTS-A with algorithm II.
+        generator_selection: The paper's generator selection algorithm (appendix D.1) for
+            ``abmcts``: 1 decides between a new node and a refinement, then samples the new
+            node's action; 2 gives every action its own GEN node at every node (the paper's
+            ARC-AGI-2 setup, with AB-MCTS-A). The actions are the models when several are
+            searched, else the context widths.
         judge_model: Judge and selector model; None reads the environment, then the default.
         critic_model: Critic model; None reads the environment, then uses the generator's.
         probe_limit: ``run_query`` probes the generator may make per node.
@@ -548,3 +548,11 @@ class AgentConfig:
     weights: ScoreWeights = field(default_factory=ScoreWeights)
     mcp_url: str | None = None
     trace: bool = False
+
+    def searched_generators(self) -> tuple[str, ...]:
+        """Return the generator models the search chooses between; empty with one.
+
+        Only ``best_of_n`` and ``abmcts`` choose; ``single`` and ``refine`` use the first model.
+        """
+        several = len(self.gen_models) > 1 and self.strategy in {"best_of_n", "abmcts"}
+        return self.gen_models if several else ()

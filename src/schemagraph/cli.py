@@ -371,9 +371,13 @@ def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
     Exits with the install hint, before anything imports them, when a package of the agent
     extra is missing, or PyMC when the AB-MCTS search would run AB-MCTS-M: without it every
     task would fail inside the search, after its MCP server and link.
+
+    Raises:
+        typer.BadParameter: An option the run would silently ignore (:func:`_reject_ignored`).
     """
     from schemagraph.agent.results import AgentConfig
 
+    _reject_ignored(strategy, settings)
     missing = [module for module in _AGENT_EXTRA_MODULES if find_spec(module) is None]
     if missing:
         typer.echo(
@@ -392,6 +396,29 @@ def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
     return AgentConfig(strategy=strategy, **settings)
 
 
+def _reject_ignored(strategy: Strategy, settings: dict[str, Any]) -> None:
+    """Refuse options the run would ignore, so no run is labelled with a setting it lacks.
+
+    Raises:
+        typer.BadParameter: ``--action`` with several ``--gen-model`` (the models are then the
+            actions and every node links wide), or ``--generator-selection 2`` or
+            ``--algorithm m`` outside ``abmcts`` (only the tree search uses them).
+    """
+    if len(settings.get("gen_models", ())) > 1 and "actions" in settings:
+        raise typer.BadParameter(
+            "with several --gen-model the models are the actions", param_hint="'--action'"
+        )
+    if strategy == "abmcts":
+        return
+    if settings.get("generator_selection", 1) != 1:
+        raise typer.BadParameter(
+            "only --strategy abmcts chooses between actions",
+            param_hint="'--generator-selection'",
+        )
+    if settings.get("abmcts_algorithm", "a") != "a":
+        raise typer.BadParameter("only --strategy abmcts runs AB-MCTS", param_hint="'--algorithm'")
+
+
 def _generators(names: list[str] | None) -> dict[str, Any]:
     """Map ``--gen-model`` to agent settings: one model is ``gen_model``, several ``gen_models``.
 
@@ -404,7 +431,11 @@ def _generators(names: list[str] | None) -> dict[str, Any]:
 
 
 def _search_actions(widths: list[str] | None) -> dict[str, Any]:
-    """Map ``--action`` to agent settings; none keeps both widths, the setting runs had."""
+    """Map ``--action`` to agent settings; none keeps both widths, the setting runs had.
+
+    Raises:
+        typer.BadParameter: A width other than ``tight`` or ``wide``.
+    """
     unique = dict.fromkeys(widths or ())
     for width in unique:
         if width not in get_args(Action):
@@ -480,8 +511,8 @@ GenModelOpt = Annotated[
         "--gen-model",
         help=(
             "generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max); repeat it "
-            "to search several together: the models become the actions (Multi-LLM AB-MCTS; "
-            "with --algorithm m the mixed model samples each new node's model)"
+            "to search several together (best_of_n, abmcts): the models become the actions "
+            "(Multi-LLM AB-MCTS; see --generator-selection); single and refine use the first"
         ),
     ),
 ]
@@ -491,9 +522,9 @@ ActionOpt = Annotated[
         "--action",
         metavar="tight|wide",
         help=(
-            "schema context the search may use, tight or wide; repeat it for both (the "
-            "default). With several --gen-model the models are the actions and every node "
-            "links wide"
+            "schema context best_of_n and abmcts may use, tight or wide; repeat it for both "
+            "(the default). Not with several --gen-model: the models are then the actions and "
+            "every node links wide"
         ),
     ),
 ]
@@ -526,9 +557,10 @@ GeneratorSelectionOpt = Annotated[
         min=1,
         max=2,
         help=(
-            "the paper's generator selection algorithm with several --gen-model: 1 chooses a new "
-            "node or a refinement, then samples the model (with --algorithm m, over the mixed "
-            "model); 2 gives each model its own GEN node (the paper's ARC-AGI-2 setup)"
+            "abmcts: the paper's generator selection algorithm. 1 chooses a new node or a "
+            "refinement, then samples the action (the model with several --gen-model, else "
+            "the context width); 2 gives each action its own GEN node (the paper's ARC-AGI-2 "
+            "setup)"
         ),
     ),
 ]

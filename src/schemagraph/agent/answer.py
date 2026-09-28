@@ -180,7 +180,14 @@ class Answerer:
     ) -> dict[str, Any]:
         """Return ``role``'s output-token cap and request timeout, widened when its model reasons.
 
-        ``model_name`` names the model when the role has several (the generators).
+        Args:
+            role: The role whose model the call uses.
+            max_tokens: The output-token cap without reasoning; None leaves it to the provider.
+            timeout: The request timeout in seconds without reasoning.
+            model_name: The model, when the role has several (the generators).
+
+        Returns:
+            The ``timeout`` and, when capped, ``max_tokens`` model settings.
         """
         reasoning = reasons(model_name) if model_name else self.models.reasoning(role)
         if reasoning:

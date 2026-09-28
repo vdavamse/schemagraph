@@ -108,10 +108,9 @@ def new_node(node_id: str, parent: Candidate | None, action: Action, **fields: A
 def split_action(cfg: AgentConfig, action: str) -> tuple[str | None, Action]:
     """Return the generator model a node's action picks and the context it links.
 
-    With several generator models (``cfg.gen_models``) an action names one of them and every
-    node links the wide context; a width, which the ``single`` and ``refine`` strategies pass,
-    then goes to the first model. With one generator the model is None and the action is the
-    context width.
+    An action that names one of ``cfg.gen_models`` links the wide context; a width (what
+    ``single``, ``refine`` and one-generator searches pass) goes to the first of
+    ``cfg.gen_models``. Without ``gen_models`` the model is None, the default generator.
     """
     if action in cfg.gen_models:
         return action, "wide"
@@ -122,7 +121,17 @@ def split_action(cfg: AgentConfig, action: str) -> tuple[str | None, Action]:
 def _trial_node(
     generate: GenerateFn, cfg: AgentConfig, node_id: str, trial: Any
 ) -> Awaitable[Candidate]:
-    """Generate the node of a TreeQuest trial, whose parent state is a Candidate (None at root)."""
+    """Generate the node of a TreeQuest trial, whose parent state is a Candidate (None at root).
+
+    Args:
+        generate: Writes and scores one node.
+        cfg: The search settings (node timeout, generator models).
+        node_id: The id to give the node.
+        trial: TreeQuest's trial: the parent state and the action to take.
+
+    Returns:
+        The node, awaitable; a failure is a score-0 node (:func:`_safe`).
+    """
     parent = cast(Candidate | None, trial.parent_state)
     return _safe(generate, cfg, node_id, parent, trial.action)
 
@@ -137,6 +146,16 @@ async def _safe(
     """Generate one node within ``cfg.node_timeout_s``; a failure or a timeout is a score-0 node.
 
     The budget then stays exact and the tree consistent.
+
+    Args:
+        generate: Writes and scores one node.
+        cfg: The search settings (node timeout, generator models).
+        node_id: The id to give the node.
+        parent: The node to refine; None for a draft.
+        action: A context width, or a generator model (:func:`split_action`).
+
+    Returns:
+        The node, or a score-0 node carrying the error.
     """
     try:
         return await asyncio.wait_for(generate(node_id, parent, action), cfg.node_timeout_s)
@@ -173,10 +192,8 @@ async def run_search(generate: GenerateFn, cfg: AgentConfig) -> SearchTrace:
 
 
 def _actions(cfg: AgentConfig) -> list[str]:
-    """Return the search's actions: the generator models when there are several, else widths."""
-    if len(cfg.gen_models) > 1:
-        return list(cfg.gen_models)
-    return list(cfg.actions) or ["wide"]
+    """Return the search's actions: its models (``cfg.searched_generators()``), else widths."""
+    return list(cfg.searched_generators() or cfg.actions) or ["wide"]
 
 
 def _searching(trace: SearchTrace, cfg: AgentConfig, budget: int) -> bool:

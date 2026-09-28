@@ -11,10 +11,12 @@
 #   smoke     one draft from each model on 2 tasks: checks every model's tool calls, about $0.30
 #   qwen_m    single-LLM AB-MCTS-M (Qwen), about $63
 #   multi_m1  multi-LLM AB-MCTS-M, generator selection algorithm I (eq. 22), about $60
-#   multi_m2  multi-LLM AB-MCTS-M, generator selection algorithm II, about $60
+#   multi_m2  multi-LLM AB-MCTS-M, generator selection algorithm II, about $60; slower than
+#             multi_m1: it fits one model per generator at every node it passes
 #   qwen_a    single-LLM AB-MCTS-A (Qwen), the paper's single-LLM baseline, about $63
 #   multi_a2  multi-LLM AB-MCTS-A, algorithm II: the paper's D.2.1 configuration, about $60
-# Resumable per tag; logs go to bench_results/run_<tag>.log.
+# Resumable per tag; each run appends to bench_results/run_<tag>.log. Needs bash 4 and GNU
+# coreutils (mapfile, realpath -m).
 set -euo pipefail
 ROOT="${1:?path to the Spider2 clone}"
 ENV_FILE="$(realpath -m "${2:?path to the .env with the model keys}")"
@@ -75,6 +77,8 @@ for arm in "${ARMS[@]}"; do
     ONLY+=(--only "$task")
   done
   echo "=== $tag: ${#ARM_TASKS[@]} tasks, log $OUT/run_${tag}.log"
+  echo "=== $(date -Is) $tag" >> "$OUT/run_${tag}.log"  # marks where each attempt starts
   uv run --env-file "$ENV_FILE" schemagraph bench-spider2-exec "$ROOT" "${ONLY[@]}" --tag "$tag" \
-    "${OPTIONS[@]}" > "$OUT/run_${tag}.log" 2>&1
+    "${OPTIONS[@]}" >> "$OUT/run_${tag}.log" 2>&1 \
+    || { echo "$tag failed; the log ends:" >&2; tail -20 "$OUT/run_${tag}.log" >&2; exit 1; }
 done
