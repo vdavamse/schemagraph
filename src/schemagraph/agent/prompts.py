@@ -110,7 +110,7 @@ def _problems(feedback: list[str]) -> str:
 
 
 def _rubric_line(candidate: Candidate) -> str:
-    """The judge's rubric of a candidate, weakest first, e.g. ``right_grain 0.24, ...``."""
+    """Format the judge's rubric of a candidate, weakest first: ``right_grain 0.24, ...``."""
     if not candidate.judgement or not candidate.judgement.fields:
         return ""
     fields = sorted(candidate.judgement.fields.items(), key=lambda item: item[1])
@@ -139,17 +139,22 @@ def _refine_sections(parent: Candidate, siblings: list[Candidate] | None = None)
         sections.append(_problems(parent.feedback))
     if parent.advice:
         sections.append(f"Reviewer advice:\n{parent.advice}")
-    tried = [sibling for sibling in siblings or [] if sibling.sql][-MAX_SIBLINGS:]
-    if tried:
-        lines = ["Other refinements of this attempt, already tried (do not repeat them):"]
-        for sibling in tried:
-            lines.append(
-                f"- score {sibling.score:.2f}; {preview(sibling.exec, 0)}\n"
-                f"  SQL: {' '.join(sibling.sql.split())[:SIBLING_SQL_CHARS]}"
-            )
-        sections.append("\n".join(lines))
+    if siblings_text := _siblings_section(siblings or []):
+        sections.append(siblings_text)
     sections.append("Write an improved query.")
     return sections
+
+
+def _siblings_section(siblings: list[Candidate]) -> str:
+    """List the last :data:`MAX_SIBLINGS` refinements that wrote SQL; empty when there are none."""
+    tried = [sibling for sibling in siblings if sibling.sql][-MAX_SIBLINGS:]
+    if not tried:
+        return ""
+    lines = ["Other refinements of this attempt, already tried (do not repeat them):"]
+    for sibling in tried:
+        sql = " ".join(sibling.sql.split())[:SIBLING_SQL_CHARS]  # on one line
+        lines.append(f"- score {sibling.score:.2f}; {preview(sibling.exec, 0)}\n  SQL: {sql}")
+    return "\n".join(lines)
 
 
 def generator_prompt(

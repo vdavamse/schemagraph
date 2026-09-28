@@ -654,10 +654,12 @@ def bench_spider2_exec(
         draft_temperature=draft_temperature,
         trace=trace,
     )
-    # ids read from a file can carry a stray "\r" (CRLF checkouts); it would match no task
-    ids = {task.strip() for task in only if task.strip()} if only else None
-    if only and not ids:  # an empty set would select every task
-        raise typer.BadParameter("names no task", param_hint="'--only'")
+    ids = None
+    if only:
+        # ids read from a file can carry a stray "\r" (CRLF checkouts); it would match no task
+        ids = {instance_id.strip() for instance_id in only} - {""}
+        if not ids:  # an empty set would select every task
+            raise typer.BadParameter("names no task", param_hint="'--only'")
     _quiet_mcp_logs()
     if judge_only:
         from schemagraph.agent.models import DEFAULT_GEN_MODEL, DEFAULT_JUDGE_MODEL

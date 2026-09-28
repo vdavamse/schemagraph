@@ -1031,7 +1031,8 @@ def staggered(generate):
     """Delay each node by 20-100 ms, so nodes finish one at a time and the rolling loop rolls."""
 
     async def slow(node_id, parent, action):
-        await asyncio.sleep((int(node_id[1:]) * 7 % 5 + 1) / 50)
+        delay_ms = 20 * (int(node_id[1:]) * 7 % 5 + 1)  # n0 20, n1 60, n2 100, n3 40, n4 80, ...
+        await asyncio.sleep(delay_ms / 1000)
         return await generate(node_id, parent, action)
 
     return slow
@@ -1092,11 +1093,11 @@ def test_a_rolling_search_that_ends_abruptly_cancels_its_nodes(monkeypatch, stop
     ask = search._ask
     asks: list[int] = []
 
-    def failing_ask(*args):
-        asks.append(args[3])
-        if len(asks) > 1:
+    def failing_ask(algorithm, cfg, state, count, actions):
+        asks.append(count)
+        if len(asks) > 1:  # the first batch launches; the next ask fails
             raise RuntimeError("sampling failed")
-        return ask(*args)
+        return ask(algorithm, cfg, state, count, actions)
 
     if stop == "ask fails":
         monkeypatch.setattr(search, "_ask", failing_ask)
@@ -1138,7 +1139,7 @@ def test_abmcts_m_asks_one_search_at_a_time():
 
     async def two_searches(algorithm):
         cfg = AgentConfig(abmcts_algorithm=algorithm)
-        asks = (asyncio.to_thread(search._ask, Fitting(), cfg, None, 1, ["wide"]) for _ in "ab")
+        asks = (asyncio.to_thread(search._ask, Fitting(), cfg, None, 1, ["wide"]) for _ in range(2))
         await asyncio.gather(*asks)
 
     asyncio.run(two_searches("a"))

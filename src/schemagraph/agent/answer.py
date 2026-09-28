@@ -123,6 +123,7 @@ class Answerer:
         self._link_text = ""
         self._wide = LinkedSchema(ddl="", tables=())
         self._advice_locks: dict[str, asyncio.Lock] = {}
+        self._refinements: dict[str, list[Candidate]] = {}  # parent id -> its finished refinements
 
     # ----------------------------------------------------------- entry points
     async def prepare(self, question: str, *, evidence: str | None = None) -> None:
@@ -134,7 +135,7 @@ class Answerer:
         self.records = []
         self.transcripts = [] if self.cfg.trace else None
         self._advice_locks = {}
-        self._children: dict[str, list[Candidate]] = {}
+        self._refinements = {}
         self.question = question
         self.evidence = evidence
         self._link_text = question
@@ -195,16 +196,16 @@ class Answerer:
 
     # ----------------------------------------------------------- one node
     def search_config(self) -> AgentConfig:
-        """The settings the search runs with: a reasoning generator gets its longer node timeout.
+        """Return the search settings, with the longer node timeout when the generator reasons.
 
         A refinement at high reasoning is a critic call and a multi-request generator run; under
         the plain node timeout it was cut off, and the tree read the score-0 node as "refining
         does not pay".
         """
-        extended = self.cfg.reasoning_node_timeout_s
-        if extended is None or not self.models.reasoning("generator"):
+        reasoning_timeout = self.cfg.reasoning_node_timeout_s
+        if reasoning_timeout is None or not self.models.reasoning("generator"):
             return self.cfg
-        return replace(self.cfg, node_timeout_s=max(self.cfg.node_timeout_s, extended))
+        return replace(self.cfg, node_timeout_s=max(self.cfg.node_timeout_s, reasoning_timeout))
 
     async def generate(self, node_id: str, parent: Candidate | None, action: Action) -> Candidate:
         """Generate and score one search node: a draft, or a refinement of ``parent``."""
@@ -230,7 +231,7 @@ class Answerer:
         ]
         candidate.ms = (time.perf_counter() - started) * 1000
         if parent is not None:
-            self._children.setdefault(parent.id, []).append(candidate)
+            self._refinements.setdefault(parent.id, []).append(candidate)
         return candidate
 
     async def _write_sql(
@@ -245,6 +246,8 @@ class Answerer:
         Raises:
             Exception: The generator failed; the node records the error.
         """
+        # earlier refinements of the same parent, so this one does not repeat them
+        siblings = list(self._refinements.get(parent.id, [])) if parent else None
         prompt = prompts.generator_prompt(
             self.question,
             self.evidence,
@@ -253,7 +256,7 @@ class Answerer:
             len(linked.tables),
             parent,
             evidence_chars=self.cfg.evidence_chars,
-            siblings=list(self._children.get(parent.id, [])) if parent else None,
+            siblings=siblings,
         )
         temperature = self.cfg.refine_temperature if parent else self.cfg.draft_temperature
         output, _, _ = await agents.run_agent(
@@ -493,7 +496,7 @@ class Answerer:
                 parent.advice = str(output).strip()
 
     async def _pick_material(self, a: Candidate, b: Candidate) -> str:
-        """What the selector reads: the judge's context for both candidates, or the bare pair."""
+        """Build the selector's prompt for a pair, with the judge's context when configured."""
         if not self.cfg.selector_context:
             return prompts.pick_material(self.question, a, b)
         schema_a, schema_b = await asyncio.gather(self._judge_schema(a), self._judge_schema(b))
