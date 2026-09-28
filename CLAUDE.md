@@ -41,7 +41,7 @@ uv run schemagraph bench-spider2-lite /path/to/Spider2 --min-db-tables 100 --tag
 uv run schemagraph bench-spider2-lite /path/to/Spider2 --opt idf=false   # any LinkOptions field via --opt key=value
 uv run schemagraph bench-spider1 <tables.json> <questions.json> --max-tables 6 --anchor-k 3   # Spider-format FK graphs (LinkAlign's Spider dev copy); measures paths/pruning
 bench_results/run_sweep.sh /path/to/Spider2   # full sweep + ablations; resumable (skips tags with existing results)
-SMOKE=1 bench_results/run_multi_llm.sh /path/to/Spider2   # then without SMOKE: Multi-LLM vs single-LLM AB-MCTS-M on the 60 held-out tasks (paid)
+bench_results/run_multi_llm.sh /path/to/Spider2 .env smoke   # then arms qwen_m multi_m1 multi_m2 qwen_a multi_a2: Multi-LLM AB-MCTS, 64 nodes on 21 held-out tasks (paid, ~$60 an arm)
 uv run schemagraph bench-spider2-exec /path/to/Spider2 --judge-only        # judge study first: AUROC of each judge vs execution match on one candidate pool
 uv run schemagraph bench-spider2-exec /path/to/Spider2 --strategy abmcts --budget 16   # EX on the 135 local SQLite tasks (needs local_sqlite.zip unpacked into spider2-lite/resource/databases/spider2-localdb/); resumable
 ```

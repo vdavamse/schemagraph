@@ -1,14 +1,16 @@
-"""Pick the held-out tasks: 20 from each third of the local tasks by schema size, none of the 21.
+"""Pick held-out tasks: N from each third of the local tasks by schema size, none of the 21.
 
-Usage: ``uv run python bench_results/select_heldout.py [/path/to/Spider2]`` (default
-``~/data/Spider2``); writes ``bench_results/spider2_exec_heldout60.txt``.
+Usage: ``uv run python bench_results/select_heldout.py [/path/to/Spider2] [N]`` (defaults
+``~/data/Spider2`` and 20); writes ``bench_results/spider2_exec_heldout{3N}.txt``. Every list
+starts the same round-robin, so the 7-per-third list (21 tasks) is part of the 20-per-third
+one (60 tasks).
 
 The 21-task subset (``spider2_exec_subset21.txt``) has been tuned on, so its numbers flatter the
 agent. The held-out tasks come from the other 114 local tasks, split the same way as the subset:
 the 135 local tasks sorted by the number of tables in their SQLite database (then by id) and cut
 into thirds of 45 (4-10, 11-17 and 17-38 tables). Within each third, the tasks outside the subset
 are taken round-robin over databases (databases by name, each database's tasks by id), so no
-database dominates, until 20 are picked.
+database dominates, until N are picked.
 """
 
 import sqlite3
@@ -20,8 +22,7 @@ from schemagraph.bench.spider2_exec import load_tasks, sqlite_path
 
 HERE = Path(__file__).parent
 SUBSET = HERE / "spider2_exec_subset21.txt"
-OUTPUT = HERE / "spider2_exec_heldout60.txt"
-# Held-out tasks per third of the local tasks by schema size.
+# Held-out tasks per third of the local tasks by schema size, by default.
 PER_THIRD = 20
 
 
@@ -43,7 +44,7 @@ def round_robin(task_ids_by_db: dict[str, list[str]], count: int) -> list[str]:
     return picked
 
 
-def main(spider2_root: Path) -> None:
+def main(spider2_root: Path, per_third: int) -> None:
     """Write the held-out task list and print how it splits by third."""
     subset = {line.strip() for line in SUBSET.read_text().splitlines() if line.strip()}
     tasks, _ = load_tasks(spider2_root)
@@ -58,16 +59,18 @@ def main(spider2_root: Path) -> None:
         for task in tier:
             if task.instance_id not in subset:
                 candidates[task.db].append(task.instance_id)
-        picked = round_robin(candidates, PER_THIRD)
+        picked = round_robin(candidates, per_third)
         held_out += picked
         tables = [sizes[task.db] for task in tier]
         print(
             f"third {index + 1}: {min(tables)}-{max(tables)} tables, {in_subset} subset tasks, "
             f"{len(picked)} held out from {len(candidates)} databases"
         )
-    OUTPUT.write_text("\n".join(held_out) + "\n", encoding="utf-8")
-    print(f"{len(held_out)} tasks written to {OUTPUT}")
+    output = HERE / f"spider2_exec_heldout{len(held_out)}.txt"
+    output.write_text("\n".join(held_out) + "\n", encoding="utf-8")
+    print(f"{len(held_out)} tasks written to {output}")
 
 
 if __name__ == "__main__":
-    main(Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "data/Spider2")
+    root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "data/Spider2"
+    main(root, int(sys.argv[2]) if len(sys.argv) > 2 else PER_THIRD)

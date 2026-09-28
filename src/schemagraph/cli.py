@@ -515,7 +515,22 @@ AgreeOpt = Annotated[
     typer.Option(help="high-scoring nodes that must return the same result to stop early"),
 ]
 DraftTemperatureOpt = Annotated[
-    float, typer.Option(help="generator temperature for fresh drafts (refinements: 0.4)")
+    float, typer.Option(help="generator temperature for fresh drafts")
+]
+RefineTemperatureOpt = Annotated[
+    float, typer.Option(help="generator temperature for refinements")
+]
+GeneratorSelectionOpt = Annotated[
+    int,
+    typer.Option(
+        min=1,
+        max=2,
+        help=(
+            "the paper's generator selection algorithm with several --gen-model: 1 chooses a new "
+            "node or a refinement, then samples the model (with --algorithm m, over the mixed "
+            "model); 2 gives each model its own GEN node (the paper's ARC-AGI-2 setup)"
+        ),
+    ),
 ]
 
 
@@ -560,6 +575,8 @@ def ask(
     early_stop_min_nodes: MinNodesOpt = 0,
     early_stop_agree: AgreeOpt = 1,
     draft_temperature: DraftTemperatureOpt = 0.8,
+    refine_temperature: RefineTemperatureOpt = 0.4,
+    generator_selection: GeneratorSelectionOpt = 1,
     as_json: Annotated[
         bool, typer.Option("--json", help="print the full AnswerResult as JSON")
     ] = False,
@@ -587,6 +604,8 @@ def ask(
         early_stop_min_nodes=early_stop_min_nodes,
         early_stop_agree=early_stop_agree,
         draft_temperature=draft_temperature,
+        refine_temperature=refine_temperature,
+        generator_selection=generator_selection,
         mcp_url=mcp_url,
         trace=trace,
     )
@@ -641,6 +660,8 @@ def bench_spider2_exec(
     early_stop_min_nodes: MinNodesOpt = 0,
     early_stop_agree: AgreeOpt = 1,
     draft_temperature: DraftTemperatureOpt = 0.8,
+    refine_temperature: RefineTemperatureOpt = 0.4,
+    generator_selection: GeneratorSelectionOpt = 1,
     judge_only: Annotated[
         bool,
         typer.Option(
@@ -703,6 +724,8 @@ def bench_spider2_exec(
         early_stop_min_nodes=early_stop_min_nodes,
         early_stop_agree=early_stop_agree,
         draft_temperature=draft_temperature,
+        refine_temperature=refine_temperature,
+        generator_selection=generator_selection,
         trace=trace,
     )
     ids = None

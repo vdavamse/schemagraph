@@ -87,6 +87,7 @@ _LEGACY_VALUES = {
     "reasoning_node_timeout_s": None,
     "selector_context": False,
     "gen_models": (),
+    "generator_selection": 1,
 }
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6
@@ -729,6 +730,12 @@ def _score_task(runner: Runner, task: Instance, result: AnswerResult, standard: 
         "ex_error": ex_error,
         "ex_by_score": candidate_ex.get(by_score.id, 0) if by_score else 0,
         "oracle": int(any(candidate_ex.values())),
+        # the paper's Pass@k counts generator calls: the task is solved within k calls when
+        # first_correct_node < k (node ids are issued in the order the search asked for them)
+        "first_correct_node": min(
+            (_node_number(node_id) for node_id, match in candidate_ex.items() if match),
+            default=None,
+        ),
         "chosen_by": result.chosen_by,
         "chosen_id": result.chosen_id,
         "score": round(result.score, 4),
@@ -755,6 +762,11 @@ def _score_task(runner: Runner, task: Instance, result: AnswerResult, standard: 
         "sql": result.sql,
         "error": None if any_ran else all_failed(result.candidates),
     }
+
+
+def _node_number(node_id: str) -> int:
+    """Return the position of a node id (``"n7"`` -> 7) in the order the search issued it."""
+    return int(node_id.removeprefix("n"))
 
 
 def _mean(rows: list[dict], key: str) -> float:

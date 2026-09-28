@@ -173,6 +173,7 @@ def test_run_scores_with_the_official_comparison_and_resumes(tmp_path):
     rows = {row["instance_id"]: row for row in result["rows"]}
     assert rows["local901"]["oracle"] == 1
     assert rows["local901"]["candidate_ex"] == {"n0": 1, "n1": 0}
+    assert rows["local901"]["first_correct_node"] == 0  # Pass@k counts from here
     assert rows["local901"]["ex"] == 1 and rows["local901"]["ex_by_score"] == 1  # judge: filtered
     assert rows["local902"]["ex"] == 1 and rows["local902"]["table_recall"] == 1.0
     assert rows["local902"]["cost_usd"] == 0.0 and rows["local902"]["unpriced"] > 0  # scripted

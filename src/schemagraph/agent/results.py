@@ -474,6 +474,11 @@ class AgentConfig:
             the generators as groups of its mixed model (the paper's generator selection
             algorithm I, eq. 22); AB-MCTS-A samples it by independent per-model Thompson
             sampling instead.
+        generator_selection: The paper's generator selection algorithm (appendix D.1) when
+            several models are searched: 1 decides between a new node and a refinement, then
+            samples the new node's model; 2 gives every model its own GEN node at every node
+            (the paper's ARC-AGI-2 setup, with AB-MCTS-A). With one generator it applies to
+            the context actions the same way.
         judge_model: Judge and selector model; None reads the environment, then the default.
         critic_model: Critic model; None reads the environment, then uses the generator's.
         probe_limit: ``run_query`` probes the generator may make per node.
@@ -521,6 +526,7 @@ class AgentConfig:
     seed: int = 0
     gen_model: str | None = None
     gen_models: tuple[str, ...] = ()
+    generator_selection: Literal[1, 2] = 1
     judge_model: str | None = None
     critic_model: str | None = None
     probe_limit: int = 3

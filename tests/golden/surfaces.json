@@ -2417,7 +2417,25 @@
      ],
      "0.8",
      "float",
-     "generator temperature for fresh drafts (refinements: 0.4)"
+     "generator temperature for fresh drafts"
+    ],
+    [
+     "refine_temperature",
+     [
+      "--refine-temperature"
+     ],
+     "0.4",
+     "float",
+     "generator temperature for refinements"
+    ],
+    [
+     "generator_selection",
+     [
+      "--generator-selection"
+     ],
+     "1",
+     "int range",
+     "the paper's generator selection algorithm with several --gen-model: 1 chooses a new node or a refinement, then samples the model (with --algorithm m, over the mixed model); 2 gives each model its own GEN node (the paper's ARC-AGI-2 setup)"
     ],
     [
      "as_json",
@@ -2671,7 +2689,25 @@
      ],
      "0.8",
      "float",
-     "generator temperature for fresh drafts (refinements: 0.4)"
+     "generator temperature for fresh drafts"
+    ],
+    [
+     "refine_temperature",
+     [
+      "--refine-temperature"
+     ],
+     "0.4",
+     "float",
+     "generator temperature for refinements"
+    ],
+    [
+     "generator_selection",
+     [
+      "--generator-selection"
+     ],
+     "1",
+     "int range",
+     "the paper's generator selection algorithm with several --gen-model: 1 chooses a new node or a refinement, then samples the model (with --algorithm m, over the mixed model); 2 gives each model its own GEN node (the paper's ARC-AGI-2 setup)"
     ],
     [
      "judge_only",

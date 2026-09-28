@@ -52,6 +52,10 @@ WIDEN_CODES = frozenset({"unknown_table", "unknown_column"})
 # One AB-MCTS-M fit at a time per process: every 10th fit, TreeQuest frees every live JAX array
 # in the process, including those of a fit running in another thread.
 _ABMCTS_M_LOCK = threading.Lock()
+# TreeQuest's model selection strategy for each of the paper's generator selection algorithms
+# (appendix D.1): 1 shares one GEN node and then samples the generator, 2 keeps one GEN node
+# per generator.
+_TREEQUEST_SELECTION = {1: "multiarm_bandit_thompson", 2: "stack"}
 # How to install AB-MCTS-M. An exact sync drops unnamed extras, so the agent extra is named too.
 ABMCTS_M_INSTALL = "uv sync --extra agent --extra abmcts-m"
 
@@ -284,13 +288,17 @@ def _abmcts_algorithm(cfg: AgentConfig) -> Any:
     """Return TreeQuest's AB-MCTS-A or AB-MCTS-M.
 
     Raises:
-        ValueError: The algorithm is neither ``a`` nor ``m``; :func:`_ask` locks only for ``m``.
+        ValueError: The algorithm is neither ``a`` nor ``m`` (:func:`_ask` locks only for
+            ``m``), or the generator selection is neither 1 nor 2.
         ImportError: ``m`` without the ``abmcts-m`` extra (PyMC, NumPyro).
     """
     import treequest as tq
 
+    if cfg.generator_selection not in _TREEQUEST_SELECTION:
+        raise ValueError(f"unknown generator selection {cfg.generator_selection!r}")
+    selection = _TREEQUEST_SELECTION[cfg.generator_selection]
     if cfg.abmcts_algorithm == "a":
-        return tq.ABMCTSA()
+        return tq.ABMCTSA(model_selection_strategy=selection)
     if cfg.abmcts_algorithm != "m":
         raise ValueError(f"unknown AB-MCTS algorithm {cfg.abmcts_algorithm!r}")
     try:
@@ -298,7 +306,9 @@ def _abmcts_algorithm(cfg: AgentConfig) -> Any:
     except ImportError as error:
         raise ImportError(f"AB-MCTS-M needs PyMC and NumPyro: {ABMCTS_M_INSTALL}") from error
     # a batch is chosen in worker processes that each load JAX; TreeQuest's default is one per CPU
-    return tq.ABMCTSM(max_process_workers=max(1, cfg.batch_size))
+    return tq.ABMCTSM(
+        model_selection_strategy=selection, max_process_workers=max(1, cfg.batch_size)
+    )
 
 
 async def _abmcts_lockstep(

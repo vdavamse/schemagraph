@@ -1168,6 +1168,21 @@ def test_abmcts_m_starts_one_worker_process_per_batch_slot():
     assert _abmcts_algorithm(batch).max_process_workers == 4  # not one per CPU
 
 
+@pytest.mark.parametrize(("selection", "strategy"), [(1, "multiarm_bandit_thompson"), (2, "stack")])
+@pytest.mark.parametrize("algorithm", ["a", "m"])
+def test_generator_selection_picks_treequests_strategy(algorithm, selection, strategy):
+    pytest.importorskip("pymc" if algorithm == "m" else "treequest")
+    cfg = AgentConfig(abmcts_algorithm=algorithm, generator_selection=selection)
+    assert _abmcts_algorithm(cfg).model_selection_strategy == strategy
+
+
+def test_an_unknown_generator_selection_is_rejected():
+    pytest.importorskip("treequest")
+    cfg = AgentConfig(budget=1, generator_selection=3)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="unknown generator selection 3"):
+        asyncio.run(run_search(fake_generate([0.5], []), cfg))
+
+
 def test_an_unknown_abmcts_algorithm_is_rejected():
     pytest.importorskip("treequest")
     cfg = AgentConfig(budget=1, abmcts_algorithm="M")  # type: ignore[arg-type]
@@ -1292,6 +1307,14 @@ def test_best_of_n_cycles_the_generators_and_abmcts_chooses_among_them():
     assert {node.action for node in trace.candidates} == {"wide"}
 
 
+def test_abmcts_a_gives_each_generator_its_own_gen_node_with_algorithm_ii():
+    pytest.importorskip("treequest")
+    cfg = AgentConfig(budget=10, batch_size=2, gen_models=MODELS, generator_selection=2)
+    log: list[tuple] = []
+    trace = asyncio.run(run_search(fake_mixed_generate(log, cfg), cfg))
+    assert trace.nodes == 10 and {node.generator for node in trace.candidates} <= set(MODELS)
+
+
 def test_a_failed_node_keeps_its_generator():
     cfg = AgentConfig(strategy="best_of_n", budget=2, batch_size=2, gen_models=MODELS[:2])
 
@@ -1306,9 +1329,13 @@ def test_a_failed_node_keeps_its_generator():
 
 
 @pytest.mark.skipif(not SLOW, reason="MCMC fits, about a minute; set SCHEMAGRAPH_SLOW_TESTS=1")
-def test_abmcts_m_samples_the_generator_of_each_new_node():
+@pytest.mark.parametrize("selection", [1, 2])
+def test_abmcts_m_samples_the_generator_of_each_new_node(selection):
     pytest.importorskip("pymc")
-    cfg = AgentConfig(budget=4, batch_size=1, abmcts_algorithm="m", gen_models=MODELS[:2])
+    cfg = AgentConfig(
+        budget=4, batch_size=1, abmcts_algorithm="m", gen_models=MODELS[:2],
+        generator_selection=selection,
+    )  # fmt: skip
     log: list[tuple] = []
     trace = asyncio.run(run_search(fake_mixed_generate(log, cfg), cfg))
     assert trace.nodes == 4 and {action for _, _, action in log} <= set(MODELS[:2])
@@ -1415,3 +1442,8 @@ def test_action_restricts_the_context_widths():
     assert _search_actions(["wide", "wide"]) == {"actions": ("wide",)}
     result = CliRunner().invoke(cli_app, ["bench-spider2-exec", "/x", "--action", "narrow"])
     assert result.exit_code == 2 and "is not tight or wide" in result.output
+
+
+def test_generator_selection_takes_the_papers_two_algorithms():
+    result = CliRunner().invoke(cli_app, ["bench-spider2-exec", "/x", "--generator-selection", "3"])
+    assert result.exit_code == 2 and "--generator-selection" in result.output
