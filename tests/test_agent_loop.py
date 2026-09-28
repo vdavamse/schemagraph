@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
 import time
 from types import SimpleNamespace
@@ -73,6 +74,8 @@ BAD = (  # `totl` does not exist: EXPLAIN rejects it and the generator retries
     "group by c.state"
 )
 NAMES = {"generator": "g", "judge": "j", "selector": "j", "critic": "c"}
+# Tests that take tens of seconds (AB-MCTS-M's MCMC fits) run only when this is set.
+SLOW = os.environ.get("SCHEMAGRAPH_SLOW_TESTS") == "1"
 
 
 # ------------------------------------------------------------------ scripted models
@@ -967,6 +970,23 @@ def test_cli_without_the_agent_extra_prints_the_hint(tmp_path, monkeypatch, comm
     assert result.exception is None or isinstance(result.exception, SystemExit)
 
 
+@pytest.mark.parametrize("command", [["ask", "q", "--home", "{home}"], ["bench-spider2-exec", "/x"]])
+def test_algorithm_m_without_pymc_prints_the_hint(tmp_path, monkeypatch, command):
+    from importlib.util import find_spec
+
+    from schemagraph import cli
+
+    def without_pymc(name: str, *args):
+        return None if name == "pymc" else find_spec(name, *args)
+
+    monkeypatch.setattr(cli, "find_spec", without_pymc)
+    arguments = [argument.format(home=tmp_path) for argument in command] + ["--algorithm", "m"]
+    result = CliRunner().invoke(cli_app, arguments)
+    assert result.exit_code == 1  # before any task runs, not an error row per task
+    # naming only abmcts-m, an exact uv sync would uninstall the agent extra
+    assert "needs the abmcts-m extra: uv sync --extra agent --extra abmcts-m" in result.output
+
+
 def test_answer_errors_without_pydantic_ai(monkeypatch):
     import builtins
 
@@ -1128,6 +1148,7 @@ def test_abmcts_m_asks_one_search_at_a_time():
     assert inside["peak"] == 1  # TreeQuest's M frees every live JAX array in the process
 
 
+@pytest.mark.skipif(not SLOW, reason="MCMC fits, about 25 s; set SCHEMAGRAPH_SLOW_TESTS=1")
 def test_abmcts_m_runs_when_installed():
     pytest.importorskip("pymc")
     log: list[tuple] = []
@@ -1135,8 +1156,62 @@ def test_abmcts_m_runs_when_installed():
     cfg = AgentConfig(budget=2, batch_size=1, abmcts_algorithm="m")  # each step fits by MCMC
     trace = asyncio.run(run_search(fake_generate([0.4, 0.6], log), cfg))
     assert trace.nodes == 2
+
+
+def test_abmcts_m_starts_one_worker_process_per_batch_slot():
+    pytest.importorskip("pymc")
     batch = AgentConfig(batch_size=4, abmcts_algorithm="m")
     assert _abmcts_algorithm(batch).max_process_workers == 4  # not one per CPU
+
+
+def test_an_unknown_abmcts_algorithm_is_rejected():
+    pytest.importorskip("treequest")
+    cfg = AgentConfig(budget=1, abmcts_algorithm="M")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="unknown AB-MCTS algorithm 'M'"):
+        asyncio.run(run_search(fake_generate([0.5], []), cfg))  # not an unlocked ABMCTSM
+
+
+def test_abmcts_imports_treequest_off_the_event_loop(monkeypatch):
+    pytest.importorskip("treequest")
+    from schemagraph.agent import search
+
+    on_loop_thread: list[bool] = []
+    loop_thread = threading.current_thread()  # asyncio.run runs the loop on this thread
+    build = search._abmcts_algorithm
+
+    def recording_build(cfg):
+        on_loop_thread.append(threading.current_thread() is loop_thread)
+        return build(cfg)
+
+    monkeypatch.setattr(search, "_abmcts_algorithm", recording_build)
+    asyncio.run(run_search(fake_generate([0.5], []), AgentConfig(budget=1)))
+    assert on_loop_thread == [False]  # with the abmcts-m extra the import loads JAX and PyMC
+
+
+def test_abmcts_seeds_the_rng_after_building_the_algorithm(monkeypatch):
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("treequest")
+    from schemagraph.agent import search
+
+    build, ask = search._abmcts_algorithm, search._ask
+    at_first_ask: list[tuple] = []
+
+    def drawing_build(cfg):  # as importing TreeQuest with the abmcts-m extra does
+        np.random.random(10)
+        return build(cfg)
+
+    def recording_ask(*args):
+        if not at_first_ask:
+            at_first_ask.append(np.random.get_state())
+        return ask(*args)
+
+    monkeypatch.setattr(search, "_abmcts_algorithm", drawing_build)
+    monkeypatch.setattr(search, "_ask", recording_ask)
+    np.random.seed(3)
+    seeded = np.random.get_state()
+    asyncio.run(run_search(fake_generate([0.5], []), AgentConfig(budget=1, seed=3)))
+    state = at_first_ask[0]
+    assert state[2] == seeded[2] and (state[1] == seeded[1]).all()  # the seed's state, undrawn
 
 
 def test_a_reasoning_generator_gets_the_longer_node_timeout(monkeypatch):

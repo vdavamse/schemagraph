@@ -61,10 +61,11 @@ JUDGE_STATS_COLUMNS = 20
 PICK_SQL_CHARS = 4000
 # Result rows shown per candidate to the selector.
 PICK_PREVIEW_ROWS = 6
-# Characters of a parent's rationale, and of each earlier refinement's SQL, shown to a refinement;
-# earlier refinements of the same parent shown at most.
+# Characters of a parent's rationale shown to a refinement.
 RATIONALE_CHARS = 1000
+# Characters of each earlier refinement's SQL shown to a refinement.
 SIBLING_SQL_CHARS = 1500
+# Earlier refinements of the same parent shown to a refinement, at most.
 MAX_SIBLINGS = 3
 # Schema DDL characters shown to the critic.
 CRITIC_SCHEMA_CHARS = 6000
@@ -367,6 +368,21 @@ def pick_material(
     With context (``AgentConfig.selector_context``) it reads what the judge reads: the notes, the
     tables each query reads with their join-key facts (once when both read the same), result
     statistics and the checks' findings. Without it, the question, the SQL and a few rows.
+
+    Args:
+        question: The user's question.
+        a: The first candidate.
+        b: The second candidate.
+        evidence: External knowledge for the question, shown as notes; None shows none.
+        evidence_chars: Characters of ``evidence`` kept; 0 shows none.
+        schema_a: The tables ``a`` reads, as the judge sees them; None shows none.
+        schema_b: The same for ``b``; shown once when equal to ``schema_a``.
+        rows: Result rows shown per candidate.
+        stats: Show per-column result statistics (:func:`result_stats`).
+        findings: Show the deterministic checks' findings.
+
+    Returns:
+        The selector's user prompt.
     """
     sections = [f"Question: {question}"]
     if evidence and evidence_chars > 0:

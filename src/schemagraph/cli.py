@@ -369,7 +369,8 @@ def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
     """Build the agent settings of ``ask`` and ``bench-spider2-exec``.
 
     Exits with the install hint, before anything imports them, when a package of the agent
-    extra is missing.
+    extra is missing, or PyMC when the AB-MCTS search would run AB-MCTS-M: without it every
+    task would fail inside the search, after its MCP server and link.
     """
     from schemagraph.agent.results import AgentConfig
 
@@ -378,6 +379,14 @@ def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
         typer.echo(
             f"missing {', '.join(missing)}; install the agent extra: uv sync --extra agent",
             err=True,
+        )
+        raise typer.Exit(1)
+    uses_m = strategy == "abmcts" and settings.get("abmcts_algorithm") == "m"
+    if uses_m and find_spec("pymc") is None:
+        from schemagraph.agent.search import ABMCTS_M_INSTALL
+
+        typer.echo(
+            f"missing pymc; --algorithm m needs the abmcts-m extra: {ABMCTS_M_INSTALL}", err=True
         )
         raise typer.Exit(1)
     return AgentConfig(strategy=strategy, **settings)

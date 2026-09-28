@@ -47,6 +47,8 @@ WIDEN_CODES = frozenset({"unknown_table", "unknown_column"})
 # One AB-MCTS-M fit at a time per process: every 10th fit, TreeQuest frees every live JAX array
 # in the process, including those of a fit running in another thread.
 _ABMCTS_M_LOCK = threading.Lock()
+# How to install AB-MCTS-M. An exact sync drops unnamed extras, so the agent extra is named too.
+ABMCTS_M_INSTALL = "uv sync --extra agent --extra abmcts-m"
 
 
 @dataclass
@@ -131,7 +133,7 @@ async def run_search(generate: GenerateFn, cfg: AgentConfig) -> SearchTrace:
     """Spend ``cfg.budget`` generator nodes with ``cfg.strategy``.
 
     Raises:
-        ValueError: The strategy is unknown.
+        ValueError: The strategy, or the AB-MCTS algorithm, is unknown.
     """
     strategies = {
         "single": _single,
@@ -249,10 +251,13 @@ async def _abmcts(
     """TreeQuest AB-MCTS: each trial is a draft or a refinement of a sampled node."""
     import numpy as np
 
-    # AB-MCTS-A samples from the global numpy RNG. AB-MCTS-M is not seeded: its first choice uses
-    # Python's random module, PyMC samples without a seed, and batches run in worker processes.
+    # in a thread: with the abmcts-m extra, importing TreeQuest loads JAX, PyMC and NumPyro
+    # (about 26 s against 9 s without them on the Windows mount), even for AB-MCTS-A
+    algorithm = await asyncio.to_thread(_abmcts_algorithm, cfg)
+    # AB-MCTS-A samples from the global numpy RNG, seeded after the import because that import
+    # draws from it. AB-MCTS-M is not seeded: its first choice uses Python's random module, PyMC
+    # samples without a seed, and batches run in worker processes.
     np.random.seed(cfg.seed)
-    algorithm = _abmcts_algorithm(cfg)
     if cfg.rolling:
         await _abmcts_rolling(algorithm, generate, cfg, trace, ids, budget)
         return
@@ -275,18 +280,19 @@ def _abmcts_algorithm(cfg: AgentConfig) -> Any:
     """Return TreeQuest's AB-MCTS-A or AB-MCTS-M.
 
     Raises:
+        ValueError: The algorithm is neither ``a`` nor ``m``; :func:`_ask` locks only for ``m``.
         ImportError: ``m`` without the ``abmcts-m`` extra (PyMC, NumPyro).
     """
     import treequest as tq
 
     if cfg.abmcts_algorithm == "a":
         return tq.ABMCTSA()
+    if cfg.abmcts_algorithm != "m":
+        raise ValueError(f"unknown AB-MCTS algorithm {cfg.abmcts_algorithm!r}")
     try:
         import pymc  # noqa: F401  # TreeQuest exports a placeholder ABMCTSM without it
     except ImportError as error:
-        raise ImportError(
-            "AB-MCTS-M needs PyMC and NumPyro: uv sync --extra agent --extra abmcts-m"
-        ) from error
+        raise ImportError(f"AB-MCTS-M needs PyMC and NumPyro: {ABMCTS_M_INSTALL}") from error
     # a batch is chosen in worker processes that each load JAX; TreeQuest's default is one per CPU
     return tq.ABMCTSM(max_process_workers=max(1, cfg.batch_size))
 
