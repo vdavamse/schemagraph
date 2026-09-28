@@ -446,11 +446,11 @@ class AgentConfig:
         early_stop: Stop the search once a candidate scores at least this.
         early_stop_agree: Nodes scoring at least ``early_stop`` that must return the same
             result before the search stops; 1 stops on one high score.
-        early_stop_min_nodes: Nodes generated before the search may stop early; 0 lets the
-            first batch stop it.
+        early_stop_min_nodes: Nodes generated before the search may stop early, counting a
+            rolling search's nodes in flight; 0 lets the first batch stop it.
         abmcts_algorithm: TreeQuest's AB-MCTS variant: ``a`` (per-node Thompson sampling,
             wide trees) or ``m`` (a Bayesian mixed model shared across the tree, deeper trees;
-            needs the ``abmcts-m`` extra).
+            needs the ``abmcts-m`` extra; not reproducible from ``seed``).
         rolling: Keep ``batch_size`` AB-MCTS nodes in flight and ask for the next one as each
             finishes, so every choice sees every result so far; off asks in lockstep batches.
         top_k: Candidates the pairwise selector compares.
@@ -460,7 +460,7 @@ class AgentConfig:
             default: replayed on the 21-task run it fixed two picks and broke two.
         judge: Run the judge. Off, the score is the checks alone, so the first clean executed
             candidate scores 1.0 and stops the search.
-        seed: Random seed of the search.
+        seed: Random seed of the search (AB-MCTS-A; AB-MCTS-M samples unseeded).
         gen_model: Generator model; None reads the environment, then the default.
         judge_model: Judge and selector model; None reads the environment, then the default.
         critic_model: Critic model; None reads the environment, then uses the generator's.

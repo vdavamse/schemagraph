@@ -239,12 +239,11 @@ PRE_REFACTOR_DEFAULT_HASH = "396f29d01a5b"
 
 
 def _legacy_config(**settings):
-    """AgentConfig with the judge material and node timeout those runs had."""
+    """AgentConfig with the judge material those runs had."""
     from schemagraph.agent.results import AgentConfig
 
     legacy = dict(preview_rows=10, judge_evidence_chars=1000, judge_schema=False,
-                  judge_findings=False, judge_stats=False,
-                  reasoning_node_timeout_s=None, selector_context=False)  # fmt: skip
+                  judge_findings=False, judge_stats=False, selector_context=False)  # fmt: skip
     return AgentConfig(**{**legacy, **settings})
 
 
@@ -261,6 +260,22 @@ def test_config_hash_ignores_the_mcp_url_and_concurrency():
     assert plain["config_hash"] == served["config_hash"] == PRE_REFACTOR_DEFAULT_HASH
     current = _run_config(AgentConfig(), models, seed=0, use_docs=True, concurrency=1)
     assert current["config_hash"] != PRE_REFACTOR_DEFAULT_HASH  # the judge context changes answers
+
+
+def test_the_reasoning_node_timeout_counts_only_for_a_reasoning_generator(monkeypatch):
+    from schemagraph.agent.results import AgentConfig
+    from schemagraph.bench.spider2_exec import _run_config
+
+    models = _Models().agent_models()
+    monkeypatch.setenv("SCHEMAGRAPH_REASONING", "high")
+
+    def chash(timeout):
+        cfg = AgentConfig(reasoning_node_timeout_s=timeout)
+        return _run_config(cfg, models, seed=0, use_docs=True, concurrency=1)["config_hash"]
+
+    assert chash(None) == chash(600.0)  # the plain node timeout applies either way
+    models.names = {**models.names, "generator": "openrouter:qwen/qwen3.8-max"}
+    assert chash(None) != chash(600.0)
 
 
 def test_config_records_the_reasoning_effort_only_for_openrouter_models(monkeypatch):

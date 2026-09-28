@@ -20,7 +20,9 @@ then a round-robin both-order pairwise selector.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
+import threading
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -41,6 +43,10 @@ NODE_ERROR_CHARS = 500
 WIDEN_MISSING_P = 0.5
 # Finding codes after which a refinement widens its context.
 WIDEN_CODES = frozenset({"unknown_table", "unknown_column"})
+
+# One AB-MCTS-M fit at a time per process: every 10th fit, TreeQuest frees every live JAX array
+# in the process, including those of a fit running in another thread.
+_ABMCTS_M_LOCK = threading.Lock()
 
 
 @dataclass
@@ -147,15 +153,23 @@ def _actions(cfg: AgentConfig) -> list[Action]:
 
 
 def _searching(trace: SearchTrace, cfg: AgentConfig, budget: int) -> bool:
-    """Whether budget is left and the early stop has not been reached.
+    """Whether budget is left and the early stop has not been reached (see :func:`_launchable`)."""
+    return _launchable(trace, cfg, budget) > 0
 
-    The early stop needs ``cfg.early_stop_min_nodes`` nodes, and ``cfg.early_stop_agree`` of
-    them scoring at least ``cfg.early_stop`` and returning the same result (:func:`fingerprint`)
+
+def _launchable(trace: SearchTrace, cfg: AgentConfig, budget: int, in_flight: int = 0) -> int:
+    """Return how many more nodes the search may start, with ``in_flight`` nodes still running.
+
+    The budget left, until the early stop is reached; after it, only what is left of the
+    ``cfg.early_stop_min_nodes`` floor. The early stop needs ``cfg.early_stop_agree`` nodes
+    scoring at least ``cfg.early_stop`` and returning the same result (:func:`fingerprint`)
     from different SQL; with 1, one high score is enough.
     """
-    if trace.nodes >= budget:
-        return False
-    return trace.nodes < cfg.early_stop_min_nodes or not _agreed(trace.candidates, cfg)
+    launched = trace.nodes + in_flight
+    room = budget - launched
+    if _agreed(trace.candidates, cfg):
+        room = min(room, cfg.early_stop_min_nodes - launched)
+    return max(0, room)
 
 
 def _agreed(candidates: list[Candidate], cfg: AgentConfig) -> bool:
@@ -235,7 +249,9 @@ async def _abmcts(
     """TreeQuest AB-MCTS: each trial is a draft or a refinement of a sampled node."""
     import numpy as np
 
-    np.random.seed(cfg.seed)  # TreeQuest samples from the global numpy RNG
+    # AB-MCTS-A samples from the global numpy RNG. AB-MCTS-M is not seeded: its first choice uses
+    # Python's random module, PyMC samples without a seed, and batches run in worker processes.
+    np.random.seed(cfg.seed)
     algorithm = _abmcts_algorithm(cfg)
     if cfg.rolling:
         await _abmcts_rolling(algorithm, generate, cfg, trace, ids, budget)
@@ -244,7 +260,7 @@ async def _abmcts(
     actions = _actions(cfg)
     while _searching(trace, cfg, budget):
         size = min(cfg.batch_size, budget - trace.nodes)
-        state, trials = await asyncio.to_thread(algorithm.ask_batch, state, size, actions)
+        state, trials = await asyncio.to_thread(_ask, algorithm, cfg, state, size, actions)
         batch = [(ids(), trial) for trial in trials]
         nodes = await asyncio.gather(
             *(_trial_node(generate, node_id, trial, cfg.node_timeout_s) for node_id, trial in batch)
@@ -271,7 +287,32 @@ def _abmcts_algorithm(cfg: AgentConfig) -> Any:
         raise ImportError(
             "AB-MCTS-M needs PyMC and NumPyro: uv sync --extra agent --extra abmcts-m"
         ) from error
-    return tq.ABMCTSM()
+    # a batch is chosen in worker processes that each load JAX; TreeQuest's default is one per CPU
+    return tq.ABMCTSM(max_process_workers=max(1, cfg.batch_size))
+
+
+def _ask(
+    algorithm: Any,
+    cfg: AgentConfig,
+    state: Any,
+    count: int,
+    actions: list[Action],
+) -> tuple[Any, list[Any]]:
+    """Ask TreeQuest for ``count`` trials; AB-MCTS-M fits under :data:`_ABMCTS_M_LOCK`.
+
+    Args:
+        algorithm: TreeQuest's ``ABMCTSA`` or ``ABMCTSM``.
+        cfg: The search settings; ``cfg.abmcts_algorithm`` decides whether to take the lock.
+        state: The algorithm's tree state.
+        count: Trials to ask for.
+        actions: The context actions a trial may take.
+
+    Returns:
+        The new tree state and the trials, as ``algorithm.ask_batch`` returns them.
+    """
+    lock = _ABMCTS_M_LOCK if cfg.abmcts_algorithm == "m" else contextlib.nullcontext()
+    with lock:
+        return algorithm.ask_batch(state, count, actions)
 
 
 async def _abmcts_rolling(
@@ -287,7 +328,10 @@ async def _abmcts_rolling(
     Every trial after the first batch is chosen with every finished node in the tree, which a
     lockstep batch only has at its start. Nodes join ``trace`` in completion order; their ids
     are issued in ask order. Once the search stops, the nodes still in flight are awaited and
-    kept: they are paid for.
+    kept: they are paid for. The ``cfg.early_stop_min_nodes`` floor counts nodes in flight, so
+    a search whose nodes agree early stops at the floor, not up to a batch past it (lockstep
+    stops at the first batch boundary at or past it). If the search is cancelled or TreeQuest
+    fails, the nodes in flight are cancelled.
     """
     state = algorithm.init_tree()
     actions = _actions(cfg)
@@ -295,24 +339,32 @@ async def _abmcts_rolling(
 
     async def launch(count: int) -> None:
         nonlocal state
-        state, trials = await asyncio.to_thread(algorithm.ask_batch, state, count, actions)
+        state, trials = await asyncio.to_thread(_ask, algorithm, cfg, state, count, actions)
         for trial in trials:
             task = asyncio.ensure_future(_trial_node(generate, ids(), trial, cfg.node_timeout_s))
             running[task] = trial
 
-    await launch(min(max(1, cfg.batch_size), budget))
-    while running:
-        done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
-        for task in done:
-            trial = running.pop(task)
-            node = task.result()  # _safe turns every failure into a score-0 node
-            reward = min(1.0, max(0.0, node.score))
-            state = await asyncio.to_thread(algorithm.tell, state, trial.trial_id, (node, reward))
-            trace.candidates.append(node)
-        launched = trace.nodes + len(running)
-        free = max(1, cfg.batch_size) - len(running)
-        if free > 0 and launched < budget and _searching(trace, cfg, budget):
-            await launch(min(free, budget - launched))
+    try:
+        await launch(min(max(1, cfg.batch_size), budget))
+        while running:
+            done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                trial = running.pop(task)
+                node = task.result()  # _safe turns every failure into a score-0 node
+                reward = min(1.0, max(0.0, node.score))
+                state = await asyncio.to_thread(
+                    algorithm.tell, state, trial.trial_id, (node, reward)
+                )
+                trace.candidates.append(node)
+            free = max(1, cfg.batch_size) - len(running)
+            count = min(free, _launchable(trace, cfg, budget, len(running)))
+            if count > 0:
+                await launch(count)
+    finally:
+        for task in running:
+            task.cancel()
+        if running:
+            await asyncio.gather(*running, return_exceptions=True)
 
 
 def fingerprint(candidate: Candidate) -> str | None:
