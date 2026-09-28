@@ -28,8 +28,12 @@ DEFAULT_REASONING = "medium"
 
 
 def model_names(cfg: AgentConfig) -> dict[str, str]:
-    """Name the model of each role: the config first, then the environment, then the default."""
-    generator = cfg.gen_model or os.environ.get(ENV_GEN) or DEFAULT_GEN_MODEL
+    """Name the model of each role: the config first, then the environment, then the default.
+
+    With several generator models (``cfg.gen_models``) the generator is the first of them.
+    """
+    configured = cfg.gen_models[0] if cfg.gen_models else cfg.gen_model
+    generator = configured or os.environ.get(ENV_GEN) or DEFAULT_GEN_MODEL
     judge = cfg.judge_model or os.environ.get(ENV_JUDGE) or DEFAULT_JUDGE_MODEL
     critic = cfg.critic_model or os.environ.get(ENV_CRITIC) or generator
     return {"generator": generator, "judge": judge, "selector": judge, "critic": critic}
@@ -147,6 +151,9 @@ class AgentModels:
         selector: Pairwise selector model, or None when it does not run.
         critic: Critic model, or None when the strategy never refines.
         names: Model name by role, including roles that do not run.
+        generators: The models of ``AgentConfig.gen_models`` by name, when the strategy
+            searches them together (``best_of_n``, ``abmcts``); empty otherwise, and the one
+            generator is ``gen``.
     """
 
     gen: Any
@@ -154,6 +161,7 @@ class AgentModels:
     selector: Any
     critic: Any
     names: dict[str, str] = field(default_factory=dict)
+    generators: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def resolve(cls, cfg: AgentConfig) -> AgentModels:
@@ -166,13 +174,13 @@ class AgentModels:
         used = _roles_used(cfg)
         by_name: dict[str, Any] = {}
 
-        def model_for(role: str) -> Any:
-            if not used[role]:
-                return None
-            name = names[role]
+        def resolved(name: str) -> Any:
             if name not in by_name:
                 by_name[name] = resolve_model(name)
             return by_name[name]
+
+        def model_for(role: str) -> Any:
+            return resolved(names[role]) if used[role] else None
 
         return cls(
             model_for("generator"),
@@ -180,8 +188,22 @@ class AgentModels:
             model_for("selector"),
             model_for("critic"),
             names,
+            {name: resolved(name) for name in cfg.searched_generators()},
         )
 
     def reasoning(self, role: str) -> bool:
-        """Whether ``role``'s model is asked to reason, and so needs reasoning headroom."""
+        """Whether ``role``'s model is asked to reason; for the generator, any of its models."""
+        if role == "generator" and self.generators:
+            return any(reasons(name) for name in self.generators)
         return reasons(self.names.get(role))
+
+    def generator(self, name: str | None) -> tuple[Any, str]:
+        """Return a generator model and its name; None, or the default's name, is ``gen``.
+
+        Raises:
+            KeyError: ``name`` is another model that was not resolved; falling back to ``gen``
+                would record the node under a model that did not write it.
+        """
+        if name is None or name == self.names["generator"]:
+            return self.gen, self.names["generator"]
+        return self.generators[name], name

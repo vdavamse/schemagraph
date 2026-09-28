@@ -6,11 +6,11 @@ import json
 import logging
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast, get_args
 
 import typer
 
-from schemagraph.agent.results import Strategy
+from schemagraph.agent.results import Action, Strategy
 from schemagraph.engine import Engine
 
 if TYPE_CHECKING:
@@ -371,9 +371,13 @@ def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
     Exits with the install hint, before anything imports them, when a package of the agent
     extra is missing, or PyMC when the AB-MCTS search would run AB-MCTS-M: without it every
     task would fail inside the search, after its MCP server and link.
+
+    Raises:
+        typer.BadParameter: An option the run would silently ignore (:func:`_reject_ignored`).
     """
     from schemagraph.agent.results import AgentConfig
 
+    _reject_ignored(strategy, settings)
     missing = [module for module in _AGENT_EXTRA_MODULES if find_spec(module) is None]
     if missing:
         typer.echo(
@@ -390,6 +394,53 @@ def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
         )
         raise typer.Exit(1)
     return AgentConfig(strategy=strategy, **settings)
+
+
+def _reject_ignored(strategy: Strategy, settings: dict[str, Any]) -> None:
+    """Refuse options the run would ignore, so no run is labelled with a setting it lacks.
+
+    Raises:
+        typer.BadParameter: ``--action`` with several ``--gen-model`` (the models are then the
+            actions and every node links wide), or ``--generator-selection 2`` or
+            ``--algorithm m`` outside ``abmcts`` (only the tree search uses them).
+    """
+    if len(settings.get("gen_models", ())) > 1 and "actions" in settings:
+        raise typer.BadParameter(
+            "with several --gen-model the models are the actions", param_hint="'--action'"
+        )
+    if strategy == "abmcts":
+        return
+    if settings.get("generator_selection", 1) != 1:
+        raise typer.BadParameter(
+            "only --strategy abmcts chooses between actions",
+            param_hint="'--generator-selection'",
+        )
+    if settings.get("abmcts_algorithm", "a") != "a":
+        raise typer.BadParameter("only --strategy abmcts runs AB-MCTS", param_hint="'--algorithm'")
+
+
+def _generators(names: list[str] | None) -> dict[str, Any]:
+    """Map ``--gen-model`` to agent settings: one model is ``gen_model``, several ``gen_models``.
+
+    One model keeps the setting earlier runs had, so their config hashes still match.
+    """
+    unique = tuple(dict.fromkeys(names or ()))
+    if len(unique) > 1:
+        return {"gen_models": unique}
+    return {"gen_model": unique[0]} if unique else {}
+
+
+def _search_actions(widths: list[str] | None) -> dict[str, Any]:
+    """Map ``--action`` to agent settings; none keeps both widths, the setting runs had.
+
+    Raises:
+        typer.BadParameter: A width other than ``tight`` or ``wide``.
+    """
+    unique = dict.fromkeys(widths or ())
+    for width in unique:
+        if width not in get_args(Action):
+            raise typer.BadParameter(f"{width!r} is not tight or wide", param_hint="'--action'")
+    return {"actions": tuple(cast(Action, width) for width in unique)} if unique else {}
 
 
 def _quiet_mcp_logs() -> None:
@@ -426,13 +477,22 @@ def _print_answer(result: AnswerResult) -> None:
         f"{result.ms / 1000:.1f}s, {_cost(result.usage.total)}"
     )
     for role, usage in result.usage.by_role.items():
-        errors = "" if usage.ok else " (errors)"
-        reasoning = f" reasoning={usage.reasoning_tokens}" if usage.reasoning_tokens else ""
-        typer.echo(
-            f"  {role:9} {usage.model:24} calls={usage.calls} requests={usage.requests} "
-            f"tokens={usage.input_tokens}/{usage.output_tokens}{reasoning} {_cost(usage)} "
-            f"{usage.ms / 1000:.1f}s{errors}"
-        )
+        typer.echo(_usage_line(role, usage))
+    generators = {candidate.generator for candidate in result.candidates if candidate.generator}
+    if len(generators) > 1:  # the generator line sums them: each model, over all its roles
+        for model in sorted(generators & set(result.usage.by_model)):
+            typer.echo(_usage_line("model", result.usage.by_model[model]))
+
+
+def _usage_line(label: str, usage: UsageRecord) -> str:
+    """Format one usage sum: its model, calls, requests, tokens, cost and time."""
+    errors = "" if usage.ok else " (errors)"
+    reasoning = f" reasoning={usage.reasoning_tokens}" if usage.reasoning_tokens else ""
+    return (
+        f"  {label:9} {usage.model:24} calls={usage.calls} requests={usage.requests} "
+        f"tokens={usage.input_tokens}/{usage.output_tokens}{reasoning} {_cost(usage)} "
+        f"{usage.ms / 1000:.1f}s{errors}"
+    )
 
 
 def _cost(usage: UsageRecord) -> str:
@@ -444,6 +504,29 @@ def _cost(usage: UsageRecord) -> str:
 StrategyOpt = Annotated[Strategy, typer.Option(help="abmcts | best_of_n | refine | single")]
 SelectorOpt = Annotated[
     bool, typer.Option(help="final pairwise pick among the top candidates")
+]
+GenModelOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--gen-model",
+        help=(
+            "generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max); repeat it "
+            "to search several together (best_of_n, abmcts): the models become the actions "
+            "(Multi-LLM AB-MCTS; see --generator-selection); single and refine use the first"
+        ),
+    ),
+]
+ActionOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--action",
+        metavar="tight|wide",
+        help=(
+            "schema context best_of_n and abmcts may use, tight or wide; repeat it for both "
+            "(the default). Not with several --gen-model: the models are then the actions and "
+            "every node links wide"
+        ),
+    ),
 ]
 AlgorithmOpt = Annotated[
     Literal["a", "m"],
@@ -463,7 +546,23 @@ AgreeOpt = Annotated[
     typer.Option(help="high-scoring nodes that must return the same result to stop early"),
 ]
 DraftTemperatureOpt = Annotated[
-    float, typer.Option(help="generator temperature for fresh drafts (refinements: 0.4)")
+    float, typer.Option(help="generator temperature for fresh drafts")
+]
+RefineTemperatureOpt = Annotated[
+    float, typer.Option(help="generator temperature for refinements")
+]
+GeneratorSelectionOpt = Annotated[
+    int,
+    typer.Option(
+        min=1,
+        max=2,
+        help=(
+            "abmcts: the paper's generator selection algorithm. 1 chooses a new node or a "
+            "refinement, then samples the action (the model with several --gen-model, else "
+            "the context width); 2 gives each action its own GEN node (the paper's ARC-AGI-2 "
+            "setup)"
+        ),
+    ),
 ]
 
 
@@ -493,12 +592,8 @@ def ask(
     budget: Annotated[int, typer.Option(help="generator nodes")] = 16,
     batch: Annotated[int, typer.Option(help="nodes generated concurrently")] = 4,
     seed: int = 0,
-    gen_model: Annotated[
-        str | None,
-        typer.Option(
-            help="generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max)"
-        ),
-    ] = None,
+    gen_model: GenModelOpt = None,
+    action: ActionOpt = None,
     judge_model: Annotated[
         str | None,
         typer.Option(
@@ -512,6 +607,8 @@ def ask(
     early_stop_min_nodes: MinNodesOpt = 0,
     early_stop_agree: AgreeOpt = 1,
     draft_temperature: DraftTemperatureOpt = 0.8,
+    refine_temperature: RefineTemperatureOpt = 0.4,
+    generator_selection: GeneratorSelectionOpt = 1,
     as_json: Annotated[
         bool, typer.Option("--json", help="print the full AnswerResult as JSON")
     ] = False,
@@ -529,7 +626,8 @@ def ask(
         budget=budget,
         batch_size=batch,
         seed=seed,
-        gen_model=gen_model,
+        **_generators(gen_model),
+        **_search_actions(action),
         judge_model=judge_model,
         judge=judge,
         selector=selector,
@@ -538,6 +636,8 @@ def ask(
         early_stop_min_nodes=early_stop_min_nodes,
         early_stop_agree=early_stop_agree,
         draft_temperature=draft_temperature,
+        refine_temperature=refine_temperature,
+        generator_selection=generator_selection,
         mcp_url=mcp_url,
         trace=trace,
     )
@@ -583,7 +683,8 @@ def bench_spider2_exec(
     budget: int = 16,
     batch: int = 4,
     seed: int = 0,
-    gen_model: str | None = None,
+    gen_model: GenModelOpt = None,
+    action: ActionOpt = None,
     judge_model: str | None = None,
     selector: SelectorOpt = True,
     algorithm: AlgorithmOpt = "a",
@@ -591,6 +692,8 @@ def bench_spider2_exec(
     early_stop_min_nodes: MinNodesOpt = 0,
     early_stop_agree: AgreeOpt = 1,
     draft_temperature: DraftTemperatureOpt = 0.8,
+    refine_temperature: RefineTemperatureOpt = 0.4,
+    generator_selection: GeneratorSelectionOpt = 1,
     judge_only: Annotated[
         bool,
         typer.Option(
@@ -643,7 +746,8 @@ def bench_spider2_exec(
         budget=budget,
         batch_size=batch,
         seed=seed,
-        gen_model=gen_model,
+        **_generators(gen_model),
+        **_search_actions(action),
         judge_model=judge_model,
         judge=True,
         selector=selector,
@@ -652,6 +756,8 @@ def bench_spider2_exec(
         early_stop_min_nodes=early_stop_min_nodes,
         early_stop_agree=early_stop_agree,
         draft_temperature=draft_temperature,
+        refine_temperature=refine_temperature,
+        generator_selection=generator_selection,
         trace=trace,
     )
     ids = None
@@ -665,7 +771,8 @@ def bench_spider2_exec(
         from schemagraph.agent.models import DEFAULT_GEN_MODEL, DEFAULT_JUDGE_MODEL
         from schemagraph.bench import spider2_judge
 
-        judges = compare_judge or [DEFAULT_JUDGE_MODEL, gen_model or DEFAULT_GEN_MODEL]
+        generator = gen_model[0] if gen_model else DEFAULT_GEN_MODEL
+        judges = compare_judge or [DEFAULT_JUDGE_MODEL, generator]
         report = spider2_judge.judge_only(
             spider2_root,
             judges=judges,

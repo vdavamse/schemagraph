@@ -334,6 +334,8 @@ class Candidate(BaseModel):
         parent_id: The node this one refines, if any.
         depth: Refinement depth; drafts are 0.
         action: Which schema context the generator saw.
+        generator: The generator model that wrote it when ``AgentConfig.gen_models`` names
+            several; None with a single generator.
         sql: The generated query.
         rationale: The generator's explanation.
         tables_used: Tables the generator says the query reads.
@@ -354,6 +356,7 @@ class Candidate(BaseModel):
     parent_id: str | None = None
     depth: int = 0
     action: Action = "wide"
+    generator: str | None = None
     sql: str = ""
     rationale: str = ""
     tables_used: list[str] = Field(default_factory=list)
@@ -462,6 +465,20 @@ class AgentConfig:
             candidate scores 1.0 and stops the search.
         seed: Random seed of the search (AB-MCTS-A; AB-MCTS-M samples unseeded).
         gen_model: Generator model; None reads the environment, then the default.
+        gen_models: Generator models searched together, the paper's Multi-LLM AB-MCTS
+            (arXiv 2503.04412, appendix D). When set, ``gen_model`` is ignored and the first
+            model is the default generator (``single``, ``refine``) and critic. With two or
+            more, ``best_of_n`` and ``abmcts`` search these models instead of the context
+            widths (:meth:`searched_generators`) and every node links the wide context. It
+            works with both AB-MCTS variants and both ``generator_selection`` modes; this
+            project's focus is AB-MCTS-M with algorithm I, where a mixed model with the
+            generators as groups (eq. 22) samples each new node's model, and the paper's
+            measured setup is AB-MCTS-A with algorithm II.
+        generator_selection: The paper's generator selection algorithm (appendix D.1) for
+            ``abmcts``: 1 decides between a new node and a refinement, then samples the new
+            node's action; 2 gives every action its own GEN node at every node (the paper's
+            ARC-AGI-2 setup, with AB-MCTS-A). The actions are the models when several are
+            searched, else the context widths.
         judge_model: Judge and selector model; None reads the environment, then the default.
         critic_model: Critic model; None reads the environment, then uses the generator's.
         probe_limit: ``run_query`` probes the generator may make per node.
@@ -508,6 +525,8 @@ class AgentConfig:
     judge: bool = True
     seed: int = 0
     gen_model: str | None = None
+    gen_models: tuple[str, ...] = ()
+    generator_selection: Literal[1, 2] = 1
     judge_model: str | None = None
     critic_model: str | None = None
     probe_limit: int = 3
@@ -529,3 +548,11 @@ class AgentConfig:
     weights: ScoreWeights = field(default_factory=ScoreWeights)
     mcp_url: str | None = None
     trace: bool = False
+
+    def searched_generators(self) -> tuple[str, ...]:
+        """Return the generator models the search chooses between; empty with one.
+
+        Only ``best_of_n`` and ``abmcts`` choose; ``single`` and ``refine`` use the first model.
+        """
+        several = len(self.gen_models) > 1 and self.strategy in {"best_of_n", "abmcts"}
+        return self.gen_models if several else ()

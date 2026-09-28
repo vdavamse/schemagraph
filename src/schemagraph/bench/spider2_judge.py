@@ -47,7 +47,7 @@ def judge_only(
     *,
     judges: list[str],
     cfg: AgentConfig | None = None,
-    gen_models: AgentModels | None = None,
+    pool_models: AgentModels | None = None,
     pool_size: int = 8,
     pool: str | Path | None = None,
     limit: int | None = None,
@@ -70,7 +70,7 @@ def judge_only(
         spider2_root: The Spider2 clone.
         judges: Judge model names.
         cfg: The base agent settings.
-        gen_models: Ready generator models (tests); None resolves them.
+        pool_models: Ready models for building the candidate pool (tests); None resolves them.
         pool_size: Candidates generated per task.
         pool: A candidate pool (jsonl) to reuse or extend; default under ``out_dir``.
         limit: Only the first this many tasks.
@@ -98,7 +98,7 @@ def judge_only(
         progress=progress,
     )
     report = asyncio.run(
-        study.run(tasks, pool_path, base, gen_models, judges, judge_models or {}, pool_size)
+        study.run(tasks, pool_path, base, pool_models, judges, judge_models or {}, pool_size)
     )
     (out / f"spider2_judge_{tag}.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     return report
@@ -187,14 +187,14 @@ class _JudgeStudy:
         tasks: list[Instance],
         pool_path: Path,
         base: AgentConfig,
-        gen_models: AgentModels | None,
+        pool_models: AgentModels | None,
         judges: list[str],
         judge_models: dict[str, Any],
         pool_size: int,
     ) -> dict[str, Any]:
         """Build the pool, then score it with every judge; return the report."""
         try:
-            await self._build_pool(tasks, pool_path, base, gen_models, pool_size)
+            await self._build_pool(tasks, pool_path, base, pool_models, pool_size)
             pool_rows = [row for row in read_rows(pool_path) if row["instance_id"] in self.by_id]
             entries = [row for row in pool_rows if not row.get("error")]  # failures are no data
             report = _pool_report(pool_path, pool_rows, entries)
@@ -211,7 +211,7 @@ class _JudgeStudy:
         tasks: list[Instance],
         pool_path: Path,
         base: AgentConfig,
-        gen_models: AgentModels | None,
+        pool_models: AgentModels | None,
         pool_size: int,
     ) -> None:
         """Generate the candidates of every task not yet in the pool file."""
@@ -229,7 +229,7 @@ class _JudgeStudy:
         missing = [task for task in tasks if task.instance_id not in have]
         if not missing:
             return  # a complete pool needs no generator key
-        models = gen_models or AgentModels.resolve(pool_cfg)
+        models = pool_models or AgentModels.resolve(pool_cfg)
         servers = McpServers(self.runner, Counter(task.db for task in missing))
         try:
             for position, task in enumerate(tasks):

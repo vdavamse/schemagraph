@@ -11,6 +11,8 @@ import json
 import os
 import threading
 import time
+from collections import Counter
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -41,18 +43,22 @@ from schemagraph.agent.execute import AgentError, DuckDBExecutor, SQLiteExecutor
 from schemagraph.agent.models import AgentModels, model_names  # noqa: E402
 from schemagraph.agent.results import (  # noqa: E402
     AgentConfig,
+    AnswerResult,
     Candidate,
     CheckReport,
     ExecResult,
     Finding,
     UsageRecord,
+    UsageSummary,
 )
 from schemagraph.agent.schema_client import SchemaClient  # noqa: E402
 from schemagraph.agent.search import (  # noqa: E402
     _abmcts_algorithm,
     _refine_action,
+    new_node,
     run_search,
     select_final,
+    split_action,
 )
 from schemagraph.cli import app as cli_app  # noqa: E402
 from schemagraph.connectors.ddl import DDLConfig, parse_ddl  # noqa: E402
@@ -1165,6 +1171,21 @@ def test_abmcts_m_starts_one_worker_process_per_batch_slot():
     assert _abmcts_algorithm(batch).max_process_workers == 4  # not one per CPU
 
 
+@pytest.mark.parametrize(("selection", "strategy"), [(1, "multiarm_bandit_thompson"), (2, "stack")])
+@pytest.mark.parametrize("algorithm", ["a", "m"])
+def test_generator_selection_picks_treequests_strategy(algorithm, selection, strategy):
+    pytest.importorskip("pymc" if algorithm == "m" else "treequest")
+    cfg = AgentConfig(abmcts_algorithm=algorithm, generator_selection=selection)
+    assert _abmcts_algorithm(cfg).model_selection_strategy == strategy
+
+
+def test_an_unknown_generator_selection_is_rejected():
+    pytest.importorskip("treequest")
+    cfg = AgentConfig(budget=1, generator_selection=3)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="unknown generator selection 3"):
+        asyncio.run(run_search(fake_generate([0.5], []), cfg))
+
+
 def test_an_unknown_abmcts_algorithm_is_rejected():
     pytest.importorskip("treequest")
     cfg = AgentConfig(budget=1, abmcts_algorithm="M")  # type: ignore[arg-type]
@@ -1248,3 +1269,241 @@ def test_a_refinement_sees_the_rubric_the_rationale_and_earlier_siblings():
     assert "already tried" not in generator_prompt(
         "q", None, "tight", "ddl", 1, parent, evidence_chars=0
     )
+
+
+# ------------------------------------------------------------------ several generator models
+MODELS = ("qwen", "glm", "grok")
+
+
+def fake_mixed_generate(log: list[tuple], cfg: AgentConfig, scores: dict[str, float] | None = None):
+    """Like fake_generate, for actions that name generator models; ``scores`` by model (0.5)."""
+
+    async def generate(node_id, parent, action):
+        log.append((node_id, parent.id if parent else None, action))
+        generator, context = split_action(cfg, action)
+        score = (scores or {}).get(generator, 0.5)
+        node = new_node(node_id, parent, context, generator=generator, score=score)
+        node.sql = f"select {node_id}"
+        node.exec = ExecResult(ok=True, rows=[[node_id]], row_count=1)
+        return node
+
+    return generate
+
+
+def test_an_action_names_the_generator_when_several_are_searched():
+    several = AgentConfig(gen_models=MODELS)
+    assert split_action(several, "glm") == ("glm", "wide")  # every model links the wide context
+    assert split_action(several, "tight") == ("qwen", "tight")  # single, refine: the first model
+    assert split_action(AgentConfig(), "tight") == (None, "tight")  # one generator: a width
+
+
+def test_best_of_n_cycles_the_generators():
+    cfg = AgentConfig(strategy="best_of_n", budget=6, batch_size=3, gen_models=MODELS)
+    log: list[tuple] = []
+    asyncio.run(run_search(fake_mixed_generate(log, cfg), cfg))
+    assert [action for _, _, action in log] == list(MODELS) * 2  # round-robin, no context action
+
+
+def test_abmcts_draws_every_node_from_the_generators():
+    pytest.importorskip("treequest")
+    tree = AgentConfig(budget=8, batch_size=2, gen_models=MODELS)
+    log: list[tuple] = []
+    trace = asyncio.run(run_search(fake_mixed_generate(log, tree), tree))
+    assert trace.nodes == 8 and {action for _, _, action in log} <= set(MODELS)
+    assert {node.generator for node in trace.candidates} <= set(MODELS)
+    assert {node.action for node in trace.candidates} == {"wide"}
+
+
+@pytest.mark.parametrize("selection", [1, 2])
+def test_rewards_steer_the_search_towards_the_better_generator(selection):
+    pytest.importorskip("treequest")
+    cfg = AgentConfig(
+        budget=24, batch_size=1, gen_models=MODELS, generator_selection=selection,
+        early_stop=2.0,  # never stop early: every node counts
+    )  # fmt: skip
+    scores = {"qwen": 0.1, "glm": 0.9, "grok": 0.1}
+    trace = asyncio.run(run_search(fake_mixed_generate([], cfg, scores), cfg))
+    counts = Counter(node.generator for node in trace.candidates)
+    assert counts["glm"] > trace.nodes / 2  # 17-23 of 24 over seeds 0-9, either selection
+
+
+def test_a_failed_node_keeps_its_generator():
+    cfg = AgentConfig(strategy="best_of_n", budget=2, batch_size=2, gen_models=MODELS[:2])
+
+    async def failing(node_id, parent, action):
+        raise RuntimeError("provider down")
+
+    trace = asyncio.run(run_search(failing, cfg))
+    assert [(node.generator, node.action) for node in trace.candidates] == [
+        ("qwen", "wide"), ("glm", "wide"),
+    ]  # fmt: skip
+    assert all("provider down" in node.error for node in trace.candidates)
+
+
+@pytest.mark.skipif(not SLOW, reason="MCMC fits, about a minute; set SCHEMAGRAPH_SLOW_TESTS=1")
+@pytest.mark.parametrize("selection", [1, 2])
+def test_abmcts_m_draws_every_node_from_the_generators(selection):
+    pytest.importorskip("pymc")
+    cfg = AgentConfig(
+        budget=4, batch_size=1, abmcts_algorithm="m", gen_models=MODELS[:2],
+        generator_selection=selection,
+    )  # fmt: skip
+    log: list[tuple] = []
+    trace = asyncio.run(run_search(fake_mixed_generate(log, cfg), cfg))
+    assert trace.nodes == 4 and {action for _, _, action in log} <= set(MODELS[:2])
+
+
+def test_each_node_is_written_by_the_model_its_action_names(store):
+    scripts = {name: Script() for name in MODELS[:2]}
+    generators = {name: FunctionModel(script.gen) for name, script in scripts.items()}
+    judge = FunctionModel(judge_fn())
+    names = {**NAMES, "generator": "qwen"}
+    models = AgentModels(generators["qwen"], judge, judge, None, names, generators)
+    cfg = AgentConfig(
+        strategy="best_of_n", budget=2, batch_size=2, gen_models=MODELS[:2], selector=False
+    )
+    result = _answer(store, cfg, models)
+    by_id = {node.id: node for node in result.candidates}
+    assert (by_id["n0"].generator, by_id["n1"].generator) == ("qwen", "glm")
+    assert all(script.calls > 0 for script in scripts.values())  # both models wrote a node
+    assert {"qwen", "glm"} <= set(result.usage.by_model)  # usage records each model by name
+
+
+def test_several_generators_resolve_once_each(monkeypatch):
+    resolved: list[str] = []
+
+    def resolve(name):
+        resolved.append(name)
+        return TestModel()
+
+    monkeypatch.setattr(agent_models, "resolve_model", resolve)
+    monkeypatch.delenv("SCHEMAGRAPH_REASONING", raising=False)
+    cfg = AgentConfig(gen_models=("openrouter:z-ai/glm-5.3", "alibaba:qwen"), judge_model="j")
+    models = AgentModels.resolve(cfg)
+    assert models.names["generator"] == models.names["critic"] == "openrouter:z-ai/glm-5.3"
+    assert sorted(resolved) == sorted(["openrouter:z-ai/glm-5.3", "alibaba:qwen", "j"])
+    assert models.generator("alibaba:qwen")[1] == "alibaba:qwen"
+    assert models.generator(None)[1] == "openrouter:z-ai/glm-5.3"
+    assert models.reasoning("generator")  # one openrouter generator reasons, so the node waits
+
+
+def test_repeating_gen_model_searches_several_generators():
+    from schemagraph.cli import _generators
+
+    assert _generators(None) == {}
+    assert _generators(["qwen"]) == {"gen_model": "qwen"}  # one model: the setting runs had
+    assert _generators(["qwen", "glm", "qwen"]) == {"gen_models": ("qwen", "glm")}
+
+
+def test_an_unknown_generator_is_an_error_not_the_default():
+    names = {**NAMES, "generator": "qwen"}
+    models = AgentModels("qwen-model", None, None, None, names, {"glm": "glm-model"})
+    assert models.generator(None) == models.generator("qwen") == ("qwen-model", "qwen")
+    assert models.generator("glm") == ("glm-model", "glm")
+    with pytest.raises(KeyError):  # recording "grok" on a node qwen wrote would skew the stats
+        models.generator("grok")
+
+
+def test_only_strategies_that_search_the_generators_resolve_them(monkeypatch):
+    resolved: list[str] = []
+
+    def resolve(name):
+        resolved.append(name)
+        return name
+
+    monkeypatch.setattr(agent_models, "resolve_model", resolve)
+    single = AgentConfig(strategy="single", gen_models=MODELS, judge=False, selector=False)
+    assert AgentModels.resolve(single).generators == {} and resolved == ["qwen"]  # first only
+    resolved.clear()
+    tree = replace(single, strategy="abmcts")
+    assert list(AgentModels.resolve(tree).generators) == list(MODELS)
+
+
+def test_each_generator_gets_its_own_reasoning_headroom(monkeypatch):
+    monkeypatch.delenv("SCHEMAGRAPH_REASONING", raising=False)
+    names = {**NAMES, "generator": "alibaba:qwen"}
+    answerer = SimpleNamespace(models=AgentModels(None, None, None, None, names))
+    reasoning = Answerer._limits(answerer, "generator", 4096, 120.0, model_name="openrouter:z-ai/glm")
+    plain = Answerer._limits(answerer, "generator", 4096, 120.0, model_name="alibaba:qwen")
+    assert reasoning == {"timeout": REASONING_TIMEOUT_S, "max_tokens": 4096 + REASONING_MAX_TOKENS}
+    assert plain == {"timeout": 120.0, "max_tokens": 4096}
+
+
+def test_a_refinement_is_written_by_its_model_and_advised_by_the_critic(store):
+    """The critic is a separate model here; the default critic is the first generator
+    (test_several_generators_resolve_once_each)."""
+    scripts = {name: Script() for name in MODELS[:2]}
+    generators = {name: FunctionModel(script.gen) for name, script in scripts.items()}
+    judge = FunctionModel(judge_fn())
+    critic_calls: list[int] = []
+    names = {**NAMES, "generator": "qwen"}
+    critic = FunctionModel(critic_fn(critic_calls))
+    models = AgentModels(generators["qwen"], judge, judge, critic, names, generators)
+    answerer = _answerer(store, AgentConfig(gen_models=MODELS[:2]), models)
+
+    async def draft_then_refine():
+        async with answerer.schema, answerer._toolset:
+            await answerer.prepare(QUESTION)
+            draft = await answerer.generate("n0", None, "qwen")
+            return draft, await answerer.generate("n1", draft, "glm")
+
+    draft, refinement = asyncio.run(draft_then_refine())
+    assert (draft.generator, refinement.generator) == ("qwen", "glm")
+    assert refinement.parent_id == "n0" and scripts["glm"].calls > 0
+    assert critic_calls == [1]  # the critic ran once, on the critic model
+    critic_models = {record.model for record in answerer.records if record.role == "critic"}
+    assert critic_models == {"c"}
+
+
+def test_action_restricts_the_context_widths():
+    from schemagraph.cli import _search_actions
+
+    assert _search_actions(None) == {}  # both widths, the setting runs had
+    assert _search_actions(["wide", "wide"]) == {"actions": ("wide",)}
+    result = CliRunner().invoke(cli_app, ["bench-spider2-exec", "/x", "--action", "narrow"])
+    assert result.exit_code == 2 and "is not tight or wide" in result.output
+
+
+def test_generator_selection_takes_the_papers_two_algorithms():
+    result = CliRunner().invoke(cli_app, ["bench-spider2-exec", "/x", "--generator-selection", "3"])
+    assert result.exit_code == 2 and "--generator-selection" in result.output
+
+
+def test_only_best_of_n_and_abmcts_search_several_generators():
+    assert AgentConfig(strategy="abmcts", gen_models=MODELS).searched_generators() == MODELS
+    assert AgentConfig(strategy="best_of_n", gen_models=MODELS).searched_generators() == MODELS
+    assert AgentConfig(strategy="refine", gen_models=MODELS).searched_generators() == ()
+    assert AgentConfig(gen_models=MODELS[:1]).searched_generators() == ()  # one model: widths
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        (["--gen-model", "a", "--gen-model", "b", "--action", "wide"], "models are the actions"),
+        (["--strategy", "best_of_n", "--generator-selection", "2"], "only --strategy abmcts"),
+        (["--strategy", "refine", "--algorithm", "m"], "only --strategy abmcts runs AB-MCTS"),
+    ],
+)
+def test_options_the_run_would_ignore_are_refused(options, message):
+    result = CliRunner().invoke(cli_app, ["bench-spider2-exec", "/x", *options])
+    unboxed = " ".join(result.output.replace("│", " ").split())  # the error box wraps lines
+    assert result.exit_code == 2 and message in unboxed
+
+
+def test_ask_prints_each_generator_models_usage(capsys):
+    from schemagraph.cli import _print_answer
+
+    records = [
+        UsageRecord(role="generator", model="qwen", calls=1, cost_usd=0.02),
+        UsageRecord(role="generator", model="glm", calls=2, cost_usd=0.01),
+    ]
+    candidates = [Candidate(id="n0", generator="qwen"), Candidate(id="n1", generator="glm")]
+    result = AnswerResult(
+        question="q", sql=None, result=None, chosen_id=None, chosen_by=None, score=0.0,
+        strategy="best_of_n", budget=2, nodes=2, stopped_early=False, candidates=candidates,
+        usage=UsageSummary.of(records),
+    )  # fmt: skip
+    _print_answer(result)
+    lines = capsys.readouterr().out.splitlines()
+    model_lines = [line for line in lines if line.strip().startswith("model ")]
+    assert [line.split()[1] for line in model_lines] == ["glm", "qwen"]  # one line per model
