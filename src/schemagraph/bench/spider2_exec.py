@@ -86,6 +86,7 @@ _LEGACY_VALUES = {
     "rolling": False,
     "reasoning_node_timeout_s": None,
     "selector_context": False,
+    "gen_models": (),
 }
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6
@@ -433,7 +434,8 @@ def _run_config(
         "agent_config": agent_config,
         "weights": asdict(cfg.weights),
     }
-    if any(name.startswith("openrouter:") for name in models.names.values()):
+    every_model = {*models.names.values(), *models.generators}  # all the generators, not the first
+    if any(name.startswith("openrouter:") for name in every_model):
         # the reasoning effort changes the answers; recorded only when a model reads it, so the
         # hash of runs on other providers is unchanged
         config["reasoning"] = reasoning_level()
@@ -660,7 +662,13 @@ class _ExecBench:
 
 
 def _candidate_record(task: Instance, candidate: Candidate, match: int | None) -> dict:
-    """Return one candidate as the candidates file stores it."""
+    """Return one candidate as the candidates file stores it.
+
+    ``fingerprint`` groups candidates with the same result, so votes over a saved pool need
+    no second execution.
+    """
+    from schemagraph.agent.search import fingerprint
+
     judgement = candidate.judgement
     result = candidate.exec
     return {
@@ -669,6 +677,7 @@ def _candidate_record(task: Instance, candidate: Candidate, match: int | None) -
         "parent_id": candidate.parent_id,
         "depth": candidate.depth,
         "action": candidate.action,
+        "generator": candidate.generator,
         "sql": candidate.sql,
         "rationale": candidate.rationale,
         "advice": candidate.advice,
@@ -682,6 +691,7 @@ def _candidate_record(task: Instance, candidate: Candidate, match: int | None) -
         else [],
         "ok": bool(result and result.ok),
         "row_count": result.row_count if result else None,
+        "fingerprint": fingerprint(candidate),
         "error": candidate.error,
         "ex": match,
     }
@@ -733,6 +743,14 @@ def _score_task(runner: Runner, task: Instance, result: AnswerResult, standard: 
         "cost_usd": round(result.usage.total.cost_usd, COST_DECIMALS),
         "unpriced": result.usage.total.unpriced,
         "usage": usage,
+        "cost_by_model": {
+            model: round(summary.cost_usd, COST_DECIMALS)
+            for model, summary in result.usage.by_model.items()
+        },
+        # with several generator models, how the search split its nodes; empty with one
+        "nodes_by_generator": dict(
+            Counter(candidate.generator for candidate in result.candidates if candidate.generator)
+        ),
         "candidate_ex": candidate_ex,
         "sql": result.sql,
         "error": None if any_ran else all_failed(result.candidates),

@@ -6,11 +6,11 @@ import json
 import logging
 from importlib.util import find_spec
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast, get_args
 
 import typer
 
-from schemagraph.agent.results import Strategy
+from schemagraph.agent.results import Action, Strategy
 from schemagraph.engine import Engine
 
 if TYPE_CHECKING:
@@ -392,6 +392,26 @@ def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
     return AgentConfig(strategy=strategy, **settings)
 
 
+def _generators(names: list[str] | None) -> dict[str, Any]:
+    """Map ``--gen-model`` to agent settings: one model is ``gen_model``, several ``gen_models``.
+
+    One model keeps the setting earlier runs had, so their config hashes still match.
+    """
+    unique = tuple(dict.fromkeys(names or ()))
+    if len(unique) > 1:
+        return {"gen_models": unique}
+    return {"gen_model": unique[0]} if unique else {}
+
+
+def _search_actions(widths: list[str] | None) -> dict[str, Any]:
+    """Map ``--action`` to agent settings; none keeps both widths, the setting runs had."""
+    unique = dict.fromkeys(widths or ())
+    for width in unique:
+        if width not in get_args(Action):
+            raise typer.BadParameter(f"{width!r} is not tight or wide", param_hint="'--action'")
+    return {"actions": tuple(cast(Action, width) for width in unique)} if unique else {}
+
+
 def _quiet_mcp_logs() -> None:
     """Log the in-process MCP traffic only from WARNING up."""
     for name in _MCP_LOGGERS:
@@ -426,13 +446,22 @@ def _print_answer(result: AnswerResult) -> None:
         f"{result.ms / 1000:.1f}s, {_cost(result.usage.total)}"
     )
     for role, usage in result.usage.by_role.items():
-        errors = "" if usage.ok else " (errors)"
-        reasoning = f" reasoning={usage.reasoning_tokens}" if usage.reasoning_tokens else ""
-        typer.echo(
-            f"  {role:9} {usage.model:24} calls={usage.calls} requests={usage.requests} "
-            f"tokens={usage.input_tokens}/{usage.output_tokens}{reasoning} {_cost(usage)} "
-            f"{usage.ms / 1000:.1f}s{errors}"
-        )
+        typer.echo(_usage_line(role, usage))
+    generators = {candidate.generator for candidate in result.candidates if candidate.generator}
+    if len(generators) > 1:  # the generator line sums them: each model, over all its roles
+        for model in sorted(generators & set(result.usage.by_model)):
+            typer.echo(_usage_line("model", result.usage.by_model[model]))
+
+
+def _usage_line(label: str, usage: UsageRecord) -> str:
+    """Format one usage sum: its model, calls, requests, tokens, cost and time."""
+    errors = "" if usage.ok else " (errors)"
+    reasoning = f" reasoning={usage.reasoning_tokens}" if usage.reasoning_tokens else ""
+    return (
+        f"  {label:9} {usage.model:24} calls={usage.calls} requests={usage.requests} "
+        f"tokens={usage.input_tokens}/{usage.output_tokens}{reasoning} {_cost(usage)} "
+        f"{usage.ms / 1000:.1f}s{errors}"
+    )
 
 
 def _cost(usage: UsageRecord) -> str:
@@ -444,6 +473,29 @@ def _cost(usage: UsageRecord) -> str:
 StrategyOpt = Annotated[Strategy, typer.Option(help="abmcts | best_of_n | refine | single")]
 SelectorOpt = Annotated[
     bool, typer.Option(help="final pairwise pick among the top candidates")
+]
+GenModelOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--gen-model",
+        help=(
+            "generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max); repeat it "
+            "to search several together: the models become the actions (Multi-LLM AB-MCTS; "
+            "with --algorithm m the mixed model samples each new node's model)"
+        ),
+    ),
+]
+ActionOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--action",
+        metavar="tight|wide",
+        help=(
+            "schema context the search may use, tight or wide; repeat it for both (the "
+            "default). With several --gen-model the models are the actions and every node "
+            "links wide"
+        ),
+    ),
 ]
 AlgorithmOpt = Annotated[
     Literal["a", "m"],
@@ -493,12 +545,8 @@ def ask(
     budget: Annotated[int, typer.Option(help="generator nodes")] = 16,
     batch: Annotated[int, typer.Option(help="nodes generated concurrently")] = 4,
     seed: int = 0,
-    gen_model: Annotated[
-        str | None,
-        typer.Option(
-            help="generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max)"
-        ),
-    ] = None,
+    gen_model: GenModelOpt = None,
+    action: ActionOpt = None,
     judge_model: Annotated[
         str | None,
         typer.Option(
@@ -529,7 +577,8 @@ def ask(
         budget=budget,
         batch_size=batch,
         seed=seed,
-        gen_model=gen_model,
+        **_generators(gen_model),
+        **_search_actions(action),
         judge_model=judge_model,
         judge=judge,
         selector=selector,
@@ -583,7 +632,8 @@ def bench_spider2_exec(
     budget: int = 16,
     batch: int = 4,
     seed: int = 0,
-    gen_model: str | None = None,
+    gen_model: GenModelOpt = None,
+    action: ActionOpt = None,
     judge_model: str | None = None,
     selector: SelectorOpt = True,
     algorithm: AlgorithmOpt = "a",
@@ -643,7 +693,8 @@ def bench_spider2_exec(
         budget=budget,
         batch_size=batch,
         seed=seed,
-        gen_model=gen_model,
+        **_generators(gen_model),
+        **_search_actions(action),
         judge_model=judge_model,
         judge=True,
         selector=selector,
@@ -665,7 +716,8 @@ def bench_spider2_exec(
         from schemagraph.agent.models import DEFAULT_GEN_MODEL, DEFAULT_JUDGE_MODEL
         from schemagraph.bench import spider2_judge
 
-        judges = compare_judge or [DEFAULT_JUDGE_MODEL, gen_model or DEFAULT_GEN_MODEL]
+        generator = gen_model[0] if gen_model else DEFAULT_GEN_MODEL
+        judges = compare_judge or [DEFAULT_JUDGE_MODEL, generator]
         report = spider2_judge.judge_only(
             spider2_root,
             judges=judges,

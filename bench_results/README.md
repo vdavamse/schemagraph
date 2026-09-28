@@ -388,6 +388,17 @@ B's "min 8 nodes" was 10 to 11 in practice: its rolling loop counted only finish
 
 Replaying the final pick on run A's candidates with Jev re-deciding every pair (`judge_context_study/selector_replay_run_a.json`): top score alone 14, the selector with its old material 13, with the judge's context 13 (fixes local141 and local169, breaks local019 and local330). `selector_context` ships off.
 
+**Multi-LLM AB-MCTS-M: prepared, not run (2026-09-28).** Repeating `--gen-model` searches several generator models together, as in the paper's appendix D (arXiv 2503.04412). The search's actions become the models (no longer the tight/wide context widths; every node links the wide context), and the first model is also the default generator and the critic. With `--algorithm m`, TreeQuest's default model selection is the paper's generator selection algorithm I: the section 3.3 mixed model decides between a new node and a refinement, then a second mixed model with the generators as groups (eq. 22) samples the new node's model by Thompson sampling. Candidates now record their `generator` and a result `fingerprint`; rows record `nodes_by_generator` and `cost_by_model`.
+
+- **Held-out tasks.** The 21-task subset has been tuned on. `spider2_exec_heldout60.txt` (`select_heldout.py`) takes 60 of the other 114 local tasks: 20 from each third by SQLite table count (4–10, 11–17, 17–38 tables; the same thirds as the subset, 7 subset tasks in each), round-robin over databases. No held-out task has an empty gold result.
+- **Runs.** `run_multi_llm.sh`: `SMOKE=1` first (one draft from each model on 2 tasks, about $0.30), then single-LLM AB-MCTS-M with Qwen against AB-MCTS-M over Qwen 3.8 Max, GLM-5.3, Grok 4.7, Gemini 3.8 Flash and GPT-6 Sol, both at budget 16 with run B's settings. The Qwen run searches the wide context only (`--action wide`), as the multi-LLM run does, so the two differ only in the models. Estimated $40 and $36 at list prices, about 10 hours each.
+- **Caveats.**
+  - The paper has no result for this exact setup. Its multi-LLM evidence is Pass@k on ARC-AGI-2 at 250 calls with AB-MCTS-A and generator selection algorithm II (one GEN node per model, TreeQuest's `stack` strategy). AB-MCTS-M with algorithm I is described (eq. 22) but not measured. With `--algorithm a`, repeating `--gen-model` gives AB-MCTS-A with algorithm I: one shared choice between a new node and a refinement, then independent per-model Thompson sampling.
+  - At 16 nodes over five models each model gets about three nodes a task. The mixed model shares μα, σα and σy across the models, so a model with few nodes borrows strength from the others; each model's own intercept still rests on its few nodes.
+  - Jev's scores steer the model choice (within-task AUROC 0.73 on run B), so a model whose wrong queries Jev scores high attracts nodes. Check the mean score of each model's wrong candidates.
+  - GPT-6 Sol takes no `temperature` (OpenRouter drops it), so its drafts vary only by its own sampling.
+- **Decision rule, set before the runs.** Multi-LLM earns its keep only if it beats single-LLM by at least 3 of 60 tasks in EX, or in oracle by more with EX no worse.
+
 ## Reading the numbers against the literature
 
 The Spider 2.0 leaderboard scores execution accuracy of end-to-end text-to-SQL. schemagraph

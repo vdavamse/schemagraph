@@ -11,6 +11,7 @@ import json
 import os
 import threading
 import time
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -51,8 +52,10 @@ from schemagraph.agent.schema_client import SchemaClient  # noqa: E402
 from schemagraph.agent.search import (  # noqa: E402
     _abmcts_algorithm,
     _refine_action,
+    new_node,
     run_search,
     select_final,
+    split_action,
 )
 from schemagraph.cli import app as cli_app  # noqa: E402
 from schemagraph.connectors.ddl import DDLConfig, parse_ddl  # noqa: E402
@@ -1248,3 +1251,167 @@ def test_a_refinement_sees_the_rubric_the_rationale_and_earlier_siblings():
     assert "already tried" not in generator_prompt(
         "q", None, "tight", "ddl", 1, parent, evidence_chars=0
     )
+
+
+# ------------------------------------------------------------------ several generator models
+MODELS = ("qwen", "glm", "grok")
+
+
+def fake_mixed_generate(log: list[tuple], cfg: AgentConfig, score: float = 0.5):
+    """Like fake_generate, for actions that name generator models."""
+
+    async def generate(node_id, parent, action):
+        log.append((node_id, parent.id if parent else None, action))
+        generator, context = split_action(cfg, action)
+        node = new_node(node_id, parent, context, generator=generator, score=score)
+        node.sql, node.exec = f"select {node_id}", ExecResult(ok=True, rows=[[node_id]], row_count=1)
+        return node
+
+    return generate
+
+
+def test_an_action_names_the_generator_when_several_are_searched():
+    several = AgentConfig(gen_models=MODELS)
+    assert split_action(several, "glm") == ("glm", "wide")  # every model links the wide context
+    assert split_action(several, "tight") == ("qwen", "tight")  # single, refine: the first model
+    assert split_action(AgentConfig(), "tight") == (None, "tight")  # one generator: a width
+
+
+def test_best_of_n_cycles_the_generators_and_abmcts_chooses_among_them():
+    pytest.importorskip("treequest")
+    cfg = AgentConfig(strategy="best_of_n", budget=6, batch_size=3, gen_models=MODELS)
+    log: list[tuple] = []
+    asyncio.run(run_search(fake_mixed_generate(log, cfg), cfg))
+    assert [action for _, _, action in log] == list(MODELS) * 2  # round-robin, no context action
+
+    tree = replace(cfg, strategy="abmcts", budget=8, batch_size=2)
+    log.clear()
+    trace = asyncio.run(run_search(fake_mixed_generate(log, tree), tree))
+    assert trace.nodes == 8 and {action for _, _, action in log} <= set(MODELS)
+    assert {node.generator for node in trace.candidates} <= set(MODELS)
+    assert {node.action for node in trace.candidates} == {"wide"}
+
+
+def test_a_failed_node_keeps_its_generator():
+    cfg = AgentConfig(strategy="best_of_n", budget=2, batch_size=2, gen_models=MODELS[:2])
+
+    async def failing(node_id, parent, action):
+        raise RuntimeError("provider down")
+
+    trace = asyncio.run(run_search(failing, cfg))
+    assert [(node.generator, node.action) for node in trace.candidates] == [
+        ("qwen", "wide"), ("glm", "wide"),
+    ]  # fmt: skip
+    assert all("provider down" in node.error for node in trace.candidates)
+
+
+@pytest.mark.skipif(not SLOW, reason="MCMC fits, about a minute; set SCHEMAGRAPH_SLOW_TESTS=1")
+def test_abmcts_m_samples_the_generator_of_each_new_node():
+    pytest.importorskip("pymc")
+    cfg = AgentConfig(budget=4, batch_size=1, abmcts_algorithm="m", gen_models=MODELS[:2])
+    log: list[tuple] = []
+    trace = asyncio.run(run_search(fake_mixed_generate(log, cfg), cfg))
+    assert trace.nodes == 4 and {action for _, _, action in log} <= set(MODELS[:2])
+
+
+def test_each_node_is_written_by_the_model_its_action_names(store):
+    scripts = {name: Script() for name in MODELS[:2]}
+    generators = {name: FunctionModel(script.gen) for name, script in scripts.items()}
+    judge = FunctionModel(judge_fn())
+    names = {**NAMES, "generator": "qwen"}
+    models = AgentModels(generators["qwen"], judge, judge, None, names, generators)
+    cfg = AgentConfig(
+        strategy="best_of_n", budget=2, batch_size=2, gen_models=MODELS[:2], selector=False
+    )
+    result = _answer(store, cfg, models)
+    by_id = {node.id: node for node in result.candidates}
+    assert (by_id["n0"].generator, by_id["n1"].generator) == ("qwen", "glm")
+    assert all(script.calls > 0 for script in scripts.values())  # both models wrote a node
+    assert {"qwen", "glm"} <= set(result.usage.by_model)  # usage records each model by name
+
+
+def test_several_generators_resolve_once_each(monkeypatch):
+    resolved: list[str] = []
+
+    def resolve(name):
+        resolved.append(name)
+        return TestModel()
+
+    monkeypatch.setattr(agent_models, "resolve_model", resolve)
+    monkeypatch.delenv("SCHEMAGRAPH_REASONING", raising=False)
+    cfg = AgentConfig(gen_models=("openrouter:z-ai/glm-5.3", "alibaba:qwen"), judge_model="j")
+    models = AgentModels.resolve(cfg)
+    assert models.names["generator"] == models.names["critic"] == "openrouter:z-ai/glm-5.3"
+    assert sorted(resolved) == sorted(["openrouter:z-ai/glm-5.3", "alibaba:qwen", "j"])
+    assert models.generator("alibaba:qwen")[1] == "alibaba:qwen"
+    assert models.generator(None)[1] == "openrouter:z-ai/glm-5.3"
+    assert models.reasoning("generator")  # one openrouter generator reasons, so the node waits
+
+
+def test_repeating_gen_model_searches_several_generators():
+    from schemagraph.cli import _generators
+
+    assert _generators(None) == {}
+    assert _generators(["qwen"]) == {"gen_model": "qwen"}  # one model: the setting runs had
+    assert _generators(["qwen", "glm", "qwen"]) == {"gen_models": ("qwen", "glm")}
+
+
+def test_an_unknown_generator_is_an_error_not_the_default():
+    names = {**NAMES, "generator": "qwen"}
+    models = AgentModels("qwen-model", None, None, None, names, {"glm": "glm-model"})
+    assert models.generator(None) == models.generator("qwen") == ("qwen-model", "qwen")
+    assert models.generator("glm") == ("glm-model", "glm")
+    with pytest.raises(KeyError):  # recording "grok" on a node qwen wrote would skew the stats
+        models.generator("grok")
+
+
+def test_only_strategies_that_search_the_generators_resolve_them(monkeypatch):
+    resolved: list[str] = []
+    monkeypatch.setattr(agent_models, "resolve_model", lambda name: resolved.append(name) or name)
+    single = AgentConfig(strategy="single", gen_models=MODELS, judge=False, selector=False)
+    assert AgentModels.resolve(single).generators == {} and resolved == ["qwen"]  # first only
+    resolved.clear()
+    tree = replace(single, strategy="abmcts")
+    assert list(AgentModels.resolve(tree).generators) == list(MODELS)
+
+
+def test_each_generator_gets_its_own_reasoning_headroom(monkeypatch):
+    monkeypatch.delenv("SCHEMAGRAPH_REASONING", raising=False)
+    names = {**NAMES, "generator": "alibaba:qwen"}
+    answerer = SimpleNamespace(models=AgentModels(None, None, None, None, names))
+    reasoning = Answerer._limits(answerer, "generator", 4096, 120.0, model_name="openrouter:z-ai/glm")
+    plain = Answerer._limits(answerer, "generator", 4096, 120.0, model_name="alibaba:qwen")
+    assert reasoning == {"timeout": REASONING_TIMEOUT_S, "max_tokens": 4096 + REASONING_MAX_TOKENS}
+    assert plain == {"timeout": 120.0, "max_tokens": 4096}
+
+
+def test_a_refinement_is_written_by_its_model_and_advised_by_the_first(store):
+    scripts = {name: Script() for name in MODELS[:2]}
+    generators = {name: FunctionModel(script.gen) for name, script in scripts.items()}
+    judge, critic_calls = FunctionModel(judge_fn()), []
+    names = {**NAMES, "generator": "qwen"}
+    critic = FunctionModel(critic_fn(critic_calls))
+    models = AgentModels(generators["qwen"], judge, judge, critic, names, generators)
+    answerer = _answerer(store, AgentConfig(gen_models=MODELS[:2]), models)
+
+    async def draft_then_refine():
+        async with answerer.schema, answerer._toolset:
+            await answerer.prepare(QUESTION)
+            draft = await answerer.generate("n0", None, "qwen")
+            return draft, await answerer.generate("n1", draft, "glm")
+
+    draft, refinement = asyncio.run(draft_then_refine())
+    assert (draft.generator, refinement.generator) == ("qwen", "glm")
+    assert refinement.parent_id == "n0" and scripts["glm"].calls > 0
+    assert critic_calls == [1]  # the critic ran once, on the default critic model
+    critic_models = {record.model for record in answerer.records if record.role == "critic"}
+    assert critic_models == {"c"}
+
+
+def test_action_restricts_the_context_widths():
+    from schemagraph.cli import _search_actions
+
+    assert _search_actions(None) == {}  # both widths, the setting runs had
+    assert _search_actions(["wide", "wide"]) == {"actions": ("wide",)}
+    result = CliRunner().invoke(cli_app, ["bench-spider2-exec", "/x", "--action", "narrow"])
+    assert result.exit_code == 2 and "is not tight or wide" in result.output

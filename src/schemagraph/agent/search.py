@@ -4,14 +4,17 @@ Every strategy calls the same ``generate(node_id, parent, action)`` (already sco
 budget the strategy is the only variable:
 
 * ``single``    one draft;
-* ``best_of_n`` N independent drafts, breadth only (BestOfN; drafts alternate the tight and wide
-  context actions);
+* ``best_of_n`` N independent drafts, breadth only (BestOfN; drafts cycle through the actions);
 * ``refine``    a chain, each node refining the previous one with its feedback (deep only; the
   pattern of DSPy's Refine, implemented here; DSPy is not a dependency);
 * ``abmcts``    TreeQuest AB-MCTS, ``ABMCTSA`` or ``ABMCTSM`` (``AgentConfig.abmcts_algorithm``):
   decides between a new child (a draft at the root, "wider") and expanding an existing one (a
-  refinement, "deeper"), and between the ``tight`` and ``wide`` context actions. Lockstep batches,
-  or a rolling loop that asks for the next trial as each node finishes (``AgentConfig.rolling``).
+  refinement, "deeper"), and between the actions. Lockstep batches, or a rolling loop that asks
+  for the next trial as each node finishes (``AgentConfig.rolling``).
+
+The actions are the ``tight`` and ``wide`` schema contexts, or, with several generator models
+(``AgentConfig.gen_models``), the models themselves: the paper's Multi-LLM AB-MCTS, where every
+node links the wide context (:func:`split_action`).
 
 The final pick is the same for every multi-node strategy: top-k by score, deduplicated by result,
 then a round-robin both-order pairwise selector.
@@ -31,7 +34,9 @@ from typing import Any, cast
 
 from schemagraph.agent.results import Action, AgentConfig, Candidate
 
-GenerateFn = Callable[[str, Candidate | None, Action], Awaitable[Candidate]]
+# generate(node id, parent or None, action): the action is a context width, or a generator
+# model when several are searched (see split_action).
+GenerateFn = Callable[[str, Candidate | None, str], Awaitable[Candidate]]
 # p(first is better), from one selector call.
 PickFn = Callable[[Candidate, Candidate], Awaitable[float]]
 # Selector preferences: candidate id -> other candidate id -> p(the first is better).
@@ -96,37 +101,50 @@ def new_node(node_id: str, parent: Candidate | None, action: Action, **fields: A
     )
 
 
+def split_action(cfg: AgentConfig, action: str) -> tuple[str | None, Action]:
+    """Return the generator model a node's action picks and the context it links.
+
+    With several generator models (``cfg.gen_models``) an action names one of them and every
+    node links the wide context; a width, which the ``single`` and ``refine`` strategies pass,
+    then goes to the first model. With one generator the model is None and the action is the
+    context width.
+    """
+    if action in cfg.gen_models:
+        return action, "wide"
+    default = cfg.gen_models[0] if cfg.gen_models else None
+    return default, cast(Action, action)
+
+
 def _trial_node(
-    generate: GenerateFn,
-    node_id: str,
-    trial: Any,
-    timeout_s: float,
+    generate: GenerateFn, cfg: AgentConfig, node_id: str, trial: Any
 ) -> Awaitable[Candidate]:
     """Generate the node of a TreeQuest trial, whose parent state is a Candidate (None at root)."""
     parent = cast(Candidate | None, trial.parent_state)
-    action = cast(Action, trial.action)
-    return _safe(generate, node_id, parent, action, timeout_s)
+    return _safe(generate, cfg, node_id, parent, trial.action)
 
 
 async def _safe(
     generate: GenerateFn,
+    cfg: AgentConfig,
     node_id: str,
     parent: Candidate | None,
-    action: Action,
-    timeout_s: float,
+    action: str,
 ) -> Candidate:
-    """Generate one node; a failure or a timeout is a score-0 node.
+    """Generate one node within ``cfg.node_timeout_s``; a failure or a timeout is a score-0 node.
 
     The budget then stays exact and the tree consistent.
     """
     try:
-        return await asyncio.wait_for(generate(node_id, parent, action), timeout_s)
+        return await asyncio.wait_for(generate(node_id, parent, action), cfg.node_timeout_s)
     except Exception as error:
         if isinstance(error, TimeoutError):
             message = "node timed out"
         else:
             message = f"{type(error).__name__}: {error}"
-        return new_node(node_id, parent, action, error=message[:NODE_ERROR_CHARS])
+        generator, context = split_action(cfg, action)
+        return new_node(
+            node_id, parent, context, generator=generator, error=message[:NODE_ERROR_CHARS]
+        )
 
 
 async def run_search(generate: GenerateFn, cfg: AgentConfig) -> SearchTrace:
@@ -150,7 +168,10 @@ async def run_search(generate: GenerateFn, cfg: AgentConfig) -> SearchTrace:
     return trace
 
 
-def _actions(cfg: AgentConfig) -> list[Action]:
+def _actions(cfg: AgentConfig) -> list[str]:
+    """Return the search's actions: the generator models when there are several, else widths."""
+    if len(cfg.gen_models) > 1:
+        return list(cfg.gen_models)
     return list(cfg.actions) or ["wide"]
 
 
@@ -194,7 +215,7 @@ async def _single(
     budget: int,
 ) -> None:
     """One wide draft."""
-    trace.candidates.append(await _safe(generate, ids(), None, "wide", cfg.node_timeout_s))
+    trace.candidates.append(await _safe(generate, cfg, ids(), None, "wide"))
 
 
 async def _best_of_n(
@@ -204,16 +225,13 @@ async def _best_of_n(
     ids: _NodeIds,
     budget: int,
 ) -> None:
-    """Independent drafts in batches, cycling through the context actions."""
+    """Independent drafts in batches, cycling through the actions (widths or models)."""
     actions = _actions(cfg)
     while _searching(trace, cfg, budget):
         size = min(cfg.batch_size, budget - trace.nodes)
         batch = [(ids(), actions[(trace.nodes + i) % len(actions)]) for i in range(size)]
         trace.candidates += await asyncio.gather(
-            *(
-                _safe(generate, node_id, None, action, cfg.node_timeout_s)
-                for node_id, action in batch
-            )
+            *(_safe(generate, cfg, node_id, None, action) for node_id, action in batch)
         )
 
 
@@ -228,7 +246,7 @@ async def _refine(
     parent: Candidate | None = None
     while _searching(trace, cfg, budget):
         action: Action = "wide" if parent is None else _refine_action(parent)
-        parent = await _safe(generate, ids(), parent, action, cfg.node_timeout_s)
+        parent = await _safe(generate, cfg, ids(), parent, action)
         trace.candidates.append(parent)
 
 
@@ -303,7 +321,7 @@ async def _abmcts_lockstep(
         state, trials = await asyncio.to_thread(_ask, algorithm, cfg, state, size, actions)
         batch = [(ids(), trial) for trial in trials]
         nodes = await asyncio.gather(
-            *(_trial_node(generate, node_id, trial, cfg.node_timeout_s) for node_id, trial in batch)
+            *(_trial_node(generate, cfg, node_id, trial) for node_id, trial in batch)
         )
         for (_, trial), node in zip(batch, nodes, strict=True):
             state = _tell(algorithm, state, trial, node)
@@ -338,7 +356,7 @@ async def _abmcts_rolling(
         nonlocal state
         state, trials = await asyncio.to_thread(_ask, algorithm, cfg, state, count, actions)
         for trial in trials:
-            task = asyncio.ensure_future(_trial_node(generate, ids(), trial, cfg.node_timeout_s))
+            task = asyncio.ensure_future(_trial_node(generate, cfg, ids(), trial))
             in_flight[task] = trial
 
     try:
@@ -365,7 +383,7 @@ def _ask(
     cfg: AgentConfig,
     state: Any,
     count: int,
-    actions: list[Action],
+    actions: list[str],
 ) -> tuple[Any, list[Any]]:
     """Ask TreeQuest for ``count`` trials; AB-MCTS-M fits under :data:`_ABMCTS_M_LOCK`.
 
@@ -374,7 +392,7 @@ def _ask(
         cfg: The search settings; ``cfg.abmcts_algorithm`` decides whether to take the lock.
         state: The algorithm's tree state.
         count: Trials to ask for.
-        actions: The context actions a trial may take.
+        actions: The actions a trial may take: context widths, or generator models.
 
     Returns:
         The new tree state and the trials, as ``algorithm.ask_batch`` returns them.

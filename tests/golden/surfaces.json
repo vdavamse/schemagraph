@@ -2336,7 +2336,16 @@
      ],
      "None",
      "str",
-     "generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max)"
+     "generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max); repeat it to search several together: the models become the actions (Multi-LLM AB-MCTS; with --algorithm m the mixed model samples each new node's model)"
+    ],
+    [
+     "action",
+     [
+      "--action"
+     ],
+     "None",
+     "str",
+     "schema context the search may use, tight or wide; repeat it for both (the default). With several --gen-model the models are the actions and every node links wide"
     ],
     [
      "judge_model",
@@ -2590,7 +2599,16 @@
      ],
      "None",
      "str",
-     null
+     "generator model (default $SCHEMAGRAPH_GEN_MODEL or alibaba:qwen3.8-max); repeat it to search several together: the models become the actions (Multi-LLM AB-MCTS; with --algorithm m the mixed model samples each new node's model)"
+    ],
+    [
+     "action",
+     [
+      "--action"
+     ],
+     "None",
+     "str",
+     "schema context the search may use, tight or wide; repeat it for both (the default). With several --gen-model the models are the actions and every node links wide"
     ],
     [
      "judge_model",

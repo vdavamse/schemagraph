@@ -22,7 +22,7 @@ from schemagraph.agent import agents, prompts
 from schemagraph.agent.checks import det_of, join_keys, result_checks, static_checks, tables_read
 from schemagraph.agent.execute import Executor
 from schemagraph.agent.guard import GuardedSQL, GuardError, guard_sql
-from schemagraph.agent.models import AgentModels
+from schemagraph.agent.models import AgentModels, reasons
 from schemagraph.agent.results import (
     Action,
     AgentConfig,
@@ -41,7 +41,7 @@ from schemagraph.agent.results import (
 )
 from schemagraph.agent.schema_client import LinkedSchema, SchemaClient
 from schemagraph.agent.score import combine, feedback
-from schemagraph.agent.search import new_node, run_search, select_final
+from schemagraph.agent.search import new_node, run_search, select_final, split_action
 from schemagraph.model import Edge
 
 # Output tokens of one generator response.
@@ -175,9 +175,15 @@ class Answerer:
             ms=(time.perf_counter() - started) * 1000,
         )
 
-    def _limits(self, role: str, max_tokens: int | None, timeout: float) -> dict[str, Any]:
-        """Return ``role``'s output-token cap and request timeout, widened when it reasons."""
-        if self.models.reasoning(role):
+    def _limits(
+        self, role: str, max_tokens: int | None, timeout: float, *, model_name: str | None = None
+    ) -> dict[str, Any]:
+        """Return ``role``'s output-token cap and request timeout, widened when its model reasons.
+
+        ``model_name`` names the model when the role has several (the generators).
+        """
+        reasoning = reasons(model_name) if model_name else self.models.reasoning(role)
+        if reasoning:
             max_tokens = (max_tokens or 0) + REASONING_MAX_TOKENS
             timeout = max(timeout, REASONING_TIMEOUT_S)
         limits: dict[str, Any] = {"timeout": timeout}
@@ -207,15 +213,21 @@ class Answerer:
             return self.cfg
         return replace(self.cfg, node_timeout_s=max(self.cfg.node_timeout_s, reasoning_timeout))
 
-    async def generate(self, node_id: str, parent: Candidate | None, action: Action) -> Candidate:
-        """Generate and score one search node: a draft, or a refinement of ``parent``."""
+    async def generate(self, node_id: str, parent: Candidate | None, action: str) -> Candidate:
+        """Generate and score one search node: a draft, or a refinement of ``parent``.
+
+        ``action`` is the context width, or the generator model when several are searched.
+        """
         started = time.perf_counter()
-        linked = await self._link(action)
+        generator, context = split_action(self.cfg, action)
+        linked = await self._link(context)
         if parent is not None:
             await self._ensure_advice(parent)
-        candidate = new_node(node_id, parent, action, linked_tables=list(linked.tables))
+        candidate = new_node(
+            node_id, parent, context, generator=generator, linked_tables=list(linked.tables)
+        )
         try:
-            output = await self._write_sql(node_id, parent, action, linked)
+            output = await self._write_sql(node_id, parent, context, linked, generator)
         except Exception as error:
             candidate.error = f"{type(error).__name__}: {error}"[: agents.FAILURE_CHARS]
             candidate.feedback = [f"generation failed: {candidate.error}"]
@@ -238,20 +250,32 @@ class Answerer:
         self,
         node_id: str,
         parent: Candidate | None,
-        action: Action,
+        context: Action,
         linked: LinkedSchema,
+        generator: str | None,
     ) -> SqlCandidate:
         """Run the generator for one node.
+
+        Args:
+            node_id: The node's id, for usage records and traces.
+            parent: The node to refine; None for a fresh draft.
+            context: The width of the linked context, named in the prompt.
+            linked: The schema context the generator sees.
+            generator: The generator model; None is the default one.
+
+        Returns:
+            The generator's query, rationale and tables.
 
         Raises:
             Exception: The generator failed; the node records the error.
         """
+        model, model_name = self.models.generator(generator)
         # earlier refinements of the same parent, so this one does not repeat them
         siblings = list(self._refinements.get(parent.id, [])) if parent else None
         prompt = prompts.generator_prompt(
             self.question,
             self.evidence,
-            action,
+            context,
             linked.ddl,
             len(linked.tables),
             parent,
@@ -263,8 +287,8 @@ class Answerer:
             "generator",
             agents.generator(),
             prompt,
-            model=self.models.gen,
-            model_name=self.models.names["generator"],
+            model=model,
+            model_name=model_name,
             node_id=node_id,
             sink=self.records,
             transcripts=self.transcripts,
@@ -272,7 +296,9 @@ class Answerer:
             toolsets=[self._toolset],
             model_settings={
                 "temperature": temperature,
-                **self._limits("generator", GEN_MAX_TOKENS, GEN_TIMEOUT_S),
+                **self._limits(
+                    "generator", GEN_MAX_TOKENS, GEN_TIMEOUT_S, model_name=model_name
+                ),
             },
             usage_limits=agents.generator_limits(),
             retries={"tools": 1, "output": self.cfg.output_retries},

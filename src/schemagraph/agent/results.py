@@ -334,6 +334,8 @@ class Candidate(BaseModel):
         parent_id: The node this one refines, if any.
         depth: Refinement depth; drafts are 0.
         action: Which schema context the generator saw.
+        generator: The generator model that wrote it when ``AgentConfig.gen_models`` names
+            several; None with a single generator.
         sql: The generated query.
         rationale: The generator's explanation.
         tables_used: Tables the generator says the query reads.
@@ -354,6 +356,7 @@ class Candidate(BaseModel):
     parent_id: str | None = None
     depth: int = 0
     action: Action = "wide"
+    generator: str | None = None
     sql: str = ""
     rationale: str = ""
     tables_used: list[str] = Field(default_factory=list)
@@ -462,6 +465,15 @@ class AgentConfig:
             candidate scores 1.0 and stops the search.
         seed: Random seed of the search (AB-MCTS-A; AB-MCTS-M samples unseeded).
         gen_model: Generator model; None reads the environment, then the default.
+        gen_models: Generator models searched together, the paper's Multi-LLM AB-MCTS
+            (arXiv 2503.04412, appendix D). With two or more, the search's actions are these
+            models instead of the context widths, every node links the wide context, and
+            ``gen_model`` is ignored; the first model is the default generator (``single``,
+            ``refine``) and critic. Meant for AB-MCTS-M (``abmcts_algorithm="m"``), which
+            decides between a new node and a refinement, then samples a new node's model with
+            the generators as groups of its mixed model (the paper's generator selection
+            algorithm I, eq. 22); AB-MCTS-A samples it by independent per-model Thompson
+            sampling instead.
         judge_model: Judge and selector model; None reads the environment, then the default.
         critic_model: Critic model; None reads the environment, then uses the generator's.
         probe_limit: ``run_query`` probes the generator may make per node.
@@ -508,6 +520,7 @@ class AgentConfig:
     judge: bool = True
     seed: int = 0
     gen_model: str | None = None
+    gen_models: tuple[str, ...] = ()
     judge_model: str | None = None
     critic_model: str | None = None
     probe_limit: int = 3

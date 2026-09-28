@@ -176,11 +176,15 @@ def test_run_scores_with_the_official_comparison_and_resumes(tmp_path):
     assert rows["local901"]["ex"] == 1 and rows["local901"]["ex_by_score"] == 1  # judge: filtered
     assert rows["local902"]["ex"] == 1 and rows["local902"]["table_recall"] == 1.0
     assert rows["local902"]["cost_usd"] == 0.0 and rows["local902"]["unpriced"] > 0  # scripted
+    assert rows["local902"]["nodes_by_generator"] == {}  # one generator
+    assert set(rows["local902"]["cost_by_model"]) == {"g", "j"}
     assert result["summary"]["overall"]["ex"] == 100.0 and result["summary"]["overall"]["n"] == 2
     assert "mcp_url" not in result["config"]["agent_config"]
     assert (out / "spider2_exec_t.json").exists() and (out / "spider2_exec_t.csv").exists()
     candidates = (out / "spider2_exec_t_candidates.jsonl").read_text().splitlines()
     assert len(candidates) == 4 and {json.loads(line)["ex"] for line in candidates} == {0, 1}
+    for record in map(json.loads, candidates):  # executed candidates carry their result's hash
+        assert (record["fingerprint"] is not None) == record["ok"]
 
     again = spider2_exec.run(root, cfg=cfg, models=models, out_dir=out, tag="t")
     assert len(again["rows"]) == 2  # resume: nothing to do
@@ -260,6 +264,9 @@ def test_config_hash_ignores_the_mcp_url_and_concurrency():
     assert plain["config_hash"] == served["config_hash"] == PRE_REFACTOR_DEFAULT_HASH
     current = _run_config(AgentConfig(), models, seed=0, use_docs=True, concurrency=1)
     assert current["config_hash"] != PRE_REFACTOR_DEFAULT_HASH  # the judge context changes answers
+    mixed = _legacy_config(gen_models=("qwen", "glm"))
+    several = _run_config(mixed, models, seed=0, use_docs=True, concurrency=1)
+    assert several["config_hash"] != PRE_REFACTOR_DEFAULT_HASH  # several generators count
 
 
 def test_the_reasoning_node_timeout_counts_only_for_a_reasoning_generator(monkeypatch):
@@ -291,6 +298,22 @@ def test_config_records_the_reasoning_effort_only_for_openrouter_models(monkeypa
     monkeypatch.setenv("SCHEMAGRAPH_REASONING", "low")
     low = _run_config(AgentConfig(), models, seed=0, use_docs=True, concurrency=1)
     assert high["reasoning"] == "high" and high["config_hash"] != low["config_hash"]
+
+
+def test_the_reasoning_effort_counts_when_any_generator_reads_it(monkeypatch):
+    from schemagraph.agent.models import AgentModels
+    from schemagraph.bench.spider2_exec import _run_config
+
+    names = {"generator": "alibaba:qwen", "judge": "j", "selector": "j", "critic": "alibaba:qwen"}
+    generators = {"alibaba:qwen": None, "openrouter:z-ai/glm-5.3": None}  # only the second reasons
+    models = AgentModels(None, None, None, None, names, generators)
+    cfg = _legacy_config(gen_models=tuple(generators))
+
+    def hash_at(level):
+        monkeypatch.setenv("SCHEMAGRAPH_REASONING", level)
+        return _run_config(cfg, models, seed=0, use_docs=True, concurrency=1)["config_hash"]
+
+    assert hash_at("low") != hash_at("high")  # a rerun at another effort does not resume
 
 
 def test_summary_reports_the_cost_per_task():
@@ -345,7 +368,7 @@ def test_judge_only_reports_auroc(tmp_path):
         _spider2(tmp_path / "s2"),
         judges=["j"],
         judge_models={"j": FunctionModel(scripted.judge)},
-        gen_models=scripted.agent_models(),
+        pool_models=scripted.agent_models(),
         cfg=AgentConfig(),
         pool_size=2,
         out_dir=tmp_path / "out",
@@ -375,9 +398,9 @@ def test_judge_pool_retries_failed_generations(tmp_path):
         "out_dir": tmp_path / "out",
         "tag": "p",
     }
-    first = spider2_judge.judge_only(root, gen_models=down, **settings)
+    first = spider2_judge.judge_only(root, pool_models=down, **settings)
     assert first["tasks"] == 0 and first["pool_errors"] == 2
-    second = spider2_judge.judge_only(root, gen_models=scripted.agent_models(), **settings)
+    second = spider2_judge.judge_only(root, pool_models=scripted.agent_models(), **settings)
     assert second["tasks"] == 2 and second["pool_errors"] == 0
     assert second["judges"]["j"]["n"] == 4
 
