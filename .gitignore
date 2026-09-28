@@ -11,3 +11,5 @@ web/dist/
 .env
 
 bench_results/*.log
+# raw model-call traces (bench-spider2-exec --trace); commit the .jsonl.gz
+bench_results/*_messages.jsonl

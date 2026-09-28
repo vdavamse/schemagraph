@@ -61,6 +61,12 @@ JUDGE_STATS_COLUMNS = 20
 PICK_SQL_CHARS = 4000
 # Result rows shown per candidate to the selector.
 PICK_PREVIEW_ROWS = 6
+# Characters of a parent's rationale shown to a refinement.
+RATIONALE_CHARS = 1000
+# Characters of each earlier refinement's SQL shown to a refinement.
+SIBLING_SQL_CHARS = 1500
+# Earlier refinements of the same parent shown to a refinement, at most.
+MAX_SIBLINGS = 3
 # Schema DDL characters shown to the critic.
 CRITIC_SCHEMA_CHARS = 6000
 
@@ -103,21 +109,52 @@ def _problems(feedback: list[str]) -> str:
     return "Problems found:\n" + "\n".join(f"- {line}" for line in feedback)
 
 
-def _refine_sections(parent: Candidate) -> list[str]:
-    """Show the generator a previous attempt and what was wrong with it."""
-    sections = [
+def _rubric_line(candidate: Candidate) -> str:
+    """Format the judge's rubric of a candidate, weakest first: ``right_grain 0.24, ...``."""
+    if not candidate.judgement or not candidate.judgement.fields:
+        return ""
+    fields = sorted(candidate.judgement.fields.items(), key=lambda item: item[1])
+    return ", ".join(f"{name} {value:.2f}" for name, value in fields)
+
+
+def _refine_sections(parent: Candidate, siblings: list[Candidate] | None = None) -> list[str]:
+    """Show the generator a previous attempt, what was wrong with it and what was tried on it.
+
+    ``siblings`` are earlier refinements of the same parent: shown so that a new refinement does
+    not repeat a change that already failed.
+    """
+    attempt = (
         f"Previous attempt (score {parent.score:.2f}):\n"
         f"SQL:\n{parent.sql or '(none)'}\n"
         f"Result: {preview(parent.exec, ATTEMPT_PREVIEW_ROWS)}"
-    ]
+    )
+    if rubric := _rubric_line(parent):
+        attempt += f"\nJudge, weakest first (1 = yes): {rubric}"
+    if parent.rationale:
+        attempt += f"\nIts author's reasoning: {parent.rationale[:RATIONALE_CHARS]}"
+    sections = [attempt]
     if parent.error:
         sections.append(f"The attempt failed: {parent.error}")
     if parent.feedback:
         sections.append(_problems(parent.feedback))
     if parent.advice:
         sections.append(f"Reviewer advice:\n{parent.advice}")
+    if siblings_text := _siblings_section(siblings or []):
+        sections.append(siblings_text)
     sections.append("Write an improved query.")
     return sections
+
+
+def _siblings_section(siblings: list[Candidate]) -> str:
+    """List the last :data:`MAX_SIBLINGS` refinements that wrote SQL; empty when there are none."""
+    tried = [sibling for sibling in siblings if sibling.sql][-MAX_SIBLINGS:]
+    if not tried:
+        return ""
+    lines = ["Other refinements of this attempt, already tried (do not repeat them):"]
+    for sibling in tried:
+        sql = " ".join(sibling.sql.split())[:SIBLING_SQL_CHARS]  # on one line
+        lines.append(f"- score {sibling.score:.2f}; {preview(sibling.exec, 0)}\n  SQL: {sql}")
+    return "\n".join(lines)
 
 
 def generator_prompt(
@@ -129,6 +166,7 @@ def generator_prompt(
     parent: Candidate | None = None,
     *,
     evidence_chars: int,
+    siblings: list[Candidate] | None = None,
 ) -> str:
     """Build the generator's user prompt for a fresh draft, or a refinement of ``parent``.
 
@@ -139,6 +177,7 @@ def generator_prompt(
         ddl: The linked schema's DDL.
         n_tables: Tables in ``ddl``.
         parent: The attempt to refine; None for a fresh draft.
+        siblings: Earlier refinements of ``parent``.
         evidence_chars: Characters of ``evidence`` kept (``AgentConfig.evidence_chars``).
 
     Returns:
@@ -149,7 +188,7 @@ def generator_prompt(
         sections.append(f"External knowledge:\n{evidence[:evidence_chars]}")
     sections.append(f"Schema ({action} context, {n_tables} tables):\n{ddl.strip()}")
     if parent is not None:
-        sections.extend(_refine_sections(parent))
+        sections.extend(_refine_sections(parent, siblings))
     return "\n\n".join(sections)
 
 
@@ -295,21 +334,72 @@ def result_stats(result: ExecResult | None) -> str:
     return "\n".join(lines)
 
 
-def _pick_section(label: str, candidate: Candidate, rows: int) -> str:
+def _pick_section(
+    label: str,
+    candidate: Candidate,
+    rows: int,
+    *,
+    stats: bool = False,
+    findings: bool = False,
+) -> str:
     """Show one candidate of a pairwise comparison."""
-    return (
+    text = (
         f"Candidate {label} SQL:\n{candidate.sql[:PICK_SQL_CHARS]}\n"
         f"Candidate {label} result: {preview(candidate.exec, rows)}"
     )
+    if stats and (summary := result_stats(candidate.exec)):
+        text += f"\nCandidate {label} result columns:\n{summary}"
+    if findings and candidate.checks and candidate.checks.findings:
+        lines = "\n".join(f"- {finding.message}" for finding in candidate.checks.findings)
+        text += f"\nCandidate {label} checks:\n{lines}"
+    return text
 
 
-def pick_material(question: str, a: Candidate, b: Candidate) -> str:
-    """Build what the selector reads to compare candidates ``a`` and ``b``."""
-    sections = [
-        f"Question: {question}",
-        _pick_section("A", a, PICK_PREVIEW_ROWS),
-        _pick_section("B", b, PICK_PREVIEW_ROWS),
-    ]
+def pick_material(
+    question: str,
+    a: Candidate,
+    b: Candidate,
+    *,
+    evidence: str | None = None,
+    evidence_chars: int = 0,
+    schema_a: str | None = None,
+    schema_b: str | None = None,
+    rows: int = PICK_PREVIEW_ROWS,
+    stats: bool = False,
+    findings: bool = False,
+) -> str:
+    """Build what the selector reads to compare candidates ``a`` and ``b``.
+
+    With context (``AgentConfig.selector_context``) it reads what the judge reads: the notes, the
+    tables each query reads with their join-key facts (once when both read the same), result
+    statistics and the checks' findings. Without it, the question, the SQL and a few rows.
+
+    Args:
+        question: The user's question.
+        a: The first candidate.
+        b: The second candidate.
+        evidence: External knowledge for the question, shown as notes; None shows none.
+        evidence_chars: Characters of ``evidence`` kept; 0 shows none.
+        schema_a: The tables ``a`` reads, as the judge sees them; None shows none.
+        schema_b: The same for ``b``; shown once when equal to ``schema_a``.
+        rows: Result rows shown per candidate.
+        stats: Show per-column result statistics (:func:`result_stats`).
+        findings: Show the deterministic checks' findings.
+
+    Returns:
+        The selector's user prompt.
+    """
+    sections = [f"Question: {question}"]
+    if evidence and evidence_chars > 0:
+        sections.append(f"Notes: {evidence[:evidence_chars]}")
+    if schema_a and schema_a == schema_b:
+        sections.append(f"Tables both queries read:\n{schema_a[:JUDGE_SCHEMA_CHARS]}")
+    else:
+        for label, schema in (("A", schema_a), ("B", schema_b)):
+            if schema:
+                sections.append(f"Tables query {label} reads:\n{schema[:JUDGE_SCHEMA_CHARS]}")
+    sections.append(_pick_section("A", a, rows, stats=stats, findings=findings))
+    sections.append(_pick_section("B", b, rows, stats=stats, findings=findings))
     return "\n\n".join(sections)
 
 

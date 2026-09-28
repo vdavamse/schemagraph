@@ -8,9 +8,10 @@ budget the strategy is the only variable:
   context actions);
 * ``refine``    a chain, each node refining the previous one with its feedback (deep only; the
   pattern of DSPy's Refine, implemented here; DSPy is not a dependency);
-* ``abmcts``    TreeQuest ``ABMCTSA``: Thompson sampling per node decides between a new child (a
-  draft at the root, "wider") and expanding an existing one (a refinement, "deeper"), and between
-  the ``tight`` and ``wide`` context actions.
+* ``abmcts``    TreeQuest AB-MCTS, ``ABMCTSA`` or ``ABMCTSM`` (``AgentConfig.abmcts_algorithm``):
+  decides between a new child (a draft at the root, "wider") and expanding an existing one (a
+  refinement, "deeper"), and between the ``tight`` and ``wide`` context actions. Lockstep batches,
+  or a rolling loop that asks for the next trial as each node finishes (``AgentConfig.rolling``).
 
 The final pick is the same for every multi-node strategy: top-k by score, deduplicated by result,
 then a round-robin both-order pairwise selector.
@@ -19,7 +20,9 @@ then a round-robin both-order pairwise selector.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
+import threading
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -40,6 +43,12 @@ NODE_ERROR_CHARS = 500
 WIDEN_MISSING_P = 0.5
 # Finding codes after which a refinement widens its context.
 WIDEN_CODES = frozenset({"unknown_table", "unknown_column"})
+
+# One AB-MCTS-M fit at a time per process: every 10th fit, TreeQuest frees every live JAX array
+# in the process, including those of a fit running in another thread.
+_ABMCTS_M_LOCK = threading.Lock()
+# How to install AB-MCTS-M. An exact sync drops unnamed extras, so the agent extra is named too.
+ABMCTS_M_INSTALL = "uv sync --extra agent --extra abmcts-m"
 
 
 @dataclass
@@ -124,7 +133,7 @@ async def run_search(generate: GenerateFn, cfg: AgentConfig) -> SearchTrace:
     """Spend ``cfg.budget`` generator nodes with ``cfg.strategy``.
 
     Raises:
-        ValueError: The strategy is unknown.
+        ValueError: The strategy, or the AB-MCTS algorithm, is unknown.
     """
     strategies = {
         "single": _single,
@@ -146,13 +155,23 @@ def _actions(cfg: AgentConfig) -> list[Action]:
 
 
 def _searching(trace: SearchTrace, cfg: AgentConfig, budget: int) -> bool:
-    """Whether budget is left and the early stop has not been reached.
+    """Whether budget is left and the early stop has not been reached (see :func:`_launchable`)."""
+    return _launchable(trace, cfg, budget) > 0
 
-    The early stop needs ``cfg.early_stop_agree`` nodes that score at least ``cfg.early_stop``
-    and return the same result (:func:`fingerprint`) from different SQL; with 1, one high score
-    is enough.
+
+def _launchable(trace: SearchTrace, cfg: AgentConfig, budget: int, in_flight: int = 0) -> int:
+    """Return how many more nodes the search may start, with ``in_flight`` nodes still running.
+
+    Before the early stop, that is the budget left. After it, it is what is left of the
+    ``cfg.early_stop_min_nodes`` floor, often nothing. The early stop needs
+    ``cfg.early_stop_agree`` nodes that score at least ``cfg.early_stop`` and return the same
+    result (:func:`fingerprint`) from different SQL; with 1, one high score is enough.
     """
-    return trace.nodes < budget and not _agreed(trace.candidates, cfg)
+    launched = trace.nodes + in_flight
+    room = budget - launched
+    if _agreed(trace.candidates, cfg):
+        room = min(room, cfg.early_stop_min_nodes - launched)
+    return max(0, room)
 
 
 def _agreed(candidates: list[Candidate], cfg: AgentConfig) -> bool:
@@ -229,25 +248,159 @@ async def _abmcts(
     ids: _NodeIds,
     budget: int,
 ) -> None:
-    """TreeQuest AB-MCTS-A in batches: each trial is a draft or a refinement of a sampled node."""
+    """TreeQuest AB-MCTS: each trial is a draft or a refinement of a sampled node."""
     import numpy as np
+
+    # in a thread: with the abmcts-m extra, importing TreeQuest loads JAX, PyMC and NumPyro
+    # (about 26 s against 9 s without them on the Windows mount), even for AB-MCTS-A
+    algorithm = await asyncio.to_thread(_abmcts_algorithm, cfg)
+    # AB-MCTS-A samples from the global numpy RNG, seeded after the import because that import
+    # draws from it. AB-MCTS-M is not seeded: its first choice uses Python's random module, PyMC
+    # samples without a seed, and batches run in worker processes.
+    np.random.seed(cfg.seed)
+    search = _abmcts_rolling if cfg.rolling else _abmcts_lockstep
+    await search(algorithm, generate, cfg, trace, ids, budget)
+
+
+def _abmcts_algorithm(cfg: AgentConfig) -> Any:
+    """Return TreeQuest's AB-MCTS-A or AB-MCTS-M.
+
+    Raises:
+        ValueError: The algorithm is neither ``a`` nor ``m``; :func:`_ask` locks only for ``m``.
+        ImportError: ``m`` without the ``abmcts-m`` extra (PyMC, NumPyro).
+    """
     import treequest as tq
 
-    np.random.seed(cfg.seed)  # TreeQuest samples from the global numpy RNG
-    algorithm = tq.ABMCTSA()
+    if cfg.abmcts_algorithm == "a":
+        return tq.ABMCTSA()
+    if cfg.abmcts_algorithm != "m":
+        raise ValueError(f"unknown AB-MCTS algorithm {cfg.abmcts_algorithm!r}")
+    try:
+        import pymc  # noqa: F401  # TreeQuest exports a placeholder ABMCTSM without it
+    except ImportError as error:
+        raise ImportError(f"AB-MCTS-M needs PyMC and NumPyro: {ABMCTS_M_INSTALL}") from error
+    # a batch is chosen in worker processes that each load JAX; TreeQuest's default is one per CPU
+    return tq.ABMCTSM(max_process_workers=max(1, cfg.batch_size))
+
+
+async def _abmcts_lockstep(
+    algorithm: Any,
+    generate: GenerateFn,
+    cfg: AgentConfig,
+    trace: SearchTrace,
+    ids: _NodeIds,
+    budget: int,
+) -> None:
+    """Ask for ``cfg.batch_size`` trials, run them all, tell every result, and repeat.
+
+    The early stop is checked between batches: once it is reached, the search stops at the first
+    batch boundary at or past the ``cfg.early_stop_min_nodes`` floor.
+    """
     state = algorithm.init_tree()
     actions = _actions(cfg)
     while _searching(trace, cfg, budget):
         size = min(cfg.batch_size, budget - trace.nodes)
-        state, trials = algorithm.ask_batch(state, size, actions)
+        state, trials = await asyncio.to_thread(_ask, algorithm, cfg, state, size, actions)
         batch = [(ids(), trial) for trial in trials]
         nodes = await asyncio.gather(
             *(_trial_node(generate, node_id, trial, cfg.node_timeout_s) for node_id, trial in batch)
         )
         for (_, trial), node in zip(batch, nodes, strict=True):
-            reward = min(1.0, max(0.0, node.score))
-            state = algorithm.tell(state, trial.trial_id, (node, reward))
+            state = _tell(algorithm, state, trial, node)
         trace.candidates += nodes
+
+
+async def _abmcts_rolling(
+    algorithm: Any,
+    generate: GenerateFn,
+    cfg: AgentConfig,
+    trace: SearchTrace,
+    ids: _NodeIds,
+    budget: int,
+) -> None:
+    """Keep ``cfg.batch_size`` nodes in flight; tell each result and ask again as it lands.
+
+    Every trial after the first batch is chosen knowing every finished node, where a lockstep
+    batch knows only the nodes that finished before it started.
+
+    * Nodes join ``trace`` in completion order; their ids are issued in ask order.
+    * The ``cfg.early_stop_min_nodes`` floor counts nodes in flight, so a search whose nodes
+      agree early stops at the floor rather than up to a batch past it.
+    * Once the search stops, the nodes still in flight are awaited and kept: they are paid for.
+    * If the search is cancelled or TreeQuest fails, the nodes in flight are cancelled.
+    """
+    width = max(1, cfg.batch_size)
+    state = algorithm.init_tree()
+    actions = _actions(cfg)
+    in_flight: dict[asyncio.Future[Candidate], Any] = {}  # each running node's TreeQuest trial
+
+    async def launch(count: int) -> None:
+        nonlocal state
+        state, trials = await asyncio.to_thread(_ask, algorithm, cfg, state, count, actions)
+        for trial in trials:
+            task = asyncio.ensure_future(_trial_node(generate, ids(), trial, cfg.node_timeout_s))
+            in_flight[task] = trial
+
+    try:
+        await launch(min(width, budget))
+        while in_flight:
+            finished, _ = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
+            for task in finished:
+                trial = in_flight.pop(task)
+                node = task.result()  # _safe turns every failure into a score-0 node
+                state = _tell(algorithm, state, trial, node)
+                trace.candidates.append(node)
+            count = min(width - len(in_flight), _launchable(trace, cfg, budget, len(in_flight)))
+            if count > 0:
+                await launch(count)
+    finally:
+        for task in in_flight:
+            task.cancel()
+        if in_flight:
+            await asyncio.gather(*in_flight, return_exceptions=True)
+
+
+def _ask(
+    algorithm: Any,
+    cfg: AgentConfig,
+    state: Any,
+    count: int,
+    actions: list[Action],
+) -> tuple[Any, list[Any]]:
+    """Ask TreeQuest for ``count`` trials; AB-MCTS-M fits under :data:`_ABMCTS_M_LOCK`.
+
+    Args:
+        algorithm: TreeQuest's ``ABMCTSA`` or ``ABMCTSM``.
+        cfg: The search settings; ``cfg.abmcts_algorithm`` decides whether to take the lock.
+        state: The algorithm's tree state.
+        count: Trials to ask for.
+        actions: The context actions a trial may take.
+
+    Returns:
+        The new tree state and the trials, as ``algorithm.ask_batch`` returns them.
+    """
+    lock = _ABMCTS_M_LOCK if cfg.abmcts_algorithm == "m" else contextlib.nullcontext()
+    with lock:
+        return algorithm.ask_batch(state, count, actions)
+
+
+def _tell(algorithm: Any, state: Any, trial: Any, node: Candidate) -> Any:
+    """Report a finished node to TreeQuest, with its score clamped to [0, 1] as the reward.
+
+    Cheap for both algorithms (it adds a node to the tree; AB-MCTS-M fits in :func:`_ask`), so
+    it runs on the event loop.
+
+    Args:
+        algorithm: TreeQuest's ``ABMCTSA`` or ``ABMCTSM``.
+        state: The algorithm's tree state.
+        trial: The trial the node ran for.
+        node: The finished node; its score becomes the reward.
+
+    Returns:
+        The new tree state.
+    """
+    reward = min(1.0, max(0.0, node.score))
+    return algorithm.tell(state, trial.trial_id, (node, reward))
 
 
 def fingerprint(candidate: Candidate) -> str | None:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
 import time
 from types import SimpleNamespace
@@ -47,7 +48,12 @@ from schemagraph.agent.results import (  # noqa: E402
     UsageRecord,
 )
 from schemagraph.agent.schema_client import SchemaClient  # noqa: E402
-from schemagraph.agent.search import _refine_action, run_search, select_final  # noqa: E402
+from schemagraph.agent.search import (  # noqa: E402
+    _abmcts_algorithm,
+    _refine_action,
+    run_search,
+    select_final,
+)
 from schemagraph.cli import app as cli_app  # noqa: E402
 from schemagraph.connectors.ddl import DDLConfig, parse_ddl  # noqa: E402
 from schemagraph.connectors.duckdb_conn import DuckDBConfig, introspect_duckdb  # noqa: E402
@@ -68,6 +74,8 @@ BAD = (  # `totl` does not exist: EXPLAIN rejects it and the generator retries
     "group by c.state"
 )
 NAMES = {"generator": "g", "judge": "j", "selector": "j", "critic": "c"}
+# Tests that take tens of seconds (AB-MCTS-M's MCMC fits) run only when this is set.
+SLOW = os.environ.get("SCHEMAGRAPH_SLOW_TESTS") == "1"
 
 
 # ------------------------------------------------------------------ scripted models
@@ -940,6 +948,11 @@ def test_cli_rejects_an_unknown_strategy(tmp_path):
     assert result.exit_code == 2 and "'greedy' is not one of" in result.output
 
 
+def test_bench_rejects_an_only_that_names_no_task(tmp_path):
+    result = CliRunner().invoke(cli_app, ["bench-spider2-exec", str(tmp_path), "--only", " "])
+    assert result.exit_code == 2 and "names no task" in result.output  # not every task
+
+
 @pytest.mark.parametrize("command", [["ask", "q", "--home", "{home}"], ["bench-spider2-exec", "/x"]])
 def test_cli_without_the_agent_extra_prints_the_hint(tmp_path, monkeypatch, command):
     from importlib.util import find_spec
@@ -955,6 +968,23 @@ def test_cli_without_the_agent_extra_prints_the_hint(tmp_path, monkeypatch, comm
     assert result.exit_code == 1
     assert "missing treequest; install the agent extra" in result.output
     assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+@pytest.mark.parametrize("command", [["ask", "q", "--home", "{home}"], ["bench-spider2-exec", "/x"]])
+def test_algorithm_m_without_pymc_prints_the_hint(tmp_path, monkeypatch, command):
+    from importlib.util import find_spec
+
+    from schemagraph import cli
+
+    def without_pymc(name: str, *args):
+        return None if name == "pymc" else find_spec(name, *args)
+
+    monkeypatch.setattr(cli, "find_spec", without_pymc)
+    arguments = [argument.format(home=tmp_path) for argument in command] + ["--algorithm", "m"]
+    result = CliRunner().invoke(cli_app, arguments)
+    assert result.exit_code == 1  # before any task runs, not an error row per task
+    # naming only abmcts-m, an exact uv sync would uninstall the agent extra
+    assert "needs the abmcts-m extra: uv sync --extra agent --extra abmcts-m" in result.output
 
 
 def test_answer_errors_without_pydantic_ai(monkeypatch):
@@ -987,3 +1017,234 @@ def test_early_stop_can_require_agreeing_results():
     assert _agreed(agreed, AgentConfig(early_stop_agree=2))  # n0 and n3 return the same result
     echo = [*split, node("n3", 0.91, 1, sql=" select 1  -- n0")]
     assert not _agreed(echo, AgentConfig(early_stop_agree=2))  # n3 repeats n0's SQL: one vote
+
+
+def test_early_stop_waits_for_the_minimum_nodes():
+    pytest.importorskip("treequest")
+    log: list[tuple] = []
+    cfg = AgentConfig(budget=16, early_stop_min_nodes=8)
+    trace = asyncio.run(run_search(fake_generate([0.95] * 16, log), cfg))
+    assert trace.nodes == 8 and trace.stopped_early  # two batches, not one
+
+
+def staggered(generate):
+    """Delay each node by 20-100 ms, so nodes finish one at a time and the rolling loop rolls."""
+
+    async def slow(node_id, parent, action):
+        delay_ms = 20 * (int(node_id[1:]) * 7 % 5 + 1)  # n0 20, n1 60, n2 100, n3 40, n4 80, ...
+        await asyncio.sleep(delay_ms / 1000)
+        return await generate(node_id, parent, action)
+
+    return slow
+
+
+def test_rolling_abmcts_spends_the_budget_and_refines(monkeypatch):
+    pytest.importorskip("treequest")
+    from schemagraph.agent import search
+
+    sizes: list[int] = []
+    ask = search._ask
+
+    def recording_ask(algorithm, cfg, state, count, actions):
+        sizes.append(count)
+        return ask(algorithm, cfg, state, count, actions)
+
+    monkeypatch.setattr(search, "_ask", recording_ask)
+    log: list[tuple] = []
+    scores = [0.5, 0.6, 0.2, 0.7, 0.8, 0.1, 0.4, 0.3, 0.5, 0.6, 0.2, 0.7]
+    cfg = AgentConfig(budget=12, batch_size=4, rolling=True, seed=3)
+    trace = asyncio.run(run_search(staggered(fake_generate(scores, log)), cfg))
+    assert trace.nodes == 12 == len(log)
+    assert sorted(c.id for c in trace.candidates) == sorted(f"n{i}" for i in range(12))
+    ids = {c.id for c in trace.candidates}
+    assert all(parent in ids for _, parent, _ in log if parent)  # refinements of real nodes
+    assert any(parent is not None for _, parent, _ in log)
+    assert sizes[0] == 4 and 1 in sizes[1:] and sum(sizes) == 12  # asks as each node lands
+
+    stopped = asyncio.run(
+        run_search(fake_generate([0.95] * 16, []), AgentConfig(budget=16, rolling=True))
+    )
+    assert stopped.nodes == 4 and stopped.stopped_early  # the in-flight nodes are kept
+
+
+def test_rolling_early_stop_counts_the_nodes_in_flight():
+    pytest.importorskip("treequest")
+    cfg = AgentConfig(budget=16, batch_size=4, rolling=True, early_stop_min_nodes=8)
+    trace = asyncio.run(run_search(staggered(fake_generate([0.95] * 16, [])), cfg))
+    assert trace.nodes == 8 and trace.stopped_early  # not up to a batch past the floor
+    low = asyncio.run(run_search(staggered(fake_generate([0.5] * 16, [])), cfg))
+    assert low.nodes == 16 and not low.stopped_early
+
+
+@pytest.mark.parametrize("stop", ["cancel", "ask fails"])
+def test_a_rolling_search_that_ends_abruptly_cancels_its_nodes(monkeypatch, stop):
+    pytest.importorskip("treequest")
+    from schemagraph.agent import search
+
+    started: list[str] = []
+    finished: list[str] = []
+
+    async def slow(node_id, parent, action):
+        started.append(node_id)
+        await asyncio.sleep(0.2 if node_id == "n0" else 0.4)
+        finished.append(node_id)
+        return search.new_node(node_id, parent, action, score=0.3, sql="select 1")
+
+    ask = search._ask
+    asks: list[int] = []
+
+    def failing_ask(algorithm, cfg, state, count, actions):
+        asks.append(count)
+        if len(asks) > 1:  # the first batch launches; the next ask fails
+            raise RuntimeError("sampling failed")
+        return ask(algorithm, cfg, state, count, actions)
+
+    if stop == "ask fails":
+        monkeypatch.setattr(search, "_ask", failing_ask)
+
+    async def end_abruptly():
+        running = asyncio.ensure_future(run_search(slow, AgentConfig(budget=8, rolling=True)))
+        for _ in range(500):  # until the first batch is in flight
+            if len(started) == 4:
+                break
+            await asyncio.sleep(0.01)
+        if stop == "cancel":
+            running.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await running
+        else:
+            with pytest.raises(RuntimeError, match="sampling failed"):
+                await running
+        await asyncio.sleep(0.5)
+
+    asyncio.run(end_abruptly())
+    assert finished == ([] if stop == "cancel" else ["n0"])  # none finish after the end
+
+
+def test_abmcts_m_asks_one_search_at_a_time():
+    from schemagraph.agent import search
+
+    inside = {"now": 0, "peak": 0}
+    count_lock = threading.Lock()
+
+    class Fitting:
+        def ask_batch(self, state, count, actions):
+            with count_lock:
+                inside["now"] += 1
+                inside["peak"] = max(inside["peak"], inside["now"])
+            time.sleep(0.05)
+            with count_lock:
+                inside["now"] -= 1
+            return state, []
+
+    async def two_searches(algorithm):
+        cfg = AgentConfig(abmcts_algorithm=algorithm)
+        asks = (asyncio.to_thread(search._ask, Fitting(), cfg, None, 1, ["wide"]) for _ in range(2))
+        await asyncio.gather(*asks)
+
+    asyncio.run(two_searches("a"))
+    assert inside["peak"] == 2
+    inside["peak"] = 0
+    asyncio.run(two_searches("m"))
+    assert inside["peak"] == 1  # TreeQuest's M frees every live JAX array in the process
+
+
+@pytest.mark.skipif(not SLOW, reason="MCMC fits, about 25 s; set SCHEMAGRAPH_SLOW_TESTS=1")
+def test_abmcts_m_runs_when_installed():
+    pytest.importorskip("pymc")
+    log: list[tuple] = []
+    # batch 1 fits in this process; a larger batch starts JAX worker processes (about a minute)
+    cfg = AgentConfig(budget=2, batch_size=1, abmcts_algorithm="m")  # each step fits by MCMC
+    trace = asyncio.run(run_search(fake_generate([0.4, 0.6], log), cfg))
+    assert trace.nodes == 2
+
+
+def test_abmcts_m_starts_one_worker_process_per_batch_slot():
+    pytest.importorskip("pymc")
+    batch = AgentConfig(batch_size=4, abmcts_algorithm="m")
+    assert _abmcts_algorithm(batch).max_process_workers == 4  # not one per CPU
+
+
+def test_an_unknown_abmcts_algorithm_is_rejected():
+    pytest.importorskip("treequest")
+    cfg = AgentConfig(budget=1, abmcts_algorithm="M")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="unknown AB-MCTS algorithm 'M'"):
+        asyncio.run(run_search(fake_generate([0.5], []), cfg))  # not an unlocked ABMCTSM
+
+
+def test_abmcts_imports_treequest_off_the_event_loop(monkeypatch):
+    pytest.importorskip("treequest")
+    from schemagraph.agent import search
+
+    on_loop_thread: list[bool] = []
+    loop_thread = threading.current_thread()  # asyncio.run runs the loop on this thread
+    build = search._abmcts_algorithm
+
+    def recording_build(cfg):
+        on_loop_thread.append(threading.current_thread() is loop_thread)
+        return build(cfg)
+
+    monkeypatch.setattr(search, "_abmcts_algorithm", recording_build)
+    asyncio.run(run_search(fake_generate([0.5], []), AgentConfig(budget=1)))
+    assert on_loop_thread == [False]  # with the abmcts-m extra the import loads JAX and PyMC
+
+
+def test_abmcts_seeds_the_rng_after_building_the_algorithm(monkeypatch):
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("treequest")
+    from schemagraph.agent import search
+
+    build, ask = search._abmcts_algorithm, search._ask
+    at_first_ask: list[tuple] = []
+
+    def drawing_build(cfg):  # as importing TreeQuest with the abmcts-m extra does
+        np.random.random(10)
+        return build(cfg)
+
+    def recording_ask(*args):
+        if not at_first_ask:
+            at_first_ask.append(np.random.get_state())
+        return ask(*args)
+
+    monkeypatch.setattr(search, "_abmcts_algorithm", drawing_build)
+    monkeypatch.setattr(search, "_ask", recording_ask)
+    np.random.seed(3)
+    seeded = np.random.get_state()
+    asyncio.run(run_search(fake_generate([0.5], []), AgentConfig(budget=1, seed=3)))
+    state = at_first_ask[0]
+    assert state[2] == seeded[2] and (state[1] == seeded[1]).all()  # the seed's state, undrawn
+
+
+def test_a_reasoning_generator_gets_the_longer_node_timeout(monkeypatch):
+    monkeypatch.delenv("SCHEMAGRAPH_REASONING", raising=False)
+    names = {"generator": "openrouter:qwen/qwen3.8-max", "judge": "typesafe:jev"}
+    reasoning = SimpleNamespace(cfg=AgentConfig(), models=AgentModels(None, None, None, None, names))
+    assert Answerer.search_config(reasoning).node_timeout_s == 600.0
+    plain = SimpleNamespace(cfg=AgentConfig(), models=AgentModels(None, None, None, None, NAMES))
+    assert Answerer.search_config(plain).node_timeout_s == 300.0
+    off = SimpleNamespace(
+        cfg=AgentConfig(reasoning_node_timeout_s=None),
+        models=AgentModels(None, None, None, None, names),
+    )
+    assert Answerer.search_config(off).node_timeout_s == 300.0
+
+
+def test_a_refinement_sees_the_rubric_the_rationale_and_earlier_siblings():
+    from schemagraph.agent.prompts import generator_prompt
+    from schemagraph.agent.results import Judgement
+
+    judged = Judgement(model="jev", fields={"right_grain": 0.24, "answers_question": 0.9}, mean=0.57)
+    result = ExecResult(ok=True, columns=["a"], rows=[[1]], row_count=600)
+    parent = Candidate(id="n2", sql="select a from t", score=0.8, exec=result,
+                       judgement=judged, rationale="one row per actor and film")  # fmt: skip
+    sibling = Candidate(id="n5", parent_id="n2", sql="select a from t group by a", score=0.9,
+                        exec=ExecResult(ok=True, columns=["a"], rows=[[1]], row_count=200))  # fmt: skip
+    prompt = generator_prompt("q", None, "tight", "create table t (a int);", 1, parent,
+                              evidence_chars=0, siblings=[sibling])  # fmt: skip
+    assert "Judge, weakest first (1 = yes): right_grain 0.24, answers_question 0.90" in prompt
+    assert "Its author's reasoning: one row per actor and film" in prompt
+    assert "already tried (do not repeat them)" in prompt
+    assert "score 0.90; 200 rows" in prompt and "select a from t group by a" in prompt
+    assert "already tried" not in generator_prompt(
+        "q", None, "tight", "ddl", 1, parent, evidence_chars=0
+    )

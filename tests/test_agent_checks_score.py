@@ -383,3 +383,20 @@ def test_join_key_lines_spell_out_the_repeated_rows():
     assert "items.order_id is not unique (120 non-NULL rows, 100 values, 1.20 rows per value)" in lines[1]
     assert "COUNT(*) or SUM over orders values after this join counts them more than once" in lines[1]
     assert lines[2] == "  orders.id is unique (100 non-NULL rows)"
+
+
+def test_pick_material_shares_the_judges_context():
+    from schemagraph.agent import prompts
+    from schemagraph.agent.results import Candidate
+
+    result = ExecResult(ok=True, columns=["v"], rows=[[1], [2]], row_count=2)
+    a = Candidate(id="n0", sql="select v from t", exec=result)
+    b = Candidate(id="n1", sql="select v from u", exec=result)
+    bare = prompts.pick_material("q", a, b)
+    assert "Tables" not in bare and "result columns" not in bare
+    shared = prompts.pick_material("q", a, b, evidence="notes", evidence_chars=100,
+                                   schema_a="t (2 rows)", schema_b="t (2 rows)", stats=True)  # fmt: skip
+    assert "Notes: notes" in shared and shared.count("t (2 rows)") == 1
+    assert "Tables both queries read" in shared and "Candidate B result columns" in shared
+    split = prompts.pick_material("q", a, b, schema_a="t", schema_b="u")
+    assert "Tables query A reads:\nt" in split and "Tables query B reads:\nu" in split

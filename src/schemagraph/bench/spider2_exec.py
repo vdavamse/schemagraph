@@ -81,6 +81,11 @@ _LEGACY_VALUES = {
     "judge_stats": False,
     "judge_ambiguity": False,
     "early_stop_agree": 1,
+    "early_stop_min_nodes": 0,
+    "abmcts_algorithm": "a",
+    "rolling": False,
+    "reasoning_node_timeout_s": None,
+    "selector_context": False,
 }
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6
@@ -404,7 +409,8 @@ def _run_config(
     itself, so the field would be None-valued noise, and leaving it out keeps the hash of rows
     written before the field existed. ``trace`` is left out too: it records, it changes no
     answer. Fields added later (:data:`_LEGACY_VALUES`) count only when they differ from the
-    behaviour earlier runs had, for the same reason as ``mcp_url``.
+    behaviour earlier runs had, for the same reason as ``mcp_url``; so does
+    ``reasoning_node_timeout_s``, which counts only when the generator reasons.
     """
     from schemagraph.agent.models import reasoning_level
 
@@ -414,6 +420,8 @@ def _run_config(
         if key not in {"weights", "mcp_url", "trace"}
         and not (key in _LEGACY_VALUES and value == _LEGACY_VALUES[key])
     }
+    if not models.reasoning("generator"):  # the plain node timeout applies
+        agent_config.pop("reasoning_node_timeout_s", None)
     config: dict[str, Any] = {
         "strategy": cfg.strategy,
         "budget": cfg.budget,

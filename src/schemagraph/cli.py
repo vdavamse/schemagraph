@@ -369,7 +369,8 @@ def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
     """Build the agent settings of ``ask`` and ``bench-spider2-exec``.
 
     Exits with the install hint, before anything imports them, when a package of the agent
-    extra is missing.
+    extra is missing, or PyMC when the AB-MCTS search would run AB-MCTS-M: without it every
+    task would fail inside the search, after its MCP server and link.
     """
     from schemagraph.agent.results import AgentConfig
 
@@ -378,6 +379,14 @@ def _agent_config(strategy: Strategy, **settings: Any) -> AgentConfig:
         typer.echo(
             f"missing {', '.join(missing)}; install the agent extra: uv sync --extra agent",
             err=True,
+        )
+        raise typer.Exit(1)
+    uses_m = strategy == "abmcts" and settings.get("abmcts_algorithm") == "m"
+    if uses_m and find_spec("pymc") is None:
+        from schemagraph.agent.search import ABMCTS_M_INSTALL
+
+        typer.echo(
+            f"missing pymc; --algorithm m needs the abmcts-m extra: {ABMCTS_M_INSTALL}", err=True
         )
         raise typer.Exit(1)
     return AgentConfig(strategy=strategy, **settings)
@@ -436,6 +445,26 @@ StrategyOpt = Annotated[Strategy, typer.Option(help="abmcts | best_of_n | refine
 SelectorOpt = Annotated[
     bool, typer.Option(help="final pairwise pick among the top candidates")
 ]
+AlgorithmOpt = Annotated[
+    Literal["a", "m"],
+    typer.Option(
+        "--algorithm", help="AB-MCTS variant: a (wide) or m (deeper; needs the abmcts-m extra)"
+    ),
+]
+RollingOpt = Annotated[
+    bool,
+    typer.Option(help="AB-MCTS: ask for the next node as each one finishes (--batch in flight)"),
+]
+MinNodesOpt = Annotated[
+    int, typer.Option(help="nodes generated before the search may stop early")
+]
+AgreeOpt = Annotated[
+    int,
+    typer.Option(help="high-scoring nodes that must return the same result to stop early"),
+]
+DraftTemperatureOpt = Annotated[
+    float, typer.Option(help="generator temperature for fresh drafts (refinements: 0.4)")
+]
 
 
 @app.command()
@@ -478,6 +507,11 @@ def ask(
     ] = None,
     judge: Annotated[bool, typer.Option(help="score candidates with the judge")] = True,
     selector: SelectorOpt = True,
+    algorithm: AlgorithmOpt = "a",
+    rolling: RollingOpt = False,
+    early_stop_min_nodes: MinNodesOpt = 0,
+    early_stop_agree: AgreeOpt = 1,
+    draft_temperature: DraftTemperatureOpt = 0.8,
     as_json: Annotated[
         bool, typer.Option("--json", help="print the full AnswerResult as JSON")
     ] = False,
@@ -499,6 +533,11 @@ def ask(
         judge_model=judge_model,
         judge=judge,
         selector=selector,
+        abmcts_algorithm=algorithm,
+        rolling=rolling,
+        early_stop_min_nodes=early_stop_min_nodes,
+        early_stop_agree=early_stop_agree,
+        draft_temperature=draft_temperature,
         mcp_url=mcp_url,
         trace=trace,
     )
@@ -547,6 +586,11 @@ def bench_spider2_exec(
     gen_model: str | None = None,
     judge_model: str | None = None,
     selector: SelectorOpt = True,
+    algorithm: AlgorithmOpt = "a",
+    rolling: RollingOpt = False,
+    early_stop_min_nodes: MinNodesOpt = 0,
+    early_stop_agree: AgreeOpt = 1,
+    draft_temperature: DraftTemperatureOpt = 0.8,
     judge_only: Annotated[
         bool,
         typer.Option(
@@ -603,9 +647,19 @@ def bench_spider2_exec(
         judge_model=judge_model,
         judge=True,
         selector=selector,
+        abmcts_algorithm=algorithm,
+        rolling=rolling,
+        early_stop_min_nodes=early_stop_min_nodes,
+        early_stop_agree=early_stop_agree,
+        draft_temperature=draft_temperature,
         trace=trace,
     )
-    ids = set(only) if only else None
+    ids = None
+    if only:
+        # ids read from a file can carry a stray "\r" (CRLF checkouts); it would match no task
+        ids = {instance_id.strip() for instance_id in only} - {""}
+        if not ids:  # an empty set would select every task
+            raise typer.BadParameter("names no task", param_hint="'--only'")
     _quiet_mcp_logs()
     if judge_only:
         from schemagraph.agent.models import DEFAULT_GEN_MODEL, DEFAULT_JUDGE_MODEL

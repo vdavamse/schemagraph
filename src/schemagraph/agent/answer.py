@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import permutations
 from typing import Any
 
@@ -123,6 +123,7 @@ class Answerer:
         self._link_text = ""
         self._wide = LinkedSchema(ddl="", tables=())
         self._advice_locks: dict[str, asyncio.Lock] = {}
+        self._refinements: dict[str, list[Candidate]] = {}  # parent id -> its finished refinements
 
     # ----------------------------------------------------------- entry points
     async def prepare(self, question: str, *, evidence: str | None = None) -> None:
@@ -134,6 +135,7 @@ class Answerer:
         self.records = []
         self.transcripts = [] if self.cfg.trace else None
         self._advice_locks = {}
+        self._refinements = {}
         self.question = question
         self.evidence = evidence
         self._link_text = question
@@ -150,7 +152,7 @@ class Answerer:
         started = time.perf_counter()
         async with self.schema, self._toolset:
             await self.prepare(question, evidence=evidence)
-            trace = await run_search(self.generate, self.cfg)
+            trace = await run_search(self.generate, self.search_config())
             pick = self._pick if self.cfg.selector else None
             chosen, chosen_by, matrix = await select_final(trace.candidates, self.cfg, pick)
         return AnswerResult(
@@ -193,6 +195,18 @@ class Answerer:
         )
 
     # ----------------------------------------------------------- one node
+    def search_config(self) -> AgentConfig:
+        """Return the search settings, with the longer node timeout when the generator reasons.
+
+        A refinement at high reasoning is a critic call and a multi-request generator run; under
+        the plain node timeout it was cut off, and the tree read the score-0 node as "refining
+        does not pay".
+        """
+        reasoning_timeout = self.cfg.reasoning_node_timeout_s
+        if reasoning_timeout is None or not self.models.reasoning("generator"):
+            return self.cfg
+        return replace(self.cfg, node_timeout_s=max(self.cfg.node_timeout_s, reasoning_timeout))
+
     async def generate(self, node_id: str, parent: Candidate | None, action: Action) -> Candidate:
         """Generate and score one search node: a draft, or a refinement of ``parent``."""
         started = time.perf_counter()
@@ -216,6 +230,8 @@ class Answerer:
             if record.node_id == node_id and record.role in _NODE_ROLES
         ]
         candidate.ms = (time.perf_counter() - started) * 1000
+        if parent is not None:
+            self._refinements.setdefault(parent.id, []).append(candidate)
         return candidate
 
     async def _write_sql(
@@ -230,6 +246,8 @@ class Answerer:
         Raises:
             Exception: The generator failed; the node records the error.
         """
+        # earlier refinements of the same parent, so this one does not repeat them
+        siblings = list(self._refinements.get(parent.id, [])) if parent else None
         prompt = prompts.generator_prompt(
             self.question,
             self.evidence,
@@ -238,6 +256,7 @@ class Answerer:
             len(linked.tables),
             parent,
             evidence_chars=self.cfg.evidence_chars,
+            siblings=siblings,
         )
         temperature = self.cfg.refine_temperature if parent else self.cfg.draft_temperature
         output, _, _ = await agents.run_agent(
@@ -476,13 +495,31 @@ class Answerer:
             else:
                 parent.advice = str(output).strip()
 
+    async def _pick_material(self, a: Candidate, b: Candidate) -> str:
+        """Build the selector's prompt for a pair, with the judge's context when configured."""
+        if not self.cfg.selector_context:
+            return prompts.pick_material(self.question, a, b)
+        schema_a, schema_b = await asyncio.gather(self._judge_schema(a), self._judge_schema(b))
+        return prompts.pick_material(
+            self.question,
+            a,
+            b,
+            evidence=self.evidence,
+            evidence_chars=self.cfg.judge_evidence_chars,
+            schema_a=schema_a,
+            schema_b=schema_b,
+            rows=self.cfg.preview_rows,
+            stats=True,
+            findings=True,
+        )
+
     async def _pick(self, a: Candidate, b: Candidate) -> float:
         """Return the selector's p(``a`` is better than ``b``); 0.5 when the call failed."""
         try:
             output, _, _ = await agents.run_agent(
                 "selector",
                 agents.selector(),
-                prompts.pick_material(self.question, a, b),
+                await self._pick_material(a, b),
                 model=self.models.selector,
                 model_name=self.models.names["selector"],
                 sink=self.records,
