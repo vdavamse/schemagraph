@@ -376,15 +376,29 @@ def test_a_task_that_fails_after_its_search_keeps_its_transcripts(tmp_path, monk
     cfg = _config(early_stop=1.01, trace=trace)
     result = spider2_exec.run(root, cfg=cfg, models=_Models().agent_models(), out_dir=out, tag="f")
     assert [row["error"] for row in result["rows"]] == ["RuntimeError: selection broke"] * 2
+    assert not (out / "spider2_exec_f_candidates.jsonl").exists()  # transcripts only
+    assert not (out / "spider2_exec_f_contexts.jsonl").exists()
     messages_path = out / "spider2_exec_f_messages.jsonl"
     if trace:
         messages = [json.loads(line) for line in messages_path.read_text().splitlines()]
         generated = {record["instance_id"] for record in messages if record["role"] == "generator"}
         assert generated == {"local901", "local902"}
+        monkeypatch.undo()  # the selection works again: a resume retries both error rows
+        models = _Models().agent_models()
+        retried = spider2_exec.run(root, cfg=cfg, models=models, out_dir=out, tag="f")
+        assert [row["error"] for row in retried["rows"]] == [None, None]
+        spider2_exec.run(root, cfg=cfg, models=models, out_dir=out, tag="clean")
+        retried_calls = _calls_by_task_and_role(messages_path)
+        clean_calls = _calls_by_task_and_role(out / "spider2_exec_clean_messages.jsonl")
+        assert retried_calls == clean_calls  # the failed attempts' transcripts are gone
     else:
         assert not messages_path.exists()
-    assert not (out / "spider2_exec_f_candidates.jsonl").exists()  # transcripts only
-    assert not (out / "spider2_exec_f_contexts.jsonl").exists()
+
+
+def _calls_by_task_and_role(messages_path: Path) -> Counter:
+    """Count a messages file's model calls per (instance id, role)."""
+    records = map(json.loads, messages_path.read_text().splitlines())
+    return Counter((record["instance_id"], record["role"]) for record in records)
 
 
 def test_judge_only_reports_auroc(tmp_path):

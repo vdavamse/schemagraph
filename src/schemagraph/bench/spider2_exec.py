@@ -757,8 +757,8 @@ class _ExecBench:
         rows_path: The rows file (one row per task attempt).
         candidates_path: The candidates file (one record per candidate).
         messages_path: The transcripts file (one record per model call attempt), written when
-            ``cfg.trace`` is on, for a task that fails after its search too (a resume that
-            retries the task drops them).
+            ``cfg.trace`` is on, also for a task whose answer raises (the calls made before the
+            failure; a resume that retries the task drops them).
         contexts_path: The contexts file (one record per answered task: the schema DDL its
             prompts name and the generator's instructions).
         config_hash: Stamped on every row.
@@ -798,7 +798,7 @@ class _ExecBench:
         """Answer and score one task; a task-level failure is an error row, not a crash."""
         async with self._semaphore:
             started = time.perf_counter()
-            answerer = None
+            answerer: Answerer | None = None  # bound once the server is up; read in the except
             try:
                 async with self._answerer(task) as answerer:
                     result = await answerer.answer(
