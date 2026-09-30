@@ -26,6 +26,7 @@ import asyncio
 import contextlib
 import hashlib
 import threading
+import time
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -65,12 +66,23 @@ class SearchTrace:
     """What a search produced.
 
     Attributes:
-        candidates: Every node, in generation order.
+        candidates: Every node, in the order its result was told to the search.
         stopped_early: The search stopped before its budget because a node scored high enough.
+        started: When the search started (``time.perf_counter``), the zero of the nodes' clock.
     """
 
     candidates: list[Candidate] = field(default_factory=list)
     stopped_early: bool = False
+    started: float = field(default_factory=time.perf_counter)
+
+    def clock_ms(self) -> float:
+        """Return the milliseconds since the search started."""
+        return (time.perf_counter() - self.started) * 1000
+
+    def add(self, node: Candidate) -> None:
+        """Keep a finished node, noting its place in the order results are told to the search."""
+        node.told = self.nodes
+        self.candidates.append(node)
 
     @property
     def nodes(self) -> int:
@@ -119,13 +131,14 @@ def split_action(cfg: AgentConfig, action: str) -> tuple[str | None, Action]:
 
 
 def _trial_node(
-    generate: GenerateFn, cfg: AgentConfig, node_id: str, trial: Any
+    generate: GenerateFn, cfg: AgentConfig, trace: SearchTrace, node_id: str, trial: Any
 ) -> Awaitable[Candidate]:
     """Generate the node of a TreeQuest trial, whose parent state is a Candidate (None at root).
 
     Args:
         generate: Writes and scores one node.
         cfg: The search settings (node timeout, generator models).
+        trace: The search so far, for the node's clock.
         node_id: The id to give the node.
         trial: TreeQuest's trial: the parent state and the action to take.
 
@@ -133,7 +146,38 @@ def _trial_node(
         The node, awaitable; a failure is a score-0 node (:func:`_safe`).
     """
     parent = cast(Candidate | None, trial.parent_state)
-    return _safe(generate, cfg, node_id, parent, trial.action)
+    # asked now, while the coroutine may start later
+    return _run_node(generate, cfg, trace, node_id, parent, trial.action, trace.nodes)
+
+
+async def _run_node(
+    generate: GenerateFn,
+    cfg: AgentConfig,
+    trace: SearchTrace,
+    node_id: str,
+    parent: Candidate | None,
+    action: str,
+    asked_after: int | None = None,
+) -> Candidate:
+    """Generate one node (:func:`_safe`) and note when it was asked, started and finished.
+
+    Args:
+        generate: Writes and scores one node.
+        cfg: The search settings.
+        trace: The search so far: the nodes finished when this one is asked, and the clock.
+        node_id: The id to give the node.
+        parent: The node to refine; None for a draft.
+        action: A context width, or a generator model.
+        asked_after: Nodes finished when the search asked for this one; None reads it now.
+
+    Returns:
+        The node, with ``asked_after``, ``start_ms`` and ``end_ms`` set.
+    """
+    asked_after = trace.nodes if asked_after is None else asked_after
+    start_ms = trace.clock_ms()
+    node = await _safe(generate, cfg, node_id, parent, action)
+    node.asked_after, node.start_ms, node.end_ms = asked_after, start_ms, trace.clock_ms()
+    return node
 
 
 async def _safe(
@@ -236,7 +280,7 @@ async def _single(
     budget: int,
 ) -> None:
     """One wide draft."""
-    trace.candidates.append(await _safe(generate, cfg, ids(), None, "wide"))
+    trace.add(await _run_node(generate, cfg, trace, ids(), None, "wide"))
 
 
 async def _best_of_n(
@@ -251,9 +295,11 @@ async def _best_of_n(
     while _searching(trace, cfg, budget):
         size = min(cfg.batch_size, budget - trace.nodes)
         batch = [(ids(), actions[(trace.nodes + i) % len(actions)]) for i in range(size)]
-        trace.candidates += await asyncio.gather(
-            *(_safe(generate, cfg, node_id, None, action) for node_id, action in batch)
+        nodes = await asyncio.gather(
+            *(_run_node(generate, cfg, trace, node_id, None, action) for node_id, action in batch)
         )
+        for node in nodes:
+            trace.add(node)
 
 
 async def _refine(
@@ -267,8 +313,8 @@ async def _refine(
     parent: Candidate | None = None
     while _searching(trace, cfg, budget):
         action: Action = "wide" if parent is None else _refine_action(parent)
-        parent = await _safe(generate, cfg, ids(), parent, action)
-        trace.candidates.append(parent)
+        parent = await _run_node(generate, cfg, trace, ids(), parent, action)
+        trace.add(parent)
 
 
 def _refine_action(parent: Candidate) -> Action:
@@ -348,11 +394,11 @@ async def _abmcts_lockstep(
         state, trials = await asyncio.to_thread(_ask, algorithm, cfg, state, size, actions)
         batch = [(ids(), trial) for trial in trials]
         nodes = await asyncio.gather(
-            *(_trial_node(generate, cfg, node_id, trial) for node_id, trial in batch)
+            *(_trial_node(generate, cfg, trace, node_id, trial) for node_id, trial in batch)
         )
         for (_, trial), node in zip(batch, nodes, strict=True):
             state = _tell(algorithm, state, trial, node)
-        trace.candidates += nodes
+            trace.add(node)
 
 
 async def _abmcts_rolling(
@@ -383,7 +429,7 @@ async def _abmcts_rolling(
         nonlocal state
         state, trials = await asyncio.to_thread(_ask, algorithm, cfg, state, count, actions)
         for trial in trials:
-            task = asyncio.ensure_future(_trial_node(generate, cfg, ids(), trial))
+            task = asyncio.ensure_future(_trial_node(generate, cfg, trace, ids(), trial))
             in_flight[task] = trial
 
     try:
@@ -394,7 +440,7 @@ async def _abmcts_rolling(
                 trial = in_flight.pop(task)
                 node = task.result()  # _safe turns every failure into a score-0 node
                 state = _tell(algorithm, state, trial, node)
-                trace.candidates.append(node)
+                trace.add(node)
             count = min(width - len(in_flight), _launchable(trace, cfg, budget, len(in_flight)))
             if count > 0:
                 await launch(count)
@@ -501,7 +547,8 @@ async def select_final(
     """Pick the answer among the search's candidates.
 
     Args:
-        candidates: Every node, in generation order.
+        candidates: Every node, in the order results were told to the search
+            (``SearchTrace.candidates``); an equal score goes to the earlier one.
         cfg: The answer's settings (``top_k``, ``selector``, ``strategy``).
         pick: The pairwise selector; None ranks by score alone.
 

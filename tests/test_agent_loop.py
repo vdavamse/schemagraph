@@ -26,6 +26,7 @@ from pydantic_ai.messages import (  # noqa: E402
     TextPart,
     ToolCallPart,
     ToolReturnPart,
+    UserPromptPart,
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel  # noqa: E402
 from pydantic_ai.models.test import TestModel  # noqa: E402
@@ -50,6 +51,7 @@ from schemagraph.agent.results import (  # noqa: E402
     Finding,
     UsageRecord,
     UsageSummary,
+    expand_prompt,
 )
 from schemagraph.agent.schema_client import SchemaClient  # noqa: E402
 from schemagraph.agent.search import (  # noqa: E402
@@ -131,9 +133,12 @@ class Script:
         self.lock_free: list[bool] = []
         self.offered: set[str] = set()
         self.returns: dict[str, object] = {}
+        self.prompts: list[str] = []  # the user prompt of each run, as the model read it
 
     def gen(self, messages, info: AgentInfo) -> ModelResponse:
         self.calls += 1
+        if len(messages) == 1:  # a run's first request
+            self.prompts += [p.content for p in messages[0].parts if isinstance(p, UserPromptPart)]
         if self.lock is not None:  # the Engine lock must be free while a model runs
             self.lock_free.append(_lock_is_free(self.lock))
         self.offered = {tool.name for tool in info.function_tools}
@@ -525,6 +530,27 @@ def test_generate_retries_after_explain_and_scores(store):
     assert result.chosen_by == "only"
     assert result.usage.by_role["generator"].tool_calls >= 1
     assert result.usage.by_role["judge"].calls == 1
+    # the prompt is kept with its schema DDL stored once, under the context key
+    assert candidate.context_key in result.contexts
+    assert f"<<schema {candidate.context_key}>>" in candidate.prompt
+    assert "CREATE TABLE" not in candidate.prompt and "CREATE TABLE" in result.contexts[
+        candidate.context_key
+    ]
+    assert "Question:" in candidate.prompt and "read-only" in result.instructions.lower()
+    assert expand_prompt(candidate.prompt, result.contexts) == script.prompts[0]  # exact
+    assert (candidate.asked_after, candidate.told) == (0, 0) and candidate.end_ms >= 0
+
+
+def test_a_node_that_times_out_keeps_the_prompt_it_was_sent(store):
+    async def stalls(messages, info: AgentInfo) -> ModelResponse:
+        await asyncio.sleep(30)  # cancelled at the node timeout
+        return _output(info, sql=GOOD)
+
+    cfg = AgentConfig(strategy="single", node_timeout_s=0.5, reasoning_node_timeout_s=None)
+    result = _answer(store, cfg, _models(stalls))
+    candidate = result.candidates[0]
+    assert candidate.error == "node timed out" and not candidate.sql
+    assert "Question:" in candidate.prompt and candidate.context_key in result.contexts
 
 
 def test_judge_on_test_model_falls_back_to_the_output(store):

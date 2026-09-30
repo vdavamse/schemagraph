@@ -15,6 +15,7 @@ from schemagraph.engine import Engine
 
 if TYPE_CHECKING:
     from schemagraph.agent.results import AgentConfig, AnswerResult, UsageRecord
+    from schemagraph.agent.viz import SearchTree
 
 app = typer.Typer(
     help="schemagraph: graph-native schema context engine for text-to-SQL.",
@@ -618,9 +619,17 @@ def ask(
             help="keep every model call's messages (prompt, reasoning, tool calls) in --json"
         ),
     ] = False,
+    viz: Annotated[
+        Path | None,
+        typer.Option(
+            metavar="FILE.html",
+            help="also write the search as an HTML replay page (nodes coloured by model family)",
+        ),
+    ] = None,
     home: HomeOpt = None,
 ):
     """Write, run (read-only) and pick SQL for a question (needs the agent extra and model keys)."""
+    viz_path = _viz_target(viz)
     cfg = _agent_config(
         strategy,
         budget=budget,
@@ -654,6 +663,36 @@ def ask(
         typer.echo(result.model_dump_json(indent=2))
     else:
         _print_answer(result)
+    if viz_path is not None:
+        _write_viz(result, viz_path, cfg.gen_models)
+
+
+def _viz_target(viz: Path | None) -> Path | None:
+    """Check the ``--viz`` path before the search spends anything.
+
+    Raises:
+        typer.BadParameter: Not a ``.html`` path, or its directory is missing or read-only.
+    """
+    from schemagraph.agent.viz import check_html_path
+
+    if viz is None:
+        return None
+    try:
+        return check_html_path(viz)
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="'--viz'") from None
+
+
+def _write_viz(result: AnswerResult, path: Path, generators: tuple[str, ...]) -> None:
+    """Write the answer's search tree; report on stderr so ``--json`` output stays clean."""
+    from schemagraph.agent.viz import tree_from_answer, write_search_html
+
+    try:
+        written = write_search_html(tree_from_answer(result, generators=generators), path)
+    except (OSError, ValueError) as error:
+        typer.echo(f"error: search tree not written: {error}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"search tree written to {written}", err=True)
 
 
 def _judge_study_progress(what: str, done: int, total: int) -> None:
@@ -803,6 +842,102 @@ def bench_spider2_exec(
     )
     typer.echo(spider2_exec.format_table(result["summary"]))
     typer.echo(f"\nresults written to {out}/")
+
+
+@app.command()
+def viz_search(
+    candidates: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            dir_okay=False,
+            help="a bench-spider2-exec candidates file (spider2_exec_<tag>_candidates.jsonl)",
+        ),
+    ],
+    task: Annotated[
+        list[str] | None, typer.Option("--task", "-t", help="only this task (repeatable)")
+    ] = None,
+    out: Annotated[
+        Path | None,
+        typer.Option(
+            metavar="FILE.html|DIR",
+            help=(
+                "one task's page, or a directory of pages plus index.html (default <run>_viz/); "
+                "a rerun into a directory rewrites index.html for the selected tasks and leaves "
+                "older pages in place"
+            ),
+        ),
+    ] = None,
+    rows: Annotated[
+        Path | None,
+        typer.Option(dir_okay=False, help="the run's rows file (default: next to CANDIDATES)"),
+    ] = None,
+    report: Annotated[
+        Path | None,
+        typer.Option(dir_okay=False, help="the run's report .json (default: next to CANDIDATES)"),
+    ] = None,
+):
+    """Draw the search trees of an exec benchmark run as HTML replay pages (offline, no model)."""
+    from schemagraph.bench.spider2_exec import CANDIDATES_SUFFIX, load_search_trees, run_files
+
+    siblings = run_files(candidates)
+    rows, report = rows or siblings.rows, report or siblings.report
+    if not rows.exists():
+        typer.echo(f"warning: no rows file {rows}; the chosen nodes are not marked", err=True)
+    if not report.exists():
+        typer.echo(f"warning: no report {report}; single-model runs show no model", err=True)
+    wanted = {name.strip() for name in task} - {""} if task else None
+    try:
+        trees = load_search_trees(candidates, rows, report, wanted, siblings.contexts)
+    except ValueError as error:  # the report is not JSON, or not a run report
+        typer.echo(f"error: {error}", err=True)
+        raise typer.Exit(1) from None
+    if not trees and wanted:
+        raise typer.BadParameter("no candidates of these tasks", param_hint="'--task'")
+    if not trees:
+        raise typer.BadParameter(f"no candidates in {candidates}", param_hint="'CANDIDATES'")
+    if wanted and (unknown := wanted - {tree.key for tree in trees}):
+        typer.echo(f"warning: no candidates for {', '.join(sorted(unknown))}", err=True)
+    run_name = candidates.name.removesuffix(CANDIDATES_SUFFIX)
+    target = out or candidates.with_name(f"{run_name}_viz")
+    written = _write_viz_pages(trees, target, title=run_name)
+    noun = "search tree" if len(trees) == 1 else "search trees"
+    typer.echo(f"{noun} written to {written}")
+
+
+def _write_viz_pages(trees: list[SearchTree], target: Path, *, title: str) -> Path:
+    """Write one page to ``target.html``, or one page per tree plus an index to a directory.
+
+    Returns:
+        The page written, or the directory's index.
+
+    Raises:
+        typer.BadParameter: A single ``.html`` target for several trees, or an unwritable one.
+    """
+    from schemagraph.agent.viz import (
+        HTML_SUFFIXES,
+        INDEX_FILENAME,
+        page_filenames,
+        render_index_html,
+        write_search_html,
+    )
+
+    try:
+        if target.suffix.lower() in HTML_SUFFIXES:
+            if len(trees) > 1:
+                raise ValueError(f"{len(trees)} tasks need a directory; pick one with --task")
+            return write_search_html(trees[0], target)
+        target.mkdir(parents=True, exist_ok=True)
+        names = page_filenames(trees)
+        pages = [
+            (write_search_html(tree, target / name).name, tree)
+            for name, tree in zip(names, trees, strict=True)
+        ]
+        index = target / INDEX_FILENAME
+        index.write_text(render_index_html(title, pages), encoding="utf-8")
+    except (OSError, ValueError) as error:
+        raise typer.BadParameter(str(error), param_hint="'--out'") from None
+    return index
 
 
 TransportOpt = Annotated[

@@ -1,0 +1,2 @@
+{"instance_id": "local901", "db": "shop", "ex": 1, "ex_by_score": 1, "oracle": 1, "chosen_by": "selector", "chosen_id": "n10", "score": 0.9, "nodes": 7, "stopped_early": true, "cost_usd": 0.1234, "ms": 42000, "error": null, "config_hash": "abc"}
+{"instance_id": "local902", "db": "shop", "ex": 0, "ex_by_score": 0, "oracle": 0, "chosen_by": "only", "chosen_id": "n0", "score": 0.3, "nodes": 1, "stopped_early": false, "cost_usd": 0.01, "ms": 5000, "error": null, "config_hash": "abc"}
