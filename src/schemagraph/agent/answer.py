@@ -126,6 +126,7 @@ class Answerer:
         self._advice_locks: dict[str, asyncio.Lock] = {}
         self._refinements: dict[str, list[Candidate]] = {}  # parent id -> its finished refinements
         self._contexts: dict[str, str] = {}  # context key -> the DDL the prompts showed
+        self._prompts: dict[str, tuple[str, str]] = {}  # node id -> (stored prompt, context key)
 
     # ----------------------------------------------------------- entry points
     async def prepare(self, question: str, *, evidence: str | None = None) -> None:
@@ -139,6 +140,7 @@ class Answerer:
         self._advice_locks = {}
         self._refinements = {}
         self._contexts = {}
+        self._prompts = {}
         self.question = question
         self.evidence = evidence
         self._link_text = question
@@ -156,6 +158,7 @@ class Answerer:
         async with self.schema, self._toolset:
             await self.prepare(question, evidence=evidence)
             trace = await run_search(self.generate, self.search_config())
+            self._restore_prompts(trace.candidates)
             pick = self._pick if self.cfg.selector else None
             chosen, chosen_by, matrix = await select_final(trace.candidates, self.cfg, pick)
         return AnswerResult(
@@ -244,6 +247,7 @@ class Answerer:
             prompt = self._generator_prompt(parent, context, linked)
             candidate.prompt, candidate.context_key = stored_prompt(prompt, linked.ddl)
             self._contexts[candidate.context_key] = linked.ddl.strip()
+            self._prompts[node_id] = (candidate.prompt, candidate.context_key)
             output = await self._write_sql(node_id, prompt, parent, generator)
         except Exception as error:
             candidate.error = f"{type(error).__name__}: {error}"[: agents.FAILURE_CHARS]
@@ -262,6 +266,16 @@ class Answerer:
         if parent is not None:
             self._refinements.setdefault(parent.id, []).append(candidate)
         return candidate
+
+    def _restore_prompts(self, candidates: list[Candidate]) -> None:
+        """Give each node that timed out the prompt it was sent, in place.
+
+        The search replaces a node that ran past ``node_timeout_s`` with an error node, which
+        drops the prompt :meth:`generate` had already recorded.
+        """
+        for candidate in candidates:
+            if not candidate.prompt and candidate.id in self._prompts:
+                candidate.prompt, candidate.context_key = self._prompts[candidate.id]
 
     def _generator_prompt(
         self, parent: Candidate | None, context: Action, linked: LinkedSchema

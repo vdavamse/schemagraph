@@ -279,12 +279,44 @@ def test_the_panel_shows_the_prompt_with_its_schema_folded_and_the_instructions(
     page = render_search_html(tree)
     section = _section_of(page, tree, "n0")
     assert "Question: how many orders?" in section and "<<schema" not in section
-    assert "<summary>schema DDL (1 lines)</summary>" in section
-    assert "CREATE TABLE orders (id INTEGER);" in section
+    key = tree.node("n0").prompt.split("<<schema ")[1].split(">>")[0]
+    assert f'<a class="ctx-link" href="#ctx-{key}">schema DDL (1 lines)</a>' in section
+    assert "CREATE TABLE orders (id INTEGER);" not in section  # linked, written once below
+    assert f'<details class="schema-context" id="ctx-{key}">' in page
+    assert page.count("CREATE TABLE orders (id INTEGER);") == 1
     assert "generator instructions (system prompt)" in page
     assert "You write one read-only SQLite query." in page
     unsaved = tree_from_records([{"id": "n0", "prompt": "Schema:\n<<schema abc123>>"}])
     assert "[schema abc123: not saved with this run]" in render_search_html(unsaved)
+
+
+def test_a_schema_shared_by_every_node_is_written_once():
+    ddl = "CREATE TABLE wide (a INT);\nCREATE TABLE wider (b INT);"
+    records = [
+        {"id": f"n{i}", "parent_id": f"n{i - 1}" if i else None, "prompt": "S:\n<<schema 0a1b>>"}
+        for i in range(8)
+    ]
+    page = render_search_html(tree_from_records(records, contexts={"0a1b": ddl, "ffff": "unused"}))
+    assert page.count("CREATE TABLE wide (a INT);") == 1 and "unused" not in page
+    assert page.count('href="#ctx-0a1b"') == 8
+    assert "<summary>schema DDL 0a1b (2 lines)</summary>" in page
+
+
+def test_a_node_hides_its_outcome_while_the_replay_has_it_generating():
+    tree = _mix_trees()["local901"]
+    page = render_search_html(tree)
+    node = tree.node("n0")
+    section = _section_of(page, tree, "n0")
+    heading = section.split("</h3>")[0]
+    # the score, facts, SQL and judgement sit in outcome blocks; the id, model and prompt do not
+    assert f'<span class="outcome"> · {node.score:.2f}' in heading
+    assert section.count('<div class="outcome">') == 2 and 'class="pending-note' in section
+    assert '</div><details open><summary>generator prompt</summary>' in section  # outside both
+    assert '.js .node-detail.pending .outcome { display: none; }' in page
+    # the tooltip the player shows while the node generates carries no score
+    title = _group_of(page, tree, "n0").split("</title>")[0]
+    assert f'data-pending="n0 · {node.model} · generating"' in title
+    assert f"score {node.score:.2f}" in title
 
 
 def test_exec_error_text_never_prints_none():

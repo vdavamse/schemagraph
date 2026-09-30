@@ -1,9 +1,10 @@
 """The style sheet and the player script of the search page (:mod:`schemagraph.agent.viz`).
 
 Both are constants: the page never builds CSS or script from data. The script reads the replay
-steps from a JSON data block, and changes the page only by toggling classes and setting
-``textContent``, so no recorded string (SQL, prompts, model names) is ever parsed as HTML. The
-page's Content-Security-Policy admits exactly this script, by its SHA-256 hash.
+steps from a JSON data block, and changes the page only by toggling classes, setting
+``textContent`` and opening disclosures, so no recorded string (SQL, prompts, model names) is
+ever parsed as HTML. The page's Content-Security-Policy admits exactly this script, by its
+SHA-256 hash.
 """
 
 from __future__ import annotations
@@ -98,11 +99,15 @@ details > summary { cursor: pointer; color: var(--muted); }
 .node-detail:target { background: var(--panel); }
 .marks { color: var(--accent); font-weight: 600; }
 .prompt-text { margin: .25rem 0; }
+.pending-note { display: none; }
+.schema-context { margin-top: .75rem; }
 
 /* the replay: classes the player script toggles */
 .js .panel .node-detail { display: none; border-top: 0; padding-top: 0; }
 .js .panel .node-detail.selected { display: block; }
 .js .panel-empty[hidden] { display: none; }
+.js .node-detail.pending .outcome { display: none; }
+.js .node-detail.pending .pending-note { display: block; }
 .js .node-g, .js .edge { transition: opacity .35s ease; }
 .js .node-g:not(.shown), .js .edge:not(.shown) { opacity: 0; pointer-events: none; }
 .js .node-g.pending .node { fill: var(--bg); stroke: var(--c); stroke-dasharray: 3 3;
@@ -143,6 +148,13 @@ PLAYER_JS = """
 
   document.body.classList.add("js");
   slider.max = String(events.length);
+  // each node's full hover text; while it generates, its title shows data-pending instead
+  const titles = [];
+  for (let index = 0; index < data.nodes; index++) {
+    const title = byId("g-" + index).querySelector("title");
+    const pending = title.getAttribute("data-pending");
+    titles.push({ title: title, full: title.textContent, pending: pending });
+  }
 
   function select(index) {
     if (selected !== null) byId("node-" + selected).classList.remove("selected");
@@ -164,9 +176,12 @@ PLAYER_JS = """
       const group = byId("g-" + index);
       const edge = byId("e-" + index);
       const shown = asked.has(index);
+      const pending = shown && !told.has(index);
       const isCurrent = current !== null && current.node === index;
       group.classList.toggle("shown", shown);
-      group.classList.toggle("pending", shown && !told.has(index));
+      group.classList.toggle("pending", pending);
+      byId("node-" + index).classList.toggle("pending", pending);
+      titles[index].title.textContent = pending ? titles[index].pending : titles[index].full;
       group.classList.toggle("on-path", path.has(index));
       group.classList.toggle("current", isCurrent);
       edge.classList.toggle("shown", shown);
@@ -221,6 +236,13 @@ PLAYER_JS = """
       event.preventDefault();
       pause();
       select(index);
+    });
+  }
+  // a prompt's schema link opens the page's one copy of that DDL
+  for (const link of document.querySelectorAll("a.ctx-link")) {
+    link.addEventListener("click", () => {
+      const target = byId(link.getAttribute("href").slice(1));
+      if (target) target.open = true;
     });
   }
   const keys = {

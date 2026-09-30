@@ -547,7 +547,8 @@ async def select_final(
     """Pick the answer among the search's candidates.
 
     Args:
-        candidates: Every node, in generation order.
+        candidates: Every node, in the order results were told to the search
+            (``SearchTrace.candidates``); an equal score goes to the earlier one.
         cfg: The answer's settings (``top_k``, ``selector``, ``strategy``).
         pick: The pairwise selector; None ranks by score alone.
 

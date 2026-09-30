@@ -14,8 +14,8 @@ A player steps through the search as it happened:
 Asks and results are replayed in the order they happened (``Candidate.asked_after`` and
 ``told``), so lockstep batches and rolling searches both replay truthfully; records written
 before those fields existed replay one node at a time in ask order. A panel shows the selected
-node's SQL, generator prompt (the schema DDL, stored once per answer, folds away), score parts,
-judge rubric, feedback and errors.
+node's SQL, generator prompt (each schema DDL is written once per page, and the prompts link to
+it), score parts, judge rubric, feedback and errors.
 
 Everything is server-rendered and HTML-escaped, and readable without script: the final tree and
 every node's section. The one script (:data:`schemagraph.agent.viz_assets.PLAYER_JS`) is a
@@ -93,6 +93,11 @@ DISPLAY_SCALE = 1.6
 
 _CSP = "default-src 'none'; style-src 'unsafe-inline'"
 _ASK_ORDER_ID = re.compile(r"n(\d+)")
+# What a node's section says, in the replay, while its generator is still running.
+_PENDING_NOTE = (
+    '<p class="pending-note muted">Generating: the search has not been told this node\'s result '
+    "yet.</p>"
+)
 _SCHEMA_MARKER = re.compile(re.escape(SCHEMA_MARKER).replace(re.escape("{key}"), "([0-9a-f]+)"))
 _UNSAFE_FILENAME = re.compile(r"[^A-Za-z0-9._-]+")
 _RESERVED_FILENAMES = frozenset(
@@ -917,7 +922,8 @@ def _node_group(
     x, y = layout.positions[node.id]
     marks = _marks(node, tree)
     parts = [
-        f"<title>{_escape(_tooltip(node, marks))}</title>",
+        f'<title data-pending="{_escape(_pending_tooltip(node))}">'
+        f"{_escape(_tooltip(node, marks))}</title>",
         f'<circle class="halo" cx="{x:.1f}" cy="{y:.1f}" r="{NODE_RADIUS + 5}"/>',
         _node_circle(node, x, y, color),
         f'<circle class="chosen-ring" cx="{x:.1f}" cy="{y:.1f}" r="{NODE_RADIUS + 4}"/>'
@@ -970,12 +976,18 @@ def _tooltip(node: TreeNode, marks: Sequence[str]) -> str:
     return " · ".join([*parts, *marks])
 
 
+def _pending_tooltip(node: TreeNode) -> str:
+    """Return the hover text the player shows while the node is generating: no outcome yet."""
+    return " · ".join([node.id, node.model, "generating"])
+
+
 # --------------------------------------------------------------------------- node panel
 def _panel(tree: SearchTree, colors: Mapping[str, str]) -> str:
     """Render the node panel: every node's section (the player shows one), then the instructions."""
     sections = "".join(
         _node_section(index, node, tree, colors) for index, node in enumerate(tree.nodes)
     )
+    schemas = "".join(_schema_context(key, tree.contexts[key]) for key in _context_keys(tree))
     instructions = (
         "<details><summary>generator instructions (system prompt)</summary>"
         f"<pre>{_escape(tree.instructions)}</pre></details>"
@@ -985,24 +997,31 @@ def _panel(tree: SearchTree, colors: Mapping[str, str]) -> str:
     return (
         '<aside class="panel" aria-label="node details">'
         '<p class="panel-empty" id="panel-empty">Play the replay, or click a node, to see its '
-        f"SQL and generator prompt.</p>{sections}{instructions}</aside>"
+        f"SQL and generator prompt.</p>{sections}{schemas}{instructions}</aside>"
     )
 
 
 def _node_section(index: int, node: TreeNode, tree: SearchTree, colors: Mapping[str, str]) -> str:
-    """Render one node's section: heading, facts, SQL, rationale, prompt, rubric and feedback."""
+    """Render one node's section: heading, facts, SQL, rationale, prompt, rubric and feedback.
+
+    Everything but the id, model and prompt is the node's outcome (class ``outcome``), which the
+    player hides while the node is still generating.
+    """
     marks = _marks(node, tree)
     marks_html = f' <span class="marks">{_escape("  ".join(marks))}</span>' if marks else ""
     heading = (
         f'<h3><span class="swatch" style="background:{_escape(colors[node.model])}"></span>'
-        f"{_escape(node.id)} · {_escape(short_model_name(node.model))} · "
-        f"{node.score:.2f}{marks_html}</h3>"
+        f"{_escape(node.id)} · {_escape(short_model_name(node.model))}"
+        f'<span class="outcome"> · {node.score:.2f}{marks_html}</span></h3>'
+    )
+    outcome = f"{_node_facts(node)}{_sql(node.sql)}{_prose('rationale', node.rationale)}"
+    judged = (
+        f"{_rubric(node)}{_text_list('feedback', node.feedback)}{_prose('advice', node.advice)}"
     )
     return (
-        f'<section class="node-detail" id="node-{index}">{heading}'
-        f"{_node_facts(node)}{_sql(node.sql)}{_prose('rationale', node.rationale)}"
-        f"{_prompt(node, tree.contexts)}{_rubric(node)}{_text_list('feedback', node.feedback)}"
-        f"{_prose('advice', node.advice)}</section>"
+        f'<section class="node-detail" id="node-{index}">{heading}{_PENDING_NOTE}'
+        f'<div class="outcome">{outcome}</div>{_prompt(node, tree.contexts)}'
+        f'<div class="outcome">{judged}</div></section>'
     )
 
 
@@ -1046,14 +1065,37 @@ def _prompt(node: TreeNode, contexts: Mapping[str, str]) -> str:
             if piece.strip():
                 parts.append(f'<pre class="prompt-text">{_escape(piece.strip(chr(10)))}</pre>')
         elif piece in contexts:
-            lines = contexts[piece].count("\n") + 1
             parts.append(
-                f"<details><summary>schema DDL ({lines} lines)</summary>"
-                f"<pre>{_escape(contexts[piece])}</pre></details>"
+                f'<p><a class="ctx-link" href="#ctx-{_escape(piece)}">schema DDL '
+                f"({_line_count(contexts[piece])} lines)</a></p>"
             )
         else:
             parts.append(f'<p class="muted">[schema {_escape(piece)}: not saved with this run]</p>')
     return f"<details open><summary>generator prompt</summary>{''.join(parts)}</details>"
+
+
+def _context_keys(tree: SearchTree) -> list[str]:
+    """Return the saved schema contexts the nodes' prompts name, in the order they first appear."""
+    keys: dict[str, None] = {}
+    for node in tree.nodes:
+        for position, piece in enumerate(_SCHEMA_MARKER.split(node.prompt or "")):
+            if position % 2 == 1 and piece in tree.contexts:
+                keys.setdefault(piece)
+    return list(keys)
+
+
+def _schema_context(key: str, ddl: str) -> str:
+    """Render one schema DDL, folded away, as the target of the prompts' links to it."""
+    return (
+        f'<details class="schema-context" id="ctx-{_escape(key)}">'
+        f"<summary>schema DDL {_escape(key)} ({_line_count(ddl)} lines)</summary>"
+        f"<pre>{_escape(ddl)}</pre></details>"
+    )
+
+
+def _line_count(text: str) -> int:
+    """Return the number of lines in ``text``."""
+    return text.count("\n") + 1
 
 
 def _rubric(node: TreeNode) -> str:

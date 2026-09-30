@@ -541,6 +541,18 @@ def test_generate_retries_after_explain_and_scores(store):
     assert (candidate.asked_after, candidate.told) == (0, 0) and candidate.end_ms >= 0
 
 
+def test_a_node_that_times_out_keeps_the_prompt_it_was_sent(store):
+    async def stalls(messages, info: AgentInfo) -> ModelResponse:
+        await asyncio.sleep(30)  # cancelled at the node timeout
+        return _output(info, sql=GOOD)
+
+    cfg = AgentConfig(strategy="single", node_timeout_s=0.5, reasoning_node_timeout_s=None)
+    result = _answer(store, cfg, _models(stalls))
+    candidate = result.candidates[0]
+    assert candidate.error == "node timed out" and not candidate.sql
+    assert "Question:" in candidate.prompt and candidate.context_key in result.contexts
+
+
 def test_judge_on_test_model_falls_back_to_the_output(store):
     models = AgentModels(FunctionModel(Script().gen), TestModel(), TestModel(), TestModel(), NAMES)
     result = _answer(store, AgentConfig(strategy="single"), models)
