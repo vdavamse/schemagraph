@@ -542,19 +542,19 @@ def load_search_trees(
 
     Returns:
         One tree per task, in the order the candidates file first names them. Every tree
-        gets the same model order (the configured generators, else every model the loaded
-        records name, sorted), so a model keeps its colour from page to page.
+        gets the same model order (the configured generators, else every model the whole
+        file names, sorted), so a model keeps its colour from page to page.
 
     Raises:
         ValueError: The report is not JSON, or not a run report (a JSON object).
     """
     from schemagraph.agent.viz import tree_from_records
 
-    records = _task_records(candidates_path, tasks)
+    records, record_models = _task_records(candidates_path, tasks)
     rows = {row["instance_id"]: row for row in read_rows(rows_path)} if rows_path else {}
     config = _report_config(report_path)
     agent_config = config.get("agent_config") or {}
-    generators = tuple(agent_config.get("gen_models") or ()) or _record_models(records)
+    generators = tuple(agent_config.get("gen_models") or ()) or record_models
     return [
         tree_from_records(
             task_records,
@@ -571,23 +571,26 @@ def load_search_trees(
     ]
 
 
-def _task_records(candidates_path: Path, tasks: Collection[str] | None) -> dict[str, list[dict]]:
-    """Return the candidates file's records by task, skipping cut lines and id-less records."""
+def _task_records(
+    candidates_path: Path, tasks: Collection[str] | None
+) -> tuple[dict[str, list[dict]], tuple[str, ...]]:
+    """Return the records of the wanted tasks by task, and every model the file names, sorted.
+
+    Cut lines and id-less records are skipped. The models come from every task, not only the
+    wanted ones, so ``--task`` never changes which colour a model gets.
+    """
     records: dict[str, list[dict]] = defaultdict(list)
+    models: set[str] = set()
     with candidates_path.open(encoding="utf-8") as handle:
         for line in handle:
             record = _parse_record(line)
             if record is None or record.get("id") is None:
                 continue
+            if record.get("generator"):
+                models.add(record["generator"])
             if tasks is None or record["instance_id"] in tasks:
                 records[record["instance_id"]].append(record)
-    return records
-
-
-def _record_models(records: dict[str, list[dict]]) -> tuple[str, ...]:
-    """Return every generator model the records name, sorted."""
-    models = {record.get("generator") for task in records.values() for record in task}
-    return tuple(sorted(model for model in models if model))
+    return records, tuple(sorted(models))
 
 
 def _report_config(report_path: Path | None) -> dict:

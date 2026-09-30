@@ -3293,7 +3293,7 @@
       "--rows"
      ],
      "None",
-     "path",
+     "file",
      "the run's rows file (default: next to CANDIDATES)"
     ],
     [
@@ -3302,7 +3302,7 @@
       "--report"
      ],
      "None",
-     "path",
+     "file",
      "the run's report .json (default: next to CANDIDATES)"
     ]
    ]

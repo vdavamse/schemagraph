@@ -419,7 +419,8 @@ def exec_error_text(result: ExecResult | None) -> str | None:
     """Return why a query failed to run (``kind: message``), or None when it ran or never did."""
     if result is None or result.ok:
         return None
-    return f"{result.error_kind or 'error'}: {result.error or ''}".rstrip(": ")
+    kind = result.error_kind or "error"
+    return f"{kind}: {result.error}" if result.error else kind
 
 
 def candidate_record(candidate: Candidate) -> dict[str, Any]:

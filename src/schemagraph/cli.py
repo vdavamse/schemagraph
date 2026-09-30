@@ -869,10 +869,12 @@ def viz_search(
         ),
     ] = None,
     rows: Annotated[
-        Path | None, typer.Option(help="the run's rows file (default: next to CANDIDATES)")
+        Path | None,
+        typer.Option(dir_okay=False, help="the run's rows file (default: next to CANDIDATES)"),
     ] = None,
     report: Annotated[
-        Path | None, typer.Option(help="the run's report .json (default: next to CANDIDATES)")
+        Path | None,
+        typer.Option(dir_okay=False, help="the run's report .json (default: next to CANDIDATES)"),
     ] = None,
 ):
     """Draw the search trees of an exec benchmark run as HTML pages (offline, no model)."""
@@ -914,6 +916,7 @@ def _write_viz_pages(trees: list[SearchTree], target: Path, *, title: str) -> Pa
     """
     from schemagraph.agent.viz import (
         HTML_SUFFIXES,
+        INDEX_FILENAME,
         page_filenames,
         render_index_html,
         write_search_html,
@@ -930,7 +933,7 @@ def _write_viz_pages(trees: list[SearchTree], target: Path, *, title: str) -> Pa
             (write_search_html(tree, target / name).name, tree)
             for name, tree in zip(names, trees, strict=True)
         ]
-        index = target / "index.html"
+        index = target / INDEX_FILENAME
         index.write_text(render_index_html(title, pages), encoding="utf-8")
     except (OSError, ValueError) as error:
         raise typer.BadParameter(str(error), param_hint="'--out'") from None

@@ -223,6 +223,8 @@ def test_exec_error_text_never_prints_none():
     assert exec_error_text(ExecResult(ok=False)) == "error"
     assert exec_error_text(ExecResult(ok=False, error_kind="timeout")) == "timeout"
     assert exec_error_text(ExecResult(ok=False, error="boom")) == "error: boom"
+    ends_in_a_colon = ExecResult(ok=False, error_kind="runtime", error="syntax error at : ")
+    assert exec_error_text(ends_in_a_colon) == "runtime: syntax error at : "  # nothing cut off
 
 
 # ----------------------------------------------------------------------------- 7. paths
@@ -284,6 +286,16 @@ def test_without_a_report_a_model_keeps_its_colour_on_every_page(tmp_path):
     qwen = model_colors(first.models)[QWEN]
     for tree in (first, second):
         assert f'fill="{qwen}"' in _row_of(render_search_html(tree), "n0")
+
+
+def test_without_a_report_the_task_filter_keeps_the_colours(tmp_path):
+    candidates = _write_jsonl(tmp_path / "run_candidates.jsonl", [
+        {"instance_id": "x", "id": "n0", "generator": QWEN, "ok": True},
+        {"instance_id": "y", "id": "n0", "generator": GLM, "ok": True},
+    ])  # fmt: skip
+    (only_y,) = load_search_trees(candidates, tasks={"y"})
+    assert only_y.models == (QWEN, GLM)  # QWEN comes from task x, which was filtered out
+    assert model_colors(only_y.models)[GLM] == MODEL_PALETTE[1]  # as on the full run
 
 
 def test_a_report_that_is_not_a_run_report_is_an_error(tmp_path):
@@ -400,7 +412,7 @@ def test_viz_search_defaults_to_a_directory_next_to_the_run(tmp_path):
 
 
 def test_viz_search_gives_every_task_its_own_safe_page(tmp_path):
-    keys = ["a b", "a_b", "A_B", "CON", "nul.x", "local1"]
+    keys = ["a b", "a_b", "A_B", "CON", "nul.x", "local1", "index", "INDEX"]
     candidates = _write_jsonl(
         tmp_path / "run_candidates.jsonl", [{"instance_id": key, "id": "n0"} for key in keys]
     )
@@ -408,6 +420,7 @@ def test_viz_search_gives_every_task_its_own_safe_page(tmp_path):
     result = CliRunner().invoke(cli_app, ["viz-search", str(candidates), "--out", str(out)])
     assert result.exit_code == 0, result.output
     expected = ["a_b.html", "a_b-2.html", "A_B-3.html", "_CON.html", "_nul.x.html", "local1.html"]
+    expected += ["index-2.html", "INDEX-3.html"]  # index.html is the run's index page
     assert sorted(path.name for path in out.iterdir()) == sorted([*expected, "index.html"])
     index = (out / "index.html").read_text(encoding="utf-8")
     for key, name in zip(keys, expected, strict=True):
@@ -441,6 +454,13 @@ def test_viz_search_reports_a_bad_report_and_an_empty_file(tmp_path):
     result = runner.invoke(cli_app, ["viz-search", str(empty), "--out", str(tmp_path / "o")])
     assert result.exit_code == 2 and "no candidates in" in result.output
     assert "--task" not in result.output
+
+
+@pytest.mark.parametrize("option", ["--rows", "--report"])
+def test_viz_search_refuses_a_directory_for_the_rows_or_report(tmp_path, option):
+    result = CliRunner().invoke(cli_app, ["viz-search", str(MIX), option, str(tmp_path)])
+    unboxed = " ".join(result.output.replace("│", " ").split())  # the error box wraps lines
+    assert result.exit_code == 2 and "is a directory" in unboxed
 
 
 # ----------------------------------------------------------------------------- 11. ask --viz

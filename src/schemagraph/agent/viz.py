@@ -41,6 +41,7 @@ MODEL_PALETTE = (
 UNKNOWN_GENERATOR = "unknown"
 # Suffixes the page may be written to.
 HTML_SUFFIXES = (".html", ".htm")
+INDEX_FILENAME = "index.html"  # a run directory's index page; no task page may take it
 # Outline geometry, in SVG pixels: row height, indent per tree level, node radius, the width of
 # one character of the 12 px monospace font, the score bar's full width, the gap between columns
 # and the padding around the outline.
@@ -389,10 +390,10 @@ def page_filename(tree: SearchTree) -> str:
 def page_filenames(trees: Sequence[SearchTree]) -> list[str]:
     """Return one distinct page file name per tree, in order.
 
-    Names are compared without case (Windows and macOS file systems ignore it); a repeat
-    gets ``-2``, ``-3``, ... before its suffix.
+    Names are compared without case (Windows and macOS file systems ignore it); a repeat,
+    or a tree whose name is the index page's, gets ``-2``, ``-3``, ... before its suffix.
     """
-    taken: set[str] = set()
+    taken = {INDEX_FILENAME}
     names = []
     for tree in trees:
         stem = page_filename(tree).removesuffix(".html")
