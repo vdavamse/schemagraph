@@ -363,6 +363,30 @@ def test_failed_tasks_are_error_rows_and_are_retried(tmp_path):
     assert len(candidates) == 4  # the failed attempts' candidates are gone
 
 
+@pytest.mark.parametrize("trace", [True, False])
+def test_a_task_that_fails_after_its_search_keeps_its_transcripts(tmp_path, monkeypatch, trace):
+    from schemagraph.agent import answer
+    from schemagraph.bench import spider2_exec
+
+    async def selection_broke(*args, **kwargs):
+        raise RuntimeError("selection broke")
+
+    monkeypatch.setattr(answer, "select_final", selection_broke)
+    root, out = _spider2(tmp_path / "s2"), tmp_path / "out"
+    cfg = _config(early_stop=1.01, trace=trace)
+    result = spider2_exec.run(root, cfg=cfg, models=_Models().agent_models(), out_dir=out, tag="f")
+    assert [row["error"] for row in result["rows"]] == ["RuntimeError: selection broke"] * 2
+    messages_path = out / "spider2_exec_f_messages.jsonl"
+    if trace:
+        messages = [json.loads(line) for line in messages_path.read_text().splitlines()]
+        generated = {record["instance_id"] for record in messages if record["role"] == "generator"}
+        assert generated == {"local901", "local902"}
+    else:
+        assert not messages_path.exists()
+    assert not (out / "spider2_exec_f_candidates.jsonl").exists()  # transcripts only
+    assert not (out / "spider2_exec_f_contexts.jsonl").exists()
+
+
 def test_judge_only_reports_auroc(tmp_path):
     from pydantic_ai.models.function import FunctionModel
 

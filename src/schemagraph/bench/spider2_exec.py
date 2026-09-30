@@ -26,8 +26,8 @@ import threading
 import time
 import zlib
 from collections import Counter, defaultdict
-from collections.abc import Callable, Collection
-from contextlib import AsyncExitStack
+from collections.abc import AsyncIterator, Callable, Collection
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from schemagraph.agent.answer import Answerer
     from schemagraph.agent.execute import SQLiteExecutor
     from schemagraph.agent.models import AgentModels
-    from schemagraph.agent.results import AgentConfig, AnswerResult, Candidate
+    from schemagraph.agent.results import AgentConfig, AnswerResult, Candidate, Transcript
     from schemagraph.agent.viz import SearchTree
     from schemagraph.linking.linker import Linker
 
@@ -757,7 +757,8 @@ class _ExecBench:
         rows_path: The rows file (one row per task attempt).
         candidates_path: The candidates file (one record per candidate).
         messages_path: The transcripts file (one record per model call attempt), written when
-            ``cfg.trace`` is on.
+            ``cfg.trace`` is on, for a task that fails after its search too (a resume that
+            retries the task drops them).
         contexts_path: The contexts file (one record per answered task: the schema DDL its
             prompts name and the generator's instructions).
         config_hash: Stamped on every row.
@@ -797,9 +798,15 @@ class _ExecBench:
         """Answer and score one task; a task-level failure is an error row, not a crash."""
         async with self._semaphore:
             started = time.perf_counter()
+            answerer = None
             try:
-                result = await self._answer(task)
+                async with self._answerer(task) as answerer:
+                    result = await answerer.answer(
+                        task.question, evidence=self.runner.evidence(task)
+                    )
             except Exception as error:
+                if answerer is not None:  # keep the paid model calls of a failed task
+                    self._write_transcripts(task, answerer.transcripts)
                 row = {
                     "instance_id": task.instance_id,
                     "db": task.db,
@@ -817,9 +824,7 @@ class _ExecBench:
                 for candidate in result.candidates:
                     match = row["candidate_ex"].get(candidate.id)
                     append_record(self.candidates_path, _candidate_record(task, candidate, match))
-                for transcript in result.transcripts:
-                    record = {"instance_id": task.instance_id, **transcript.model_dump(mode="json")}
-                    append_record(self.messages_path, record)
+                self._write_transcripts(task, result.transcripts)
                 contexts = {"contexts": result.contexts, "instructions": result.instructions}
                 append_record(self.contexts_path, {"instance_id": task.instance_id, **contexts})
             append_record(self.rows_path, row)
@@ -827,16 +832,26 @@ class _ExecBench:
             if self.progress:
                 self.progress(self.finished, self.total, row)
 
-    async def _answer(self, task: Instance) -> AnswerResult:
-        """Answer one task over its database's MCP server."""
+    @asynccontextmanager
+    async def _answerer(self, task: Instance) -> AsyncIterator[Answerer]:
+        """Yield an Answerer over the task's database's MCP server, releasing the server after.
+
+        A context manager rather than a function returning the answer, so that ``_task`` still
+        holds the Answerer, and the transcripts it has collected, when answering raises.
+        """
         task_seed = self.seed + zlib.crc32(task.instance_id.encode()) % TASK_SEED_SPREAD
         try:
             url = await self._servers.url(task.db)
             executor = await asyncio.to_thread(self.runner.executor, task.db)
-            answerer = new_answerer(url, executor, replace(self.cfg, seed=task_seed), self.models)
-            return await answerer.answer(task.question, evidence=self.runner.evidence(task))
+            yield new_answerer(url, executor, replace(self.cfg, seed=task_seed), self.models)
         finally:
             await self._servers.task_done(task.db)
+
+    def _write_transcripts(self, task: Instance, transcripts: list[Transcript] | None) -> None:
+        """Append the task's transcripts (None: trace off) to the messages file, one per call."""
+        for transcript in transcripts or []:
+            record = {"instance_id": task.instance_id, **transcript.model_dump(mode="json")}
+            append_record(self.messages_path, record)
 
 
 def _candidate_record(task: Instance, candidate: Candidate, match: int | None) -> dict:
