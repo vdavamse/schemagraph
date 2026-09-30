@@ -623,7 +623,7 @@ def ask(
         Path | None,
         typer.Option(
             metavar="FILE.html",
-            help="also write the search tree as an HTML page (nodes coloured by generator model)",
+            help="also write the search as an HTML replay page (nodes coloured by model family)",
         ),
     ] = None,
     home: HomeOpt = None,
@@ -877,18 +877,18 @@ def viz_search(
         typer.Option(dir_okay=False, help="the run's report .json (default: next to CANDIDATES)"),
     ] = None,
 ):
-    """Draw the search trees of an exec benchmark run as HTML pages (offline, no model)."""
+    """Draw the search trees of an exec benchmark run as HTML replay pages (offline, no model)."""
     from schemagraph.bench.spider2_exec import CANDIDATES_SUFFIX, load_search_trees, run_files
 
-    default_rows, default_report = run_files(candidates)
-    rows, report = rows or default_rows, report or default_report
+    siblings = run_files(candidates)
+    rows, report = rows or siblings.rows, report or siblings.report
     if not rows.exists():
         typer.echo(f"warning: no rows file {rows}; the chosen nodes are not marked", err=True)
     if not report.exists():
         typer.echo(f"warning: no report {report}; single-model runs show no model", err=True)
     wanted = {name.strip() for name in task} - {""} if task else None
     try:
-        trees = load_search_trees(candidates, rows, report, wanted)
+        trees = load_search_trees(candidates, rows, report, wanted, siblings.contexts)
     except ValueError as error:  # the report is not JSON, or not a run report
         typer.echo(f"error: {error}", err=True)
         raise typer.Exit(1) from None

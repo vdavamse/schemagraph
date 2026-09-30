@@ -1,132 +1,107 @@
-"""Draw one answer's search tree as an HTML page: which node refined which, by which model.
+"""Replay one answer's search as an HTML page: which node the search selected, refined and scored.
 
-The page is an indented outline drawn in inline SVG, one row per node, depth-first: each node
-sits under the node it refines, and siblings follow the order the search asked for them. Rows
-are coloured by the generator model, so a Multi-LLM search shows which model wrote what. Each
-row links to a section with the node's score parts, judge rubric, findings, feedback, critic
-advice, errors and SQL. The page has no script: a Content-Security-Policy meta forbids every
-script, and every string is HTML-escaped.
+The page draws the search tree top-down in inline SVG, the question at the top and each node
+under the node it refines, coloured by the generator model's family (qwen, glm, gemini, ...).
+A player steps through the search as it happened:
 
-The tree is built from our own candidates, not TreeQuest's state (which the search discards and
-the baselines never have), in the one record form `candidate_record` defines:
-:func:`tree_from_answer` reads an `AnswerResult`, and :func:`tree_from_records` reads those
-records, as the exec benchmark's ``*_candidates.jsonl`` stores them
-(:func:`schemagraph.bench.spider2_exec.load_search_trees`). Core dependencies only (the stdlib
-and `schemagraph.agent.results`), so the offline viewer runs without the ``agent`` extra.
+* **ask**: the selection path lights up from the question down to the node being expanded
+  (AB-MCTS moves only from a node to one of its children, so the path of a step is the chain of
+  ancestors of the expanded node: CONT at each ancestor, GEN at the parent), and the new node
+  appears, dashed, while its generator runs;
+* **tell**: the node fills with its score, and the path lights up again as the reward backs up;
+* **pick**: the final choice gets its ring.
+
+Asks and results are replayed in the order they happened (``Candidate.asked_after`` and
+``told``), so lockstep batches and rolling searches both replay truthfully; records written
+before those fields existed replay one node at a time in ask order. A panel shows the selected
+node's SQL, generator prompt (the schema DDL, stored once per answer, folds away), score parts,
+judge rubric, feedback and errors.
+
+Everything is server-rendered and HTML-escaped, and readable without script: the final tree and
+every node's section. The one script (:data:`schemagraph.agent.viz_assets.PLAYER_JS`) is a
+constant admitted by its hash in the page's Content-Security-Policy; it reads the replay steps
+from a JSON data block and only toggles classes and sets ``textContent``.
+
+The tree is built from our own candidates, not TreeQuest's state, in the one record form
+`candidate_record` defines: :func:`tree_from_answer` reads an `AnswerResult`, and
+:func:`tree_from_records` reads those records as the exec benchmark's ``*_candidates.jsonl``
+stores them (:func:`schemagraph.bench.spider2_exec.load_search_trees`). Core dependencies only
+(the stdlib and `schemagraph.agent.results`), so the offline viewer runs without the ``agent``
+extra.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import html
+import json
 import os
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
-from schemagraph.agent.results import candidate_record
+from schemagraph.agent.results import SCHEMA_MARKER, candidate_record
+from schemagraph.agent.viz_assets import CSS, PLAYER_JS
 
 if TYPE_CHECKING:
     from schemagraph.agent.results import AnswerResult
 
-# Okabe-Ito colours, told apart under the common colour-vision deficiencies, in the order models
-# get them; black is swapped for grey so the eighth model shows on a dark background. The palette
-# cycles after eight models.
-MODEL_PALETTE = (
-    "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999",
-)  # fmt: skip
+# LLM families: (family, fragments of a model name that identify it, the family's colour). A
+# model belongs to the first family with a fragment in its lowercased full name, so it keeps its
+# family's colour in every run. The colours start from Okabe-Ito, told apart under the common
+# colour-vision deficiencies.
+MODEL_FAMILIES = (
+    ("qwen", ("qwen",), "#7B5CD6"),
+    ("glm", ("glm", "z-ai/", "zhipu"), "#0072B2"),
+    ("gemini", ("gemini", "gemma", "google/"), "#009E73"),
+    ("gpt", ("gpt", "openai/"), "#E69F00"),
+    ("claude", ("claude", "anthropic"), "#D55E00"),
+    ("deepseek", ("deepseek",), "#56B4E9"),
+    ("kimi", ("kimi", "moonshot"), "#CC79A7"),
+    ("llama", ("llama",), "#A08C00"),
+    ("mistral", ("mistral", "codestral", "devstral"), "#8C564B"),
+    ("grok", ("grok", "x-ai/"), "#B03060"),
+)
+# The family of a model no fragment names, and its colour.
+OTHER_FAMILY = "other"
+OTHER_COLOR = "#999999"
+# The shade of each further model of one family, in legend order: how far its colour moves
+# towards white (positive) or black (negative). The steps cycle after the last one.
+SHADE_STEPS = (0.0, 0.45, -0.35, 0.7, -0.55)
 # The model of a node whose record names none and whose run names no default generator.
 UNKNOWN_GENERATOR = "unknown"
 # Suffixes the page may be written to.
 HTML_SUFFIXES = (".html", ".htm")
 INDEX_FILENAME = "index.html"  # a run directory's index page; no task page may take it
-# Outline geometry, in SVG pixels: row height, indent per tree level, node radius, the width of
-# one character of the 12 px monospace font, the score bar's full width, the gap between columns
-# and the padding around the outline.
-ROW_HEIGHT = 26
-INDENT = 20
-NODE_RADIUS = 6
-CHAR_WIDTH = 7.3
-SCORE_BAR_WIDTH = 80
-COLUMN_GAP = 16
-PADDING = 12
-# Characters of the score number ("0.66"), which the score bar follows.
-SCORE_TEXT_CHARS = 4
+# Tree geometry, in SVG units: the distance between neighbouring leaves and between levels, the
+# node radius, the question box and the padding around the tree.
+SLOT_WIDTH = 34
+LEVEL_HEIGHT = 64
+NODE_RADIUS = 11
+ROOT_WIDTH = 76
+ROOT_HEIGHT = 22
+PADDING = 24
+# The gap between a node and its id label below it.
+LABEL_GAP = 12
+# How much larger than its SVG units the tree is shown (readable on a slide); a tree wider than
+# the page shrinks to fit.
+DISPLAY_SCALE = 1.6
 
 _CSP = "default-src 'none'; style-src 'unsafe-inline'"
 _ASK_ORDER_ID = re.compile(r"n(\d+)")
+_SCHEMA_MARKER = re.compile(re.escape(SCHEMA_MARKER).replace(re.escape("{key}"), "([0-9a-f]+)"))
 _UNSAFE_FILENAME = re.compile(r"[^A-Za-z0-9._-]+")
 _RESERVED_FILENAMES = frozenset(
     {"CON", "PRN", "AUX", "NUL"} | {f"{port}{n}" for port in ("COM", "LPT") for n in range(1, 10)}
 )
 _ROOT_LABEL = "question"
 # The fill of the example circles in the marks key; any model colour would do.
-_KEY_FILL = MODEL_PALETTE[1]
-_CSS = """
-:root {
-  color-scheme: light dark;
-  --bg: #ffffff; --fg: #1b1f24; --muted: #5b6470; --line: #c3c9d1; --panel: #f3f4f6;
-  --accent: #b35900; --good: #1a7f37; --bad: #cf222e; --bar: #7d8590; --code: #f6f8fa;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1115; --fg: #e6e8eb; --muted: #9aa4b1; --line: #3b424c; --panel: #1b1f26;
-    --accent: #ffb454; --good: #56d364; --bad: #ff7b72; --bar: #8b949e; --code: #161b22;
-  }
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0 auto; max-width: 72rem; padding: 16px; background: var(--bg); color: var(--fg);
-  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; overflow-wrap: anywhere;
-}
-a { color: inherit; }
-h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
-h2 { font-size: 1.1rem; margin: 1.5rem 0 .5rem; }
-h3 { font-size: 1rem; margin: 0 0 .5rem; }
-.facts { display: grid; grid-template-columns: max-content 1fr; gap: .15rem 1rem; margin: 0; }
-.facts dt { color: var(--muted); }
-.facts dd { margin: 0; }
-.scroll { overflow-x: auto; max-width: 100%; }
-.outline { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
-.outline svg { display: block; font: 12px ui-monospace, "SFMono-Regular", Consolas, monospace; }
-.outline text { fill: var(--fg); dominant-baseline: middle; }
-.outline .muted { fill: var(--muted); }
-.outline .edge { stroke: var(--line); fill: none; stroke-width: 1.5; }
-.outline .filled { stroke: var(--fg); stroke-width: 1; }
-.outline .hollow { stroke-width: 2.5; }
-.outline .dashed { stroke-width: 2; stroke-dasharray: 3 2; }
-.outline .ring { stroke: var(--accent); fill: none; stroke-width: 2; }
-.outline .root { fill: var(--muted); }
-.outline .bar-bg { fill: var(--panel); }
-.outline .bar { fill: var(--bar); }
-.outline .hit { fill: transparent; }
-.outline a:hover .hit, .outline a:focus .hit { fill: var(--panel); }
-.outline .good { fill: var(--good); }
-.outline .bad { fill: var(--bad); }
-.outline .chosen { fill: var(--accent); }
-table { border-collapse: collapse; }
-th, td { text-align: left; padding: .2rem .75rem .2rem 0; vertical-align: top; }
-th { color: var(--muted); font-weight: 600; white-space: nowrap; }
-.legend { margin: .5rem 0 1rem; }
-.swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%;
-  border: 1px solid var(--fg); vertical-align: -1px; margin-right: .4rem; }
-.key { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; color: var(--muted); margin: .5rem 0; }
-.key svg { vertical-align: -3px; margin-right: .3rem; }
-.key .node { stroke: var(--fg); }
-.key .ring { stroke: var(--accent); fill: none; stroke-width: 2; }
-.node-detail { border-top: 1px solid var(--line); padding: .75rem 0; }
-.node-detail:target { background: var(--panel); }
-.marks { color: var(--accent); font-weight: 600; }
-.good { color: var(--good); }
-.bad { color: var(--bad); }
-.muted { color: var(--muted); }
-pre { background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: .6rem;
-  overflow-x: auto; font: 12.5px/1.45 ui-monospace, "SFMono-Regular", Consolas, monospace;
-  overflow-wrap: normal; }
-ul { margin: .25rem 0; padding-left: 1.25rem; }
-"""
+_KEY_FILL = MODEL_FAMILIES[1][2]
+_SPEEDS = ("0.5", "1", "2", "4")
 
 
 @dataclass(frozen=True)
@@ -136,7 +111,7 @@ class TreeNode:
     Attributes:
         id: The node id (``"n0"``, ``"n1"``, ... in ask order).
         parent_id: The node it refines, None for a fresh draft.
-        level: Its level in the drawn outline: 1 for a draft, one more per refinement; a node
+        level: Its level in the drawn tree: 1 for a draft, one more per refinement; a node
             whose parent is missing hangs off the root at level 1.
         depth: The refinement depth the search recorded.
         model: The generator model that wrote it.
@@ -155,6 +130,11 @@ class TreeNode:
         sql: The query.
         rationale: The generator's explanation.
         ex: The execution match against the gold result (benchmark only), else None.
+        prompt: The generator's prompt, its schema DDL replaced by a marker.
+        asked_after: Nodes finished when the search asked for this one, when recorded.
+        told: Its place in the order results came back, when recorded.
+        start_ms: When it started, in milliseconds since the search started, when recorded.
+        end_ms: When it finished, on the same clock, when recorded.
     """
 
     id: str
@@ -177,6 +157,11 @@ class TreeNode:
     sql: str = ""
     rationale: str = ""
     ex: int | None = None
+    prompt: str = ""
+    asked_after: int | None = None
+    told: int | None = None
+    start_ms: float | None = None
+    end_ms: float | None = None
 
     @property
     def failed(self) -> bool:
@@ -202,6 +187,8 @@ class SearchTree:
         chosen_by: How it was picked (``score``, ``selector`` or ``only``).
         strategy: The search strategy.
         facts: Label and value pairs shown under the title.
+        contexts: The schema DDL of each context key the prompts name.
+        instructions: The generator's system instructions, when recorded.
     """
 
     key: str
@@ -212,6 +199,8 @@ class SearchTree:
     chosen_by: str | None = None
     strategy: str | None = None
     facts: tuple[tuple[str, str], ...] = ()
+    contexts: Mapping[str, str] = field(default_factory=dict)
+    instructions: str = ""
 
     def node(self, node_id: str | None) -> TreeNode | None:
         """Return the node with this id, or None."""
@@ -230,6 +219,8 @@ def tree_from_records(
     chosen_by: str | None = None,
     strategy: str | None = None,
     facts: Iterable[tuple[str, str]] = (),
+    contexts: Mapping[str, str] | None = None,
+    instructions: str = "",
 ) -> SearchTree:
     """Build a search tree from candidate records, the one place records are normalised.
 
@@ -241,11 +232,13 @@ def tree_from_records(
         default_model: The model of a record whose ``generator`` is empty (a single-generator
             run records none); None leaves it `UNKNOWN_GENERATOR`.
         generators: The configured generator models; they lead the legend, in this order, and
-            keep their colours from task to task.
+            keep their shades from task to task.
         chosen_id: The node the answer picked.
         chosen_by: How it was picked.
         strategy: The search strategy.
         facts: Label and value pairs shown under the title.
+        contexts: The schema DDL by context key, to put back into the prompts.
+        instructions: The generator's system instructions.
 
     Returns:
         The tree, with nodes in depth-first pre-order and children in ask order.
@@ -264,6 +257,8 @@ def tree_from_records(
         chosen_by=chosen_by,
         strategy=strategy,
         facts=tuple((str(label), str(value)) for label, value in facts),
+        contexts={str(name): str(ddl) for name, ddl in (contexts or {}).items()},
+        instructions=instructions,
     )
 
 
@@ -297,6 +292,8 @@ def tree_from_answer(result: AnswerResult, *, generators: Sequence[str] = ()) ->
         chosen_by=result.chosen_by,
         strategy=result.strategy,
         facts=facts,
+        contexts=result.contexts,
+        instructions=result.instructions,
     )
 
 
@@ -322,7 +319,22 @@ def _node_from_record(record: Mapping[str, Any], default_model: str | None) -> T
         sql=record.get("sql") or "",
         rationale=record.get("rationale") or "",
         ex=record.get("ex"),
+        prompt=str(record.get("prompt") or ""),
+        asked_after=_optional_int(record.get("asked_after")),
+        told=_optional_int(record.get("told")),
+        start_ms=_optional_float(record.get("start_ms")),
+        end_ms=_optional_float(record.get("end_ms")),
     )
+
+
+def _optional_int(value: Any) -> int | None:
+    """Return ``value`` as an int, or None when it is missing or not a number."""
+    return int(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+
+
+def _optional_float(value: Any) -> float | None:
+    """Return ``value`` as a float, or None when it is missing or not a number."""
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
 
 
 def _ask_order(node_id: str) -> tuple[int, int, str]:
@@ -332,7 +344,7 @@ def _ask_order(node_id: str) -> tuple[int, int, str]:
 
 
 def _preorder(by_id: dict[str, TreeNode]) -> Iterator[TreeNode]:
-    """Yield the nodes depth-first, children in ask order, each with its outline ``level``.
+    """Yield the nodes depth-first, children in ask order, each with its drawn ``level``.
 
     A node whose parent is not among the records (a run killed mid-write) hangs off the root.
     """
@@ -361,9 +373,43 @@ def _legend_order(nodes: Sequence[TreeNode], generators: Sequence[str]) -> tuple
     return (*configured, *sorted(seen))
 
 
+# --------------------------------------------------------------------------- colours
+def model_family(model: str) -> str:
+    """Return the LLM family of a model name (see `MODEL_FAMILIES`), else `OTHER_FAMILY`."""
+    name = model.lower()
+    for family, fragments, _ in MODEL_FAMILIES:
+        if any(fragment in name for fragment in fragments):
+            return family
+    return OTHER_FAMILY
+
+
 def model_colors(models: Sequence[str]) -> dict[str, str]:
-    """Map each model to its `MODEL_PALETTE` colour, in order, cycling after the palette ends."""
-    return {model: MODEL_PALETTE[index % len(MODEL_PALETTE)] for index, model in enumerate(models)}
+    """Map each model to its family's colour, the family's further models to its shades.
+
+    Args:
+        models: The models in legend order; within a family, the first gets the family colour
+            and the next ones the `SHADE_STEPS` shades, in this order.
+
+    Returns:
+        Model -> ``#rrggbb`` colour.
+    """
+    base = {family: color for family, _, color in MODEL_FAMILIES}
+    seen: defaultdict[str, int] = defaultdict(int)
+    colors = {}
+    for model in models:
+        family = model_family(model)
+        step = SHADE_STEPS[seen[family] % len(SHADE_STEPS)]
+        seen[family] += 1
+        colors[model] = _shade(base.get(family, OTHER_COLOR), step)
+    return colors
+
+
+def _shade(color: str, amount: float) -> str:
+    """Move a ``#rrggbb`` colour towards white (``amount`` > 0) or black (< 0) by ``|amount|``."""
+    channels = [int(color[index : index + 2], 16) for index in (1, 3, 5)]
+    target = 255 if amount > 0 else 0
+    mixed = [round(channel + (target - channel) * abs(amount)) for channel in channels]
+    return "#" + "".join(f"{channel:02X}" for channel in mixed)
 
 
 def short_model_name(name: str) -> str:
@@ -375,6 +421,7 @@ def short_model_name(name: str) -> str:
     return short or name
 
 
+# --------------------------------------------------------------------------- file names
 def page_filename(tree: SearchTree) -> str:
     """Return a safe file name for the tree's page, from its key.
 
@@ -445,26 +492,243 @@ def write_search_html(tree: SearchTree, path: str | Path) -> Path:
     return target
 
 
+# --------------------------------------------------------------------------- layout
+@dataclass(frozen=True)
+class TreeLayout:
+    """Where the tree is drawn.
+
+    Attributes:
+        parents: Node id -> the id of the node drawn above it (None: the question).
+        positions: Node id -> the centre of its circle.
+        root: The centre of the question box.
+        width: The SVG's width.
+        height: The SVG's height.
+    """
+
+    parents: Mapping[str, str | None]
+    positions: Mapping[str, tuple[float, float]]
+    root: tuple[float, float]
+    width: float
+    height: float
+
+
+def drawn_parents(tree: SearchTree) -> dict[str, str | None]:
+    """Return each node's parent as drawn: the nearest node one level up before it in pre-order.
+
+    This is the recorded parent, except for an orphan or a node on a parent cycle, which hang
+    off the question (None).
+    """
+    parents: dict[str, str | None] = {}
+    path: list[str] = []  # the drawn path from the question to the previous node
+    for node in tree.nodes:
+        del path[node.level - 1 :]
+        parents[node.id] = path[-1] if path else None
+        path.append(node.id)
+    return parents
+
+
+def layout_tree(tree: SearchTree) -> TreeLayout:
+    """Lay the tree out top-down: leaves side by side in pre-order, parents over their children."""
+    parents = drawn_parents(tree)
+    children: defaultdict[str | None, list[str]] = defaultdict(list)
+    for node in tree.nodes:
+        children[parents[node.id]].append(node.id)
+    x_of: dict[str, float] = {}
+    leaves = 0
+    for node in tree.nodes:  # leaves left to right in pre-order
+        if not children[node.id]:
+            x_of[node.id] = PADDING + (leaves + 0.5) * SLOT_WIDTH
+            leaves += 1
+    for node in reversed(tree.nodes):  # a node's children come after it in pre-order
+        if children[node.id]:
+            x_of[node.id] = (x_of[children[node.id][0]] + x_of[children[node.id][-1]]) / 2
+    width = max(2 * PADDING + leaves * SLOT_WIDTH, 2 * PADDING + ROOT_WIDTH)
+    tops = children[None]
+    root_x = (x_of[tops[0]] + x_of[tops[-1]]) / 2 if tops else width / 2
+    root_y = PADDING + ROOT_HEIGHT / 2
+    positions = {node.id: (x_of[node.id], _level_y(node.level)) for node in tree.nodes}
+    deepest = max((node.level for node in tree.nodes), default=0)
+    height = _level_y(deepest) + NODE_RADIUS + LABEL_GAP + PADDING if tree.nodes else 2 * root_y
+    return TreeLayout(parents, positions, (root_x, root_y), width, height)
+
+
+def _level_y(level: int) -> float:
+    """Return the y of the centre of a node at tree ``level`` (the question is level 0)."""
+    return PADDING + ROOT_HEIGHT / 2 + level * LEVEL_HEIGHT
+
+
+# --------------------------------------------------------------------------- replay
+EventKind = Literal["ask", "tell", "pick"]
+
+
+@dataclass(frozen=True)
+class ReplayEvent:
+    """One step of the replay.
+
+    Attributes:
+        kind: ``ask`` (the search selects a node and starts a child), ``tell`` (the child's
+            score comes back) or ``pick`` (the final choice).
+        node: The index in `SearchTree.nodes` of the node the step is about.
+        path: The indexes of its drawn ancestors, the question's side first: the selection path
+            of an ask, the backup path of a tell.
+        caption: What the step shows, in words.
+    """
+
+    kind: EventKind
+    node: int
+    path: tuple[int, ...]
+    caption: str
+
+
+def replay_events(tree: SearchTree) -> list[ReplayEvent]:
+    """Return the replay's steps: every ask and tell in the order they happened, then the pick.
+
+    With ``asked_after`` and ``told`` on every node, an ask comes after the results that had
+    come back when it was made; otherwise the nodes replay one at a time in ask order.
+    """
+    index = {node.id: position for position, node in enumerate(tree.nodes)}
+    parents = drawn_parents(tree)
+
+    def ancestors(node: TreeNode) -> list[TreeNode]:
+        chain = []
+        parent = parents[node.id]
+        while parent is not None:
+            chain.append(tree.nodes[index[parent]])
+            parent = parents[parent]
+        return chain[::-1]
+
+    clock_zero = min((node.start_ms for node in tree.nodes if node.start_ms is not None), default=0)
+    events = []
+    for kind, node in _replay_order(tree.nodes):
+        path = ancestors(node)
+        caption = (
+            _ask_caption(node, path, tree.strategy, clock_zero)
+            if kind == "ask"
+            else _tell_caption(node, path, tree.strategy, clock_zero)
+        )
+        events.append(ReplayEvent(kind, index[node.id], tuple(index[n.id] for n in path), caption))
+    chosen = tree.node(tree.chosen_id)
+    if chosen is not None:
+        path = ancestors(chosen)
+        how = f" by {tree.chosen_by}" if tree.chosen_by else ""
+        caption = f"Final pick: {chosen.id}{how}, score {chosen.score:.2f}{_ex_words(chosen)}"
+        events.append(
+            ReplayEvent("pick", index[chosen.id], tuple(index[n.id] for n in path), caption)
+        )
+    return events
+
+
+def _replay_order(nodes: Sequence[TreeNode]) -> list[tuple[EventKind, TreeNode]]:
+    """Return every node's ask and tell, in the order they happened."""
+    keyed: list[tuple[tuple[int, int, tuple[int, int, str]], EventKind, TreeNode]] = []
+    if all(node.asked_after is not None and node.told is not None for node in nodes):
+        for node in nodes:
+            keyed.append(((node.asked_after or 0, 0, _ask_order(node.id)), "ask", node))
+            keyed.append(((node.told or 0, 1, _ask_order(node.id)), "tell", node))
+    else:  # older records: one node at a time, in ask order
+        for position, node in enumerate(sorted(nodes, key=lambda node: _ask_order(node.id))):
+            keyed.append(((position, 0, _ask_order(node.id)), "ask", node))
+            keyed.append(((position, 1, _ask_order(node.id)), "tell", node))
+    keyed.sort(key=lambda item: item[0])
+    return [(kind, node) for _, kind, node in keyed]
+
+
+def _clock(ms: float | None, zero: float) -> str:
+    """Return a caption's time prefix (``12.3 s · ``), or nothing when the time is unknown."""
+    return "" if ms is None else f"{max(0.0, ms - zero) / 1000:.1f} s · "
+
+
+def _ask_caption(
+    node: TreeNode, path: Sequence[TreeNode], strategy: str | None, zero: float
+) -> str:
+    """Describe an ask: the selection path and the child started, in AB-MCTS terms for abmcts."""
+    model = short_model_name(node.model)
+    context = f" ({node.action} context)" if node.action and node.action != node.model else ""
+    with_model = f"with {model}{context}"
+    abmcts = strategy == "abmcts"
+    if not path:
+        what = f"GEN at the question: a new draft {node.id} {with_model}"
+        return _clock(node.start_ms, zero) + (what if abmcts else f"Draft {node.id} {with_model}")
+    parent = path[-1].id
+    if not abmcts:
+        return _clock(node.start_ms, zero) + f"Refine {parent} into {node.id} {with_model}"
+    route = " → ".join([_ROOT_LABEL, *(step.id for step in path)])
+    return _clock(node.start_ms, zero) + (
+        f"Select {route} (CONT), then GEN under {parent}: {node.id} {with_model}"
+    )
+
+
+def _tell_caption(
+    node: TreeNode, path: Sequence[TreeNode], strategy: str | None, zero: float
+) -> str:
+    """Describe a tell: the node's score and marks, and the path its reward backs up."""
+    status = " · generation failed" if node.failed else " · exec error" if node.exec_failed else ""
+    text = (
+        f"{node.id} ({short_model_name(node.model)}) scored {node.score:.2f}"
+        f"{status}{_ex_words(node)}"
+    )
+    if strategy == "abmcts":
+        route = " → ".join([*(step.id for step in reversed(path)), _ROOT_LABEL])
+        text += f"; the reward backs up {route}"
+    return _clock(node.end_ms, zero) + text
+
+
+def _ex_words(node: TreeNode) -> str:
+    """Return a node's EX for a caption, or nothing when unknown."""
+    if node.ex is None:
+        return ""
+    return " · EX ✓ (matches gold)" if node.ex else " · EX ✗"
+
+
+def _events_json(tree: SearchTree, events: Sequence[ReplayEvent]) -> str:
+    """Return the player's data as JSON that is safe inside a ``<script>`` data block."""
+    models = len({node.model for node in tree.nodes})
+    noun = "model" if models == 1 else "models"
+    data = {
+        "nodes": len(tree.nodes),
+        "start": (
+            f"Press ▶ Play (or Space) to replay the search: {len(tree.nodes)} nodes by {models} "
+            f"{noun}. ← and → step through it; click a node for its prompt and SQL."
+        ),
+        "events": [
+            {"kind": event.kind, "node": event.node, "path": list(event.path),
+             "caption": event.caption}
+            for event in events
+        ],
+    }  # fmt: skip
+    text = json.dumps(data, ensure_ascii=False)
+    return text.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
+
+
 # --------------------------------------------------------------------------- the search page
 def render_search_html(tree: SearchTree) -> str:
-    """Render one search tree as a standalone, script-free HTML page.
+    """Render one search tree as a standalone HTML page with the replay player.
 
-    The page has the title and facts, a legend (each model's colour, node count, best score
-    and correct nodes when known; the key to the marks), the outline, and one section per node.
+    The page has the title and facts, a legend (each model's family colour, node count, best
+    score and correct nodes when known; the key to the marks), the player (controls, caption and
+    the tree) beside the node panel, and the replay steps as a JSON data block.
     """
     colors = model_colors(tree.models)
+    layout = layout_tree(tree)
+    events = replay_events(tree)
     body = "".join(
         [
             f"<h1>{_escape(tree.title)}</h1>",
             _facts(tree),
             _legend(tree, colors),
-            '<h2>Search tree</h2><div class="scroll outline">',
-            _outline_svg(tree, colors),
-            "</div><h2>Nodes</h2>",
-            "".join(_node_section(node, tree, colors) for node in tree.nodes),
+            '<div class="player"><div class="player-main" id="player">',
+            _controls(),
+            '<p class="caption" id="caption" aria-live="polite"></p>',
+            f'<div class="stage">{_tree_svg(tree, colors, layout)}</div></div>',
+            _panel(tree, colors),
+            "</div>",
+            '<script type="application/json" id="search-events">',
+            _events_json(tree, events),
+            "</script>",
+            f"<script>{PLAYER_JS}</script>",
         ]
     )
-    return _page(tree.title, body)
+    return _page(tree.title, body, script=PLAYER_JS)
 
 
 def _escape(value: object) -> str:
@@ -472,14 +736,24 @@ def _escape(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
-def _page(title: str, body: str) -> str:
-    """Wrap ``body`` in a document with the CSP meta, the viewport and the style sheet."""
+def script_hash(script: str) -> str:
+    """Return the CSP source that admits exactly this inline script (``'sha256-...'``)."""
+    digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+    return f"'sha256-{digest}'"
+
+
+def _page(title: str, body: str, *, script: str | None = None) -> str:
+    """Wrap ``body`` in a document with the CSP meta, the viewport and the style sheet.
+
+    The CSP forbids every script, or admits only ``script`` (by its hash) when one is given.
+    """
+    csp = _CSP + (f"; script-src {script_hash(script)}" if script is not None else "")
     return (
         "<!doctype html>\n"
         '<html lang="en"><head><meta charset="utf-8">'
-        f'<meta http-equiv="Content-Security-Policy" content="{_escape(_CSP)}">'
+        f'<meta http-equiv="Content-Security-Policy" content="{_escape(csp)}">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f"<title>{_escape(title)}</title><style>{_CSS}</style></head>"
+        f"<title>{_escape(title)}</title><style>{CSS}</style></head>"
         f'<body id="top">{body}</body></html>\n'
     )
 
@@ -510,11 +784,30 @@ def _marks(node: TreeNode, tree: SearchTree) -> list[str]:
     return marks
 
 
+def _controls() -> str:
+    """Render the player's controls (shown only when the script runs)."""
+    speeds = "".join(
+        f'<option value="{speed}"{" selected" if speed == "1" else ""}>{speed}×</option>'
+        for speed in _SPEEDS
+    )
+    return (
+        '<div class="controls" role="toolbar" aria-label="replay">'
+        '<button type="button" id="first" title="first step (Home)">|◀</button>'
+        '<button type="button" id="back" title="step back (←)">◀ step</button>'
+        '<button type="button" id="play" title="play or pause (Space)">▶ Play</button>'
+        '<button type="button" id="forward" title="step forward (→)">step ▶</button>'
+        '<button type="button" id="last" title="last step (End)">▶|</button>'
+        '<input type="range" id="step" min="0" max="0" value="0" aria-label="replay step">'
+        '<span class="counter" id="counter"></span>'
+        f'<label>speed <select id="speed">{speeds}</select></label></div>'
+    )
+
+
 # --------------------------------------------------------------------------- legend
 def _legend(tree: SearchTree, colors: Mapping[str, str]) -> str:
-    """Render the model table (colour, nodes, best score, correct nodes) and the marks key."""
+    """Render the model table (colour, family, nodes, best score, correct nodes) and the key."""
     known_ex = any(node.ex is not None for node in tree.nodes)
-    header = "<th>model</th><th>nodes</th><th>best score</th>" + (
+    header = "<th>model</th><th>family</th><th>nodes</th><th>best score</th>" + (
         "<th>EX ✓</th>" if known_ex else ""
     )
     rows = "".join(_legend_row(tree, model, colors[model], known_ex) for model in tree.models)
@@ -533,188 +826,143 @@ def _legend_row(tree: SearchTree, model: str, color: str, known_ex: bool) -> str
     correct = f"<td>{sum(1 for node in nodes if node.ex)}</td>" if known_ex else ""
     return (
         f'<tr><td><span class="swatch" style="background:{_escape(color)}"></span>'
-        f"{_escape(model)}</td><td>{len(nodes)}</td><td>{best_text}</td>{correct}</tr>"
+        f"{_escape(model)}</td><td>{_escape(model_family(model))}</td>"
+        f"<td>{len(nodes)}</td><td>{best_text}</td>{correct}</tr>"
     )
 
 
 def _marks_key() -> str:
-    """Render the key to the node marks, each with a small drawing of its circle."""
-    radius, size = NODE_RADIUS, 2 * NODE_RADIUS + 8
+    """Render the key to the node marks and the replay's colours, each with a small drawing."""
+    radius, size = 6, 20
     center = size / 2
 
     def swatch(shape: str) -> str:
         return f'<svg width="{size}" height="{size}" aria-hidden="true">{shape}</svg>'
 
     circle = f'<circle cx="{center}" cy="{center}" r="{radius}" class="node"'
+    line = f'<line x1="2" y1="{center}" x2="{size - 2}" y2="{center}" stroke-width="3.5" '
     entries = [
-        (swatch(f'{circle} fill="{_KEY_FILL}"/>'), "ran (fill: model)"),
-        (swatch(f'{circle} fill="none" stroke-width="2.5"/>'), "exec error (hollow)"),
+        (swatch(f'{circle} fill="{_KEY_FILL}"/>'), "ran (fill: model family)"),
+        (swatch(f'{circle} fill="none" stroke-width="3"/>'), "exec error (hollow)"),
         (swatch(f'{circle} fill="none" stroke-dasharray="3 2"/>'), "⚠ generation failed"),
         (
             swatch(
                 f'{circle} fill="{_KEY_FILL}"/>'
-                f'<circle cx="{center}" cy="{center}" r="{radius + 3}" class="ring"/>'
+                f'<circle cx="{center}" cy="{center}" r="{radius + 3}" class="chosen-ring"/>'
             ),
             "★ chosen (ring)",
         ),
+        (swatch(f'{line}style="stroke:var(--select)"/>'), "selection path"),
+        (swatch(f'{line}style="stroke:var(--backup)"/>'), "reward backup"),
     ]
     items = "".join(f"<span>{shape}{_escape(label)}</span>" for shape, label in entries)
     return f'<div class="key">{items}</div>'
 
 
-# --------------------------------------------------------------------------- outline
-@dataclass(frozen=True)
-class _Columns:
-    """The x positions of the outline's aligned columns, and its size.
-
-    Attributes:
-        model: Left edge of the model name column.
-        score: Left edge of the score number.
-        bar: Left edge of the score bar.
-        marks: Left edge of the marks column.
-        width: The SVG's width.
-        height: The SVG's height.
-    """
-
-    model: float
-    score: float
-    bar: float
-    marks: float
-    width: float
-    height: float
-
-
-def _node_x(level: int) -> float:
-    """Return the x of the centre of a node circle at outline ``level`` (the root is 0)."""
-    return PADDING + level * INDENT + NODE_RADIUS
-
-
-def _row_y(row: int) -> float:
-    """Return the y of the middle of outline row ``row`` (the root is row 0)."""
-    return PADDING + row * ROW_HEIGHT + ROW_HEIGHT / 2
-
-
-def _columns(tree: SearchTree) -> _Columns:
-    """Lay out the aligned columns after the deepest node's id label."""
-    labels = [(node.level, node.id) for node in tree.nodes] or [(0, _ROOT_LABEL)]
-    tree_right = max(
-        _node_x(level) + NODE_RADIUS + 6 + len(label) * CHAR_WIDTH for level, label in labels
+# --------------------------------------------------------------------------- the tree
+def _tree_svg(tree: SearchTree, colors: Mapping[str, str], layout: TreeLayout) -> str:
+    """Render the tree: the edges, the question box, then one linked group per node."""
+    edges = "".join(_edge(index, node, layout) for index, node in enumerate(tree.nodes))
+    groups = "".join(
+        _node_group(index, node, tree, colors[node.model], layout)
+        for index, node in enumerate(tree.nodes)
     )
-    model_x = tree_right + COLUMN_GAP
-    model_chars = max((len(short_model_name(model)) for model in tree.models), default=0)
-    score_x = model_x + model_chars * CHAR_WIDTH + COLUMN_GAP
-    bar_x = score_x + (SCORE_TEXT_CHARS + 1) * CHAR_WIDTH
-    marks_x = bar_x + SCORE_BAR_WIDTH + COLUMN_GAP
-    marks_chars = max((len("  ".join(_marks(node, tree))) for node in tree.nodes), default=0)
-    return _Columns(
-        model=model_x,
-        score=score_x,
-        bar=bar_x,
-        marks=marks_x,
-        width=round(marks_x + marks_chars * CHAR_WIDTH + PADDING),
-        height=round(2 * PADDING + (len(tree.nodes) + 1) * ROW_HEIGHT),
-    )
-
-
-def _outline_svg(tree: SearchTree, colors: Mapping[str, str]) -> str:
-    """Render the outline: the root row, the edges, then one linked row per node."""
-    columns = _columns(tree)
-    rows = {node.id: row for row, node in enumerate(tree.nodes, start=1)}
-    edges = "".join(_edge(node, rows) for node in tree.nodes)
-    node_rows = "".join(
-        _node_row(node, row, tree, colors[node.model], columns)
-        for row, node in enumerate(tree.nodes, start=1)
-    )
-    root_y = _row_y(0)
+    root_x, root_y = layout.root
     root = (
-        f'<rect class="root" x="{_node_x(0) - NODE_RADIUS + 1}" y="{root_y - NODE_RADIUS + 1}" '
-        f'width="{2 * NODE_RADIUS - 2}" height="{2 * NODE_RADIUS - 2}"/>'
-        f'<text class="muted" x="{_node_x(0) + NODE_RADIUS + 6}" y="{root_y}">{_ROOT_LABEL}</text>'
+        f'<g class="root" id="root-node"><rect x="{root_x - ROOT_WIDTH / 2:.1f}" '
+        f'y="{root_y - ROOT_HEIGHT / 2:.1f}" width="{ROOT_WIDTH}" height="{ROOT_HEIGHT}" rx="6"/>'
+        f'<text x="{root_x:.1f}" y="{root_y:.1f}">{_ROOT_LABEL}</text></g>'
     )
+    width, height = round(layout.width), round(layout.height)
+    shown_width, shown_height = round(width * DISPLAY_SCALE), round(height * DISPLAY_SCALE)
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{columns.width}" '
-        f'height="{columns.height}" viewBox="0 0 {columns.width} {columns.height}" '
-        f'role="img" aria-label="search tree">{edges}{root}{node_rows}</svg>'
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" '
+        f'width="{shown_width}" height="{shown_height}" role="img" aria-label="search tree">'
+        f"{edges}{root}{groups}</svg>"
     )
 
 
-def _edge(node: TreeNode, rows: Mapping[str, int]) -> str:
-    """Draw the elbow from the node's parent down and across to the node.
-
-    A draft, an orphan and the first node drawn of a parent cycle hang off the root: their
-    parent has no row, or a row that is not above theirs.
-    """
-    parent_row = rows.get(node.parent_id or "", 0)
-    if parent_row >= rows[node.id]:
-        parent_row = 0
-    parent_x, parent_y = _node_x(node.level - 1), _row_y(parent_row)
-    child_x, child_y = _node_x(node.level), _row_y(rows[node.id])
+def _edge(index: int, node: TreeNode, layout: TreeLayout) -> str:
+    """Draw the curve from the node's drawn parent (or the question box) down to the node."""
+    parent = layout.parents[node.id]
+    if parent is None:
+        start_x, start_y = layout.root[0], layout.root[1] + ROOT_HEIGHT / 2
+    else:
+        start_x, start_y = layout.positions[parent]
+        start_y += NODE_RADIUS
+    end_x, end_y = layout.positions[node.id]
+    end_y -= NODE_RADIUS
+    middle = (start_y + end_y) / 2
     return (
-        f'<path class="edge" d="M{parent_x} {parent_y + NODE_RADIUS} '
-        f'V{child_y} H{child_x - NODE_RADIUS}"/>'
+        f'<path class="edge" id="e-{index}" d="M{start_x:.1f} {start_y:.1f} '
+        f'C{start_x:.1f} {middle:.1f} {end_x:.1f} {middle:.1f} {end_x:.1f} {end_y:.1f}"/>'
     )
 
 
-def _node_row(node: TreeNode, row: int, tree: SearchTree, color: str, columns: _Columns) -> str:
-    """Render one node's row, linked to its section, with a hover tooltip.
+def _node_group(
+    index: int, node: TreeNode, tree: SearchTree, color: str, layout: TreeLayout
+) -> str:
+    """Render one node: its circle, score, id label, EX mark and chosen ring, linked to its section.
 
     Args:
+        index: The node's index in `SearchTree.nodes`, which names its elements.
         node: The node.
-        row: Its outline row (1 for the first node).
         tree: The tree, for the chosen node.
         color: The node's model colour.
-        columns: The column layout.
+        layout: Where the node sits.
 
     Returns:
-        An ``<a>`` element holding the row's shapes and text.
+        An ``<a>`` element holding the node's shapes and text.
     """
-    y = _row_y(row)
-    x = _node_x(node.level)
+    x, y = layout.positions[node.id]
     marks = _marks(node, tree)
-    score = min(max(node.score, 0.0), 1.0)
     parts = [
         f"<title>{_escape(_tooltip(node, marks))}</title>",
-        f'<rect class="hit" x="0" y="{y - ROW_HEIGHT / 2}" width="{columns.width}" '
-        f'height="{ROW_HEIGHT}"/>',
+        f'<circle class="halo" cx="{x:.1f}" cy="{y:.1f}" r="{NODE_RADIUS + 5}"/>',
         _node_circle(node, x, y, color),
-        f'<circle class="ring" cx="{x}" cy="{y}" r="{NODE_RADIUS + 3}"/>'
+        f'<circle class="chosen-ring" cx="{x:.1f}" cy="{y:.1f}" r="{NODE_RADIUS + 4}"/>'
         if node.id == tree.chosen_id
         else "",
-        f'<text x="{x + NODE_RADIUS + 6}" y="{y}">{_escape(node.id)}</text>',
-        f'<text class="muted" x="{columns.model}" y="{y}">'
-        f"{_escape(short_model_name(node.model))}</text>",
-        f'<text x="{columns.score}" y="{y}">{node.score:.2f}</text>',
-        f'<rect class="bar-bg" x="{columns.bar}" y="{y - 4}" width="{SCORE_BAR_WIDTH}" '
-        'height="8" rx="2"/>',
-        f'<rect class="bar" x="{columns.bar}" y="{y - 4}" width="{score * SCORE_BAR_WIDTH:.1f}" '
-        'height="8" rx="2"/>',
-        _marks_text(marks, columns.marks, y),
+        ""
+        if node.failed
+        else f'<text class="score" x="{x:.1f}" y="{y:.1f}">{_score_text(node.score)}</text>',
+        f'<text class="label" x="{x:.1f}" y="{y + NODE_RADIUS + LABEL_GAP:.1f}">'
+        f"{_escape(node.id)}</text>",
+        _ex_mark(node, x, y),
     ]
-    return f'<a href="#node-{_escape(node.id)}">{"".join(parts)}</a>'
+    return f'<a href="#node-{index}" class="node-g" id="g-{index}">{"".join(parts)}</a>'
 
 
 def _node_circle(node: TreeNode, x: float, y: float, color: str) -> str:
-    """Draw the node: filled when it ran, hollow on an exec error, dashed when it failed."""
-    if node.failed:
-        style = f'class="node dashed" fill="none" stroke="{_escape(color)}"'
-    elif node.exec_failed:
-        style = f'class="node hollow" fill="none" stroke="{_escape(color)}"'
-    else:
-        style = f'class="node filled" fill="{_escape(color)}"'
-    return f'<circle cx="{x}" cy="{y}" r="{NODE_RADIUS}" {style}/>'
+    """Draw the node: filled when it ran, hollow on an exec error, dashed when it failed.
+
+    The model colour is the ``--c`` custom property, which the style sheet uses for the fill
+    or the outline, and the replay for the outline of a node still running.
+    """
+    shape = "dashed" if node.failed else "hollow" if node.exec_failed else "filled"
+    return (
+        f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{NODE_RADIUS}" class="node {shape}" '
+        f'style="--c:{_escape(color)}"/>'
+    )
 
 
-def _marks_text(marks: Sequence[str], x: float, y: float) -> str:
-    """Render the marks as one text line, each coloured by what it says."""
-    spans = []
-    for mark in marks:
-        css = "chosen" if mark.startswith("★") else "good" if mark == "EX ✓" else "bad"
-        spans.append(f'<tspan class="{css}">{_escape(mark)}</tspan>')
-    return f'<text x="{x}" y="{y}" xml:space="preserve">{"  ".join(spans)}</text>' if spans else ""
+def _score_text(score: float) -> str:
+    """Return a score as the node shows it: ``.82``, ``1.0`` (it must fit in the circle)."""
+    clamped = min(max(score, 0.0), 1.0)
+    return "1.0" if clamped >= 0.995 else f"{clamped:.2f}".removeprefix("0")
+
+
+def _ex_mark(node: TreeNode, x: float, y: float) -> str:
+    """Draw a tick or a cross right of the node when its EX is known."""
+    if node.ex is None:
+        return ""
+    css, mark = ("good", "✓") if node.ex else ("bad", "✗")
+    position = f'x="{x + NODE_RADIUS + 2:.1f}" y="{y - NODE_RADIUS:.1f}"'
+    return f'<text class="ex {css}" {position}>{mark}</text>'
 
 
 def _tooltip(node: TreeNode, marks: Sequence[str]) -> str:
-    """Return the hover text of a node row."""
+    """Return the hover text of a node."""
     parent = f"refines {node.parent_id}" if node.parent_id else "draft"
     parts = [node.id, node.model, f"score {node.score:.2f}", parent]
     if node.action and node.action != node.model:
@@ -722,9 +970,27 @@ def _tooltip(node: TreeNode, marks: Sequence[str]) -> str:
     return " · ".join([*parts, *marks])
 
 
-# --------------------------------------------------------------------------- node sections
-def _node_section(node: TreeNode, tree: SearchTree, colors: Mapping[str, str]) -> str:
-    """Render one node's section: heading, facts, judge rubric, feedback and SQL."""
+# --------------------------------------------------------------------------- node panel
+def _panel(tree: SearchTree, colors: Mapping[str, str]) -> str:
+    """Render the node panel: every node's section (the player shows one), then the instructions."""
+    sections = "".join(
+        _node_section(index, node, tree, colors) for index, node in enumerate(tree.nodes)
+    )
+    instructions = (
+        "<details><summary>generator instructions (system prompt)</summary>"
+        f"<pre>{_escape(tree.instructions)}</pre></details>"
+        if tree.instructions
+        else ""
+    )
+    return (
+        '<aside class="panel" aria-label="node details">'
+        '<p class="panel-empty" id="panel-empty">Play the replay, or click a node, to see its '
+        f"SQL and generator prompt.</p>{sections}{instructions}</aside>"
+    )
+
+
+def _node_section(index: int, node: TreeNode, tree: SearchTree, colors: Mapping[str, str]) -> str:
+    """Render one node's section: heading, facts, SQL, rationale, prompt, rubric and feedback."""
     marks = _marks(node, tree)
     marks_html = f' <span class="marks">{_escape("  ".join(marks))}</span>' if marks else ""
     heading = (
@@ -733,11 +999,10 @@ def _node_section(node: TreeNode, tree: SearchTree, colors: Mapping[str, str]) -
         f"{node.score:.2f}{marks_html}</h3>"
     )
     return (
-        f'<section class="node-detail" id="node-{_escape(node.id)}">{heading}'
-        f"{_node_facts(node)}{_rubric(node)}{_text_list('feedback', node.feedback)}"
-        f"{_prose('advice', node.advice)}{_prose('rationale', node.rationale)}"
-        f"{_sql(node.sql)}"
-        '<p><a href="#top">↑ top</a></p></section>'
+        f'<section class="node-detail" id="node-{index}">{heading}'
+        f"{_node_facts(node)}{_sql(node.sql)}{_prose('rationale', node.rationale)}"
+        f"{_prompt(node, tree.contexts)}{_rubric(node)}{_text_list('feedback', node.feedback)}"
+        f"{_prose('advice', node.advice)}</section>"
     )
 
 
@@ -756,11 +1021,39 @@ def _node_facts(node: TreeNode) -> str:
         ("findings", ", ".join(node.findings) or None),
         ("error", node.error),
         ("exec error", node.exec_error),
+        ("time", _duration(node)),
     ]
     items = "".join(
         f"<dt>{_escape(label)}</dt><dd>{_escape(value)}</dd>" for label, value in facts if value
     )
     return f'<dl class="facts">{items}</dl>'
+
+
+def _duration(node: TreeNode) -> str | None:
+    """Return how long the node took, when both ends are recorded."""
+    if node.start_ms is None or node.end_ms is None:
+        return None
+    return f"{(node.end_ms - node.start_ms) / 1000:.1f} s"
+
+
+def _prompt(node: TreeNode, contexts: Mapping[str, str]) -> str:
+    """Render the generator prompt, its schema DDL folded away in its own disclosure."""
+    if not node.prompt:
+        return ""
+    parts = []
+    for position, piece in enumerate(_SCHEMA_MARKER.split(node.prompt)):
+        if position % 2 == 0:  # prompt text between markers
+            if piece.strip():
+                parts.append(f'<pre class="prompt-text">{_escape(piece.strip(chr(10)))}</pre>')
+        elif piece in contexts:
+            lines = contexts[piece].count("\n") + 1
+            parts.append(
+                f"<details><summary>schema DDL ({lines} lines)</summary>"
+                f"<pre>{_escape(contexts[piece])}</pre></details>"
+            )
+        else:
+            parts.append(f'<p class="muted">[schema {_escape(piece)}: not saved with this run]</p>')
+    return f"<details open><summary>generator prompt</summary>{''.join(parts)}</details>"
 
 
 def _rubric(node: TreeNode) -> str:
@@ -794,7 +1087,7 @@ def _prose(label: str, text: str | None) -> str:
 
 
 def _sql(sql: str) -> str:
-    """Render the query in a block that scrolls sideways inside itself."""
+    """Render the query in a block that wraps inside itself."""
     return f"<pre><code>{_escape(sql)}</code></pre>" if sql else ""
 
 

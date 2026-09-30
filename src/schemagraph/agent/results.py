@@ -8,7 +8,8 @@ pydantic turns into the output tool's JSON schema.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import hashlib
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Literal
@@ -17,6 +18,11 @@ from pydantic import BaseModel, Field, create_model
 
 Strategy = Literal["single", "best_of_n", "refine", "abmcts"]
 Action = Literal["tight", "wide"]
+
+# Hex digits of the key that names a schema context (its DDL) in stored prompts.
+CONTEXT_KEY_CHARS = 12
+# Stands in for the schema DDL in a stored prompt; the DDL is kept once, under its key.
+SCHEMA_MARKER = "<<schema {key}>>"
 
 # Jev: at most 255 options per question, and a Literal needs at least 2.
 MAX_OPTIONS = 255
@@ -350,6 +356,15 @@ class Candidate(BaseModel):
         error: The generation failure, if any.
         usage: Model usage attributed to this node.
         ms: Wall time spent on this node.
+        prompt: The generator's prompt, with the schema DDL replaced by `SCHEMA_MARKER`
+            (:func:`stored_prompt`); empty when the node failed before prompting.
+        context_key: The key of the schema DDL the prompt showed, in `AnswerResult.contexts`.
+        asked_after: Nodes the search had finished when it asked for this one; with ``told``
+            it orders the asks and results as they happened, for the search player.
+        told: This node's place in the order results were told to the search (0 first): the
+            order they came back in a rolling search, the batch's order in a lockstep one.
+        start_ms: When the node started, in milliseconds since the search started.
+        end_ms: When it finished, on the same clock.
     """
 
     id: str
@@ -371,6 +386,12 @@ class Candidate(BaseModel):
     error: str | None = None
     usage: list[UsageRecord] = Field(default_factory=list)
     ms: float = 0.0
+    prompt: str = ""
+    context_key: str | None = None
+    asked_after: int | None = None
+    told: int | None = None
+    start_ms: float | None = None
+    end_ms: float | None = None
 
 
 class AnswerResult(BaseModel):
@@ -394,6 +415,8 @@ class AnswerResult(BaseModel):
         models: Model name by role.
         ms: Wall time of the answer.
         transcripts: The messages of every model call, when ``AgentConfig.trace`` is on.
+        contexts: The schema DDL of each context key the candidates' prompts name.
+        instructions: The generator's system instructions.
     """
 
     question: str
@@ -413,6 +436,36 @@ class AnswerResult(BaseModel):
     models: dict[str, str] = Field(default_factory=dict)
     ms: float = 0.0
     transcripts: list[Transcript] = Field(default_factory=list)
+    contexts: dict[str, str] = Field(default_factory=dict)
+    instructions: str = ""
+
+
+def context_key(ddl: str) -> str:
+    """Return the short key that names a schema context, from its DDL."""
+    return hashlib.sha256(ddl.strip().encode()).hexdigest()[:CONTEXT_KEY_CHARS]
+
+
+def stored_prompt(prompt: str, ddl: str) -> tuple[str, str]:
+    """Return a prompt with its schema DDL replaced by `SCHEMA_MARKER`, and the DDL's key.
+
+    A search's nodes see one or two schema contexts, so the DDL is stored once per answer
+    (`AnswerResult.contexts`) and not once per node.
+    """
+    key = context_key(ddl)
+    schema = ddl.strip()
+    marker = SCHEMA_MARKER.format(key=key)
+    return (prompt.replace(schema, marker) if schema else prompt), key
+
+
+def expand_prompt(prompt: str, contexts: Mapping[str, str]) -> str:
+    """Put the schema DDL back into a stored prompt; an unknown key keeps its marker.
+
+    The inverse of :func:`stored_prompt`: it rebuilds exactly what the generator read (unless
+    the question itself contains a schema marker).
+    """
+    for key, ddl in contexts.items():
+        prompt = prompt.replace(SCHEMA_MARKER.format(key=key), ddl.strip())
+    return prompt
 
 
 def exec_error_text(result: ExecResult | None) -> str | None:
@@ -452,6 +505,12 @@ def candidate_record(candidate: Candidate) -> dict[str, Any]:
         "row_count": result.row_count if result else None,
         "error": candidate.error,
         "exec_error": exec_error_text(result),
+        "prompt": candidate.prompt,
+        "context_key": candidate.context_key,
+        "asked_after": candidate.asked_after,
+        "told": candidate.told,
+        "start_ms": candidate.start_ms,
+        "end_ms": candidate.end_ms,
     }
 
 

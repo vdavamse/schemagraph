@@ -1,0 +1,1 @@
+{"instance_id": "local901", "contexts": {"0123456789ab": "CREATE TABLE orders (id INTEGER);"}, "instructions": "You write one read-only SQLite query."}

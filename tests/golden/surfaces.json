@@ -2462,7 +2462,7 @@
      ],
      "None",
      "path",
-     "also write the search tree as an HTML page (nodes coloured by generator model)"
+     "also write the search as an HTML replay page (nodes coloured by model family)"
     ],
     [
      "home",
@@ -3257,7 +3257,7 @@
    ]
   },
   "viz-search": {
-   "help": "Draw the search trees of an exec benchmark run as HTML pages (offline, no model).",
+   "help": "Draw the search trees of an exec benchmark run as HTML replay pages (offline, no model).",
    "params": [
     [
      "candidates",

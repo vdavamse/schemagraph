@@ -38,6 +38,7 @@ from schemagraph.agent.results import (
     UsageRecord,
     UsageSummary,
     rubric_type,
+    stored_prompt,
 )
 from schemagraph.agent.schema_client import LinkedSchema, SchemaClient
 from schemagraph.agent.score import combine, feedback
@@ -124,6 +125,7 @@ class Answerer:
         self._wide = LinkedSchema(ddl="", tables=())
         self._advice_locks: dict[str, asyncio.Lock] = {}
         self._refinements: dict[str, list[Candidate]] = {}  # parent id -> its finished refinements
+        self._contexts: dict[str, str] = {}  # context key -> the DDL the prompts showed
 
     # ----------------------------------------------------------- entry points
     async def prepare(self, question: str, *, evidence: str | None = None) -> None:
@@ -136,6 +138,7 @@ class Answerer:
         self.transcripts = [] if self.cfg.trace else None
         self._advice_locks = {}
         self._refinements = {}
+        self._contexts = {}
         self.question = question
         self.evidence = evidence
         self._link_text = question
@@ -173,6 +176,10 @@ class Answerer:
             linked_tables=list(self._wide.tables),
             models=self.models.names,
             ms=(time.perf_counter() - started) * 1000,
+            contexts=dict(self._contexts),
+            instructions=prompts.generator_instructions(
+                self.executor.dialect, self.cfg.probe_limit
+            ),
         )
 
     def _limits(
@@ -234,7 +241,10 @@ class Answerer:
             node_id, parent, context, generator=generator, linked_tables=list(linked.tables)
         )
         try:
-            output = await self._write_sql(node_id, parent, context, linked, generator)
+            prompt = self._generator_prompt(parent, context, linked)
+            candidate.prompt, candidate.context_key = stored_prompt(prompt, linked.ddl)
+            self._contexts[candidate.context_key] = linked.ddl.strip()
+            output = await self._write_sql(node_id, prompt, parent, generator)
         except Exception as error:
             candidate.error = f"{type(error).__name__}: {error}"[: agents.FAILURE_CHARS]
             candidate.feedback = [f"generation failed: {candidate.error}"]
@@ -253,33 +263,22 @@ class Answerer:
             self._refinements.setdefault(parent.id, []).append(candidate)
         return candidate
 
-    async def _write_sql(
-        self,
-        node_id: str,
-        parent: Candidate | None,
-        context: Action,
-        linked: LinkedSchema,
-        generator: str | None,
-    ) -> SqlCandidate:
-        """Run the generator for one node.
+    def _generator_prompt(
+        self, parent: Candidate | None, context: Action, linked: LinkedSchema
+    ) -> str:
+        """Build the generator's prompt for a draft, or a refinement of ``parent``.
 
         Args:
-            node_id: The node's id, for usage records and traces.
             parent: The node to refine; None for a fresh draft.
             context: The width of the linked context, named in the prompt.
             linked: The schema context the generator sees.
-            generator: The generator model; None is the default one.
 
         Returns:
-            The generator's query, rationale and tables.
-
-        Raises:
-            Exception: The generator failed; the node records the error.
+            The prompt, schema DDL included.
         """
-        model, model_name = self.models.generator(generator)
         # earlier refinements of the same parent, so this one does not repeat them
         siblings = list(self._refinements.get(parent.id, [])) if parent else None
-        prompt = prompts.generator_prompt(
+        return prompts.generator_prompt(
             self.question,
             self.evidence,
             context,
@@ -289,6 +288,29 @@ class Answerer:
             evidence_chars=self.cfg.evidence_chars,
             siblings=siblings,
         )
+
+    async def _write_sql(
+        self,
+        node_id: str,
+        prompt: str,
+        parent: Candidate | None,
+        generator: str | None,
+    ) -> SqlCandidate:
+        """Run the generator for one node.
+
+        Args:
+            node_id: The node's id, for usage records and traces.
+            prompt: The generator's prompt (:meth:`_generator_prompt`).
+            parent: The node to refine; None for a fresh draft (it sets the temperature).
+            generator: The generator model; None is the default one.
+
+        Returns:
+            The generator's query, rationale and tables.
+
+        Raises:
+            Exception: The generator failed; the node records the error.
+        """
+        model, model_name = self.models.generator(generator)
         temperature = self.cfg.refine_temperature if parent else self.cfg.draft_temperature
         output, _, _ = await agents.run_agent(
             "generator",

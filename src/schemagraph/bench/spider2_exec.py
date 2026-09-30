@@ -30,7 +30,7 @@ from collections.abc import Callable, Collection
 from contextlib import AsyncExitStack
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from schemagraph.bench.spider2_eval import evaluate_rows
 from schemagraph.bench.spider2_lite import SUITES, Instance, _GraphCache, canon, load_instances
@@ -93,13 +93,15 @@ _LEGACY_VALUES = {
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6
 # A run's files, each ``spider2_exec_<tag>`` plus a suffix: one record per candidate, one row
-# per task attempt, the report (summary, config and rows), the per-task CSV and the model-call
-# transcripts.
+# per task attempt, the report (summary, config and rows), the per-task CSV, the model-call
+# transcripts and one record per task of what its generator prompts share (schema DDL by context
+# key, the generator's instructions).
 CANDIDATES_SUFFIX = "_candidates.jsonl"
 ROWS_SUFFIX = ".rows.jsonl"
 REPORT_SUFFIX = ".json"
 CSV_SUFFIX = ".csv"
 MESSAGES_SUFFIX = "_messages.jsonl"
+CONTEXTS_SUFFIX = "_contexts.jsonl"
 
 TaskProgress = Callable[[int, int, dict], None]
 
@@ -509,16 +511,32 @@ def _write_outputs(
 
 
 # --------------------------------------------------------------------------- search trees
-def run_files(candidates_path: Path) -> tuple[Path, Path]:
-    """Return the rows file and the report next to a run's candidates file.
+class RunFiles(NamedTuple):
+    """The files next to a run's candidates file.
 
-    ``spider2_exec_t_candidates.jsonl`` gives ``spider2_exec_t.rows.jsonl`` and
-    ``spider2_exec_t.json``; a file without the candidates suffix is taken as the run's stem.
+    Attributes:
+        rows: The rows file.
+        report: The report.
+        contexts: The contexts file (schema DDL and generator instructions per task).
+    """
+
+    rows: Path
+    report: Path
+    contexts: Path
+
+
+def run_files(candidates_path: Path) -> RunFiles:
+    """Return the rows file, the report and the contexts file next to a run's candidates file.
+
+    ``spider2_exec_t_candidates.jsonl`` gives ``spider2_exec_t.rows.jsonl``,
+    ``spider2_exec_t.json`` and ``spider2_exec_t_contexts.jsonl``; a file without the
+    candidates suffix is taken as the run's stem.
     """
     stem = candidates_path.name.removesuffix(CANDIDATES_SUFFIX)
-    return (
-        candidates_path.with_name(stem + ROWS_SUFFIX),
-        candidates_path.with_name(stem + REPORT_SUFFIX),
+    return RunFiles(
+        rows=candidates_path.with_name(stem + ROWS_SUFFIX),
+        report=candidates_path.with_name(stem + REPORT_SUFFIX),
+        contexts=candidates_path.with_name(stem + CONTEXTS_SUFFIX),
     )
 
 
@@ -527,6 +545,7 @@ def load_search_trees(
     rows_path: Path | None = None,
     report_path: Path | None = None,
     tasks: Collection[str] | None = None,
+    contexts_path: Path | None = None,
 ) -> list[SearchTree]:
     """Build the search tree of every task of a run, for :mod:`schemagraph.agent.viz`.
 
@@ -539,6 +558,8 @@ def load_search_trees(
             name none), the configured generators' order and the strategy; None or a missing
             file leaves those unknown.
         tasks: Only these instance ids; None keeps every task.
+        contexts_path: Its contexts file, for the schema DDL in the prompts and the generator's
+            instructions; None or a missing file shows the prompts with schema markers.
 
     Returns:
         One tree per task, in the order the candidates file first names them. Every tree
@@ -554,6 +575,7 @@ def load_search_trees(
     rows = {row["instance_id"]: row for row in read_rows(rows_path)} if rows_path else {}
     config = _report_config(report_path)
     agent_config = config.get("agent_config") or {}
+    contexts = _task_contexts(contexts_path, tasks)
     generators = tuple(agent_config.get("gen_models") or ()) or record_models
     return [
         tree_from_records(
@@ -566,6 +588,8 @@ def load_search_trees(
             chosen_by=rows.get(instance_id, {}).get("chosen_by"),
             strategy=config.get("strategy"),
             facts=_task_facts(rows.get(instance_id, {}), config),
+            contexts=_dict_field(contexts.get(instance_id, {}), "contexts"),
+            instructions=str(contexts.get(instance_id, {}).get("instructions") or ""),
         )
         for instance_id, task_records in records.items()
     ]
@@ -591,6 +615,25 @@ def _task_records(
             if tasks is None or record["instance_id"] in tasks:
                 records[record["instance_id"]].append(record)
     return records, tuple(sorted(models))
+
+
+def _task_contexts(contexts_path: Path | None, tasks: Collection[str] | None) -> dict[str, dict]:
+    """Return the contexts file's record by task (the last one wins), or {} without the file."""
+    if contexts_path is None or not contexts_path.exists():
+        return {}
+    records: dict[str, dict] = {}
+    with contexts_path.open(encoding="utf-8") as handle:
+        for line in handle:
+            record = _parse_record(line)
+            if record is not None and (tasks is None or record["instance_id"] in tasks):
+                records[record["instance_id"]] = record
+    return records
+
+
+def _dict_field(record: dict, name: str) -> dict:
+    """Return a record's field when it is a JSON object, else {} (a malformed record)."""
+    value = record.get(name)
+    return value if isinstance(value, dict) else {}
 
 
 def _report_config(report_path: Path | None) -> dict:
@@ -674,10 +717,10 @@ def run(
     rows_path = out / f"spider2_exec_{tag}{ROWS_SUFFIX}"
     candidates_path = out / f"spider2_exec_{tag}{CANDIDATES_SUFFIX}"
     messages_path = out / f"spider2_exec_{tag}{MESSAGES_SUFFIX}"
+    contexts_path = out / f"spider2_exec_{tag}{CONTEXTS_SUFFIX}"
     config = _run_config(cfg, models, seed=seed, use_docs=use_docs, concurrency=concurrency)
-    done = _resume(
-        rows_path, (candidates_path, messages_path), config["config_hash"], resume=resume
-    )
+    per_task_paths = (candidates_path, messages_path, contexts_path)
+    done = _resume(rows_path, per_task_paths, config["config_hash"], resume=resume)
     bench = _ExecBench(
         runner=Runner(root, use_docs=use_docs),
         cfg=cfg,
@@ -686,6 +729,7 @@ def run(
         rows_path=rows_path,
         candidates_path=candidates_path,
         messages_path=messages_path,
+        contexts_path=contexts_path,
         config_hash=config["config_hash"],
         seed=seed,
         total=len(tasks),
@@ -714,6 +758,8 @@ class _ExecBench:
         candidates_path: The candidates file (one record per candidate).
         messages_path: The transcripts file (one record per model call attempt), written when
             ``cfg.trace`` is on.
+        contexts_path: The contexts file (one record per answered task: the schema DDL its
+            prompts name and the generator's instructions).
         config_hash: Stamped on every row.
         seed: The run seed.
         total: Tasks in the run, done ones included.
@@ -728,6 +774,7 @@ class _ExecBench:
     rows_path: Path
     candidates_path: Path
     messages_path: Path
+    contexts_path: Path
     config_hash: str
     seed: int
     total: int
@@ -773,6 +820,8 @@ class _ExecBench:
                 for transcript in result.transcripts:
                     record = {"instance_id": task.instance_id, **transcript.model_dump(mode="json")}
                     append_record(self.messages_path, record)
+                contexts = {"contexts": result.contexts, "instructions": result.instructions}
+                append_record(self.contexts_path, {"instance_id": task.instance_id, **contexts})
             append_record(self.rows_path, row)
             self.finished += 1
             if self.progress:

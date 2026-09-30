@@ -186,6 +186,11 @@ def test_run_scores_with_the_official_comparison_and_resumes(tmp_path):
     assert len(candidates) == 4 and {json.loads(line)["ex"] for line in candidates} == {0, 1}
     for record in map(json.loads, candidates):  # executed candidates carry their result's hash
         assert (record["fingerprint"] is not None) == record["ok"]
+    contexts = [json.loads(line) for line in (out / "spider2_exec_t_contexts.jsonl").open()]
+    assert sorted(record["instance_id"] for record in contexts) == ["local901", "local902"]
+    for record in map(json.loads, candidates):  # each prompt's schema is in its task's record
+        by_task = next(c for c in contexts if c["instance_id"] == record["instance_id"])
+        assert record["context_key"] in by_task["contexts"] and by_task["instructions"]
 
     again = spider2_exec.run(root, cfg=cfg, models=models, out_dir=out, tag="t")
     assert len(again["rows"]) == 2  # resume: nothing to do
