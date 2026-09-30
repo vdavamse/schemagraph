@@ -631,6 +631,86 @@ def test_run_query_probe_budget_and_sample_values(store):
     assert any("unknown column 'nope'" in text for text in seen)
 
 
+# A cross join the cost gate refuses once the store executor's threshold is lowered to
+# COST_TEST_MAX_ROWS: DuckDB estimates 3 x 4 x 3 = 36 compared rows, GOOD's hash join 3.
+CROSS = "select count(*) from orders, order_items, customer"
+COST_TEST_MAX_ROWS = 20
+
+
+def _retry_texts(messages) -> list[str]:
+    return [
+        str(part.content)
+        for message in messages
+        for part in message.parts
+        if isinstance(part, RetryPromptPart)
+    ]
+
+
+def test_a_probe_refused_by_the_cost_gate_spends_the_budget(store, monkeypatch):
+    monkeypatch.setattr(store[1], "max_plan_rows", COST_TEST_MAX_ROWS)
+    seen: list[str] = []
+
+    def gen(messages, info):
+        returns = [part for message in messages for part in message.parts]
+        returns = [part for part in returns if isinstance(part, ToolReturnPart)]
+        seen.extend(str(part.content) for part in returns)
+        if returns:
+            return _output(info, sql=GOOD)
+        calls = [
+            ToolCallPart("run_query", {"sql": CROSS}),
+            ToolCallPart("run_query", {"sql": "select 1"}),
+        ]
+        return ModelResponse(parts=calls)
+
+    cfg = AgentConfig(strategy="single", probe_limit=1, judge=False)
+    result = _answer(store, cfg, _models(gen), question="q")
+    assert any(text.startswith("error (cost): the plan would process about") for text in seen)
+    assert any("probe budget exhausted" in text for text in seen)
+    assert result.sql == GOOD and result.candidates[0].exec.plan_rows == 3.0
+
+
+def test_the_cost_gate_sends_an_expensive_query_back_once(store, monkeypatch):
+    monkeypatch.setattr(store[1], "max_plan_rows", COST_TEST_MAX_ROWS)
+    retries: list[str] = []
+
+    def gen(messages, info):
+        retries.extend(_retry_texts(messages[-1:]))
+        return _output(info, sql=GOOD if retries else CROSS)
+
+    result = _answer(store, AgentConfig(strategy="single", judge=False), _models(gen))
+    assert len(retries) == 1 and "too much work" in retries[0] and "CROSS_PRODUCT" in retries[0]
+    assert result.sql == GOOD and result.candidates[0].exec.ok
+
+
+def test_an_expensive_query_on_the_last_retry_is_scored_as_a_cost_failure(store, monkeypatch):
+    monkeypatch.setattr(store[1], "max_plan_rows", COST_TEST_MAX_ROWS)
+    retries: list[str] = []
+
+    def gen(messages, info):
+        retries.extend(_retry_texts(messages[-1:]))
+        return _output(info, sql=CROSS)
+
+    cfg = AgentConfig(strategy="single", judge=False, output_retries=1)
+    result = _answer(store, cfg, _models(gen))
+    candidate = result.candidates[0]
+    assert len(retries) == 1  # sent back once, kept on the last retry
+    assert candidate.sql == CROSS and not candidate.error
+    assert candidate.exec.error_kind == "cost" and candidate.exec.plan_rows == 36.0
+    assert [finding.code for finding in candidate.checks.findings] == ["cartesian", "cost"]
+    assert candidate.score == pytest.approx(0.05)
+
+
+def test_without_the_cost_gate_an_expensive_query_runs(store, monkeypatch):
+    monkeypatch.setattr(store[1], "max_plan_rows", COST_TEST_MAX_ROWS)
+
+    def gen(messages, info):
+        return _output(info, sql=CROSS)
+
+    cfg = AgentConfig(strategy="single", judge=False, cost_gate=False)
+    candidate = _answer(store, cfg, _models(gen)).candidates[0]
+    assert candidate.exec.ok and candidate.exec.rows == [[36]] and candidate.exec.plan_rows is None
+
+
 # ------------------------------------------------------------------ checks over MCP lookups
 
 

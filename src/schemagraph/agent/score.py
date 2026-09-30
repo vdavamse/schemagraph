@@ -41,7 +41,7 @@ def combine(
     Args:
         checks: The deterministic check report; None or unparsed scores 0.
         execution: The execution result; a guard refusal scores 0 and any other failure
-            ``weights.exec_fail``.
+            ``weights.exec_fail``, a cost refusal (a plan too expensive to run) included.
         judgement: The judge's rubric; without it the deterministic score stands alone.
         weights: The formula's weights; the defaults when None.
 

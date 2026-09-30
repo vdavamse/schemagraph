@@ -253,7 +253,8 @@ def _legacy_config(**settings):
     from schemagraph.agent.results import AgentConfig
 
     legacy = dict(preview_rows=10, judge_evidence_chars=1000, judge_schema=False,
-                  judge_findings=False, judge_stats=False, selector_context=False)  # fmt: skip
+                  judge_findings=False, judge_stats=False, selector_context=False,
+                  cost_gate=False)  # fmt: skip
     return AgentConfig(**{**legacy, **settings})
 
 
@@ -273,6 +274,9 @@ def test_config_hash_ignores_the_mcp_url_and_concurrency():
     mixed = _legacy_config(gen_models=("qwen", "glm"))
     several = _run_config(mixed, models, seed=0, use_docs=True, concurrency=1)
     assert several["config_hash"] != PRE_REFACTOR_DEFAULT_HASH  # several generators count
+    gated = _run_config(_legacy_config(cost_gate=True), models, seed=0, use_docs=True,
+                        concurrency=1)  # fmt: skip
+    assert gated["config_hash"] != PRE_REFACTOR_DEFAULT_HASH  # the cost gate refuses queries
 
 
 def test_the_reasoning_node_timeout_counts_only_for_a_reasoning_generator(monkeypatch):

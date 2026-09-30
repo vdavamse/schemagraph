@@ -677,8 +677,8 @@ def result_checks(
         guarded: The query, for the row-explosion check; without it that check is skipped.
 
     Returns:
-        A timeout/database-error finding for a failed query, else empty-result, all-NULL-column
-        and row-explosion findings.
+        A timeout, cost-refusal or database-error finding for a failed query, else
+        empty-result, all-NULL-column and row-explosion findings.
     """
     if not result.ok:
         return [_failure_finding(result)]
@@ -704,9 +704,13 @@ def result_checks(
 
 
 def _failure_finding(result: ExecResult) -> Finding:
+    """Return the finding for a query that did not run: timeout, cost refusal or error."""
     if result.error_kind == "timeout":
         message = f"{result.error}; avoid cross joins and add join predicates or filters"
         return Finding(code="timeout", severity="error", message=message)
+    if result.error_kind == "cost":
+        message = f"refused before running: {result.error}"
+        return Finding(code="cost", severity="error", message=message)
     code = "guard" if result.error_kind == "guard" else "exec_error"
     return Finding(code=code, severity="error", message=f"database error: {result.error}")
 

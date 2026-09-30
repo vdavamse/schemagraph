@@ -3,7 +3,9 @@
 Agents are built once with ``defer_model_check=True`` and no model; the model is passed per run,
 so building never needs a key and tests swap models per run. The generator's schema tools are
 schemagraph's own MCP server (:func:`schema_toolset`), attached per run; its local tools are
-the two that execute SQL, which the MCP server deliberately does not serve.
+the two that execute SQL, which the MCP server deliberately does not serve. Both are capped in
+the SQL text, and a ``run_query`` probe is planned first and refused unrun when its plan is too
+expensive (``AgentConfig.cost_gate``).
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.usage import RunUsage, UsageLimits
 
 from schemagraph.agent import prompts
+from schemagraph.agent.cost import cost_refusal
 from schemagraph.agent.execute import Executor
 from schemagraph.agent.guard import GuardError, guard_sql
 from schemagraph.agent.results import (
@@ -45,7 +48,8 @@ SCHEMA_TOOLS = frozenset(
 GENERATOR_MAX_TABLES = LinkOptions.max_tables
 # Characters of one tool result the generator sees.
 TOOL_RESULT_CHARS = 12_000
-# Rows a ``run_query`` probe shows.
+# Rows a ``run_query`` probe shows; the probe's SQL gets ``LIMIT PROBE_ROWS + 1``, so the
+# model sees "20+ rows" for anything larger.
 PROBE_ROWS = 20
 # Most distinct values ``sample_values`` returns.
 SAMPLE_VALUES_MAX = 50
@@ -140,6 +144,9 @@ def schema_toolset(mcp_url: str) -> AbstractToolset[AgentDeps]:
 def generator() -> Agent[AgentDeps, SqlCandidate]:
     """Build the generator: one query as a :class:`SqlCandidate`, checked by the guard and EXPLAIN.
 
+    EXPLAIN catches unknown names and type errors and, with ``AgentConfig.cost_gate``, a plan
+    too expensive to run; each is sent back to the model to fix.
+
     Its schema tools are not part of the agent; pass :func:`schema_toolset` to each run.
     """
     agent: Agent[AgentDeps, SqlCandidate] = Agent(
@@ -202,7 +209,7 @@ async def sample_values(
         f"WHERE {quoted_column} IS NOT NULL LIMIT {count}"
     )
     result = await asyncio.to_thread(
-        executor.execute, sql, limit=count, timeout_s=TOOL_QUERY_TIMEOUT_S
+        executor.execute, sql, limit=count, count_cap=count, timeout_s=TOOL_QUERY_TIMEOUT_S
     )
     if not result.ok:
         return f"error: {result.error}"
@@ -212,18 +219,24 @@ async def sample_values(
 async def run_query(run_context: RunContext[AgentDeps], sql: str) -> str:
     """Run a small read-only probe query and see up to 20 rows.
 
+    '20+ rows' means more; use COUNT(*) to count them. A query planned to be too expensive is
+    refused unrun; rewrite it as the message says.
+
     Args:
         run_context: The run context.
         sql: One SELECT query.
     """
-    if run_context.deps.probes_left <= 0:
+    deps = run_context.deps
+    if deps.probes_left <= 0:
         return "probe budget exhausted; return your final query now"
-    run_context.deps.probes_left -= 1
+    deps.probes_left -= 1  # a refused probe spends the budget too
     result = await asyncio.to_thread(
-        run_context.deps.executor.execute,
+        deps.executor.execute,
         sql,
         limit=PROBE_ROWS,
+        count_cap=PROBE_ROWS,
         timeout_s=TOOL_QUERY_TIMEOUT_S,
+        cost_gate=deps.cfg.cost_gate,
     )
     return _cut(prompts.preview(result, PROBE_ROWS))
 
@@ -232,15 +245,26 @@ async def _validate_output(
     run_context: RunContext[AgentDeps],
     output: SqlCandidate,
 ) -> SqlCandidate:
-    """Send the query back to the model unless the guard and the database's EXPLAIN accept it."""
-    executor = run_context.deps.executor
+    """Send the query back to the model unless the guard and the database's EXPLAIN accept it.
+
+    A plan over the cost gate's threshold is sent back too, except on the last output retry:
+    that query is kept, so scoring records it as a ``cost`` failure rather than the node
+    failing without a candidate.
+    """
+    deps = run_context.deps
+    executor = deps.executor
     try:
         guarded = guard_sql(output.sql, executor.dialect)
     except GuardError as error:
         raise ModelRetry(f"{error}. Return one read-only SELECT query.") from error
-    result = await asyncio.to_thread(executor.explain, guarded.sql)
-    if not result.ok:
-        raise ModelRetry(f"The database rejected the query: {result.error}. Fix the query.")
+    plan = await asyncio.to_thread(executor.plan, guarded.sql, estimate=deps.cfg.cost_gate)
+    if not plan.ok:
+        raise ModelRetry(f"The database rejected the query: {plan.error}. Fix the query.")
+    refusal = cost_refusal(plan, executor.max_plan_rows) if deps.cfg.cost_gate else None
+    if refusal and not run_context.last_attempt:
+        raise ModelRetry(
+            f"The database would do too much work for this query: {refusal}. Rewrite it."
+        )
     return output.model_copy(update={"sql": guarded.sql})
 
 

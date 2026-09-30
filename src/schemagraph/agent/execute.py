@@ -11,8 +11,13 @@ Three layers, each sufficient against the common cases and together against pars
    (``mode=ro`` alone still lets ``ATTACH`` create a file) and ``SQLITE_LIMIT_ATTACHED=0``.
 
 Every call is bounded: a wall-clock timeout (DuckDB ``interrupt()``, SQLite progress handler), a
-preview limit and a row-count cap. Catalog introspection (``catalog()``, ``row_count()``) runs fixed
-SQL over a separate trusted path, never model-written text.
+preview limit and a row-count cap, which also goes into the SQL text as a ``LIMIT`` (admitted
+again through the guard and the engine check) so the database can stop early. With ``cost_gate``
+the query is planned with ``EXPLAIN`` first and refused unrun when the plan is estimated far
+beyond the timeout (:mod:`schemagraph.agent.cost`). A full-result call (``limit=None``, the
+benchmark's evaluation) is neither capped in the text nor gated. Catalog introspection
+(``catalog()``, ``row_count()``) runs fixed SQL over a separate trusted path, never model-written
+text, and is never capped or gated.
 """
 
 from __future__ import annotations
@@ -29,9 +34,18 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 import duckdb
+from sqlglot import exp
 
-from schemagraph.agent.guard import GuardedSQL, GuardError, guard_sql
-from schemagraph.agent.results import ErrorKind, ExecResult
+from schemagraph.agent.cost import (
+    DUCKDB_MAX_JOIN_ROWS,
+    SQLITE_MAX_LOOP_ROWS,
+    SqliteNames,
+    cost_refusal,
+    duckdb_plan_cost,
+    sqlite_plan_cost,
+)
+from schemagraph.agent.guard import GuardedSQL, GuardError, bounded_sql, guard_sql, row_limit
+from schemagraph.agent.results import ErrorKind, ExecResult, PlanInfo
 from schemagraph.store import substitute_env
 
 if TYPE_CHECKING:
@@ -43,8 +57,11 @@ EVAL_MAX_ROWS = 1_000_000
 DEFAULT_PREVIEW_ROWS = 1000
 DEFAULT_TIMEOUT_S = 30.0
 DEFAULT_COUNT_CAP = 100_000
-# Default timeout of :meth:`Executor.explain`: binding a query is cheap.
+# Default timeout of :meth:`Executor.plan`: binding and planning a query is cheap.
 EXPLAIN_TIMEOUT_S = 10.0
+# Plans kept per executor, by query text; the oldest is dropped past this. A node plans its
+# query in the output validator and again when it is scored, and refinements repeat queries.
+PLAN_CACHE_SIZE = 256
 # Timeout of the trusted ``count(*)`` behind the row-explosion check; a view can be arbitrarily
 # expensive, so the count is None on timeout.
 COUNT_TIMEOUT_S = 10.0
@@ -76,10 +93,13 @@ class Executor(Protocol):
     Attributes:
         dialect: The sqlglot dialect of the database: ``duckdb`` or ``sqlite``.
         name: A short display name (the file stem).
+        max_plan_rows: The cost gate's threshold on a plan's work estimate
+            (:mod:`schemagraph.agent.cost`).
     """
 
     dialect: str
     name: str
+    max_plan_rows: float
 
     def execute(
         self,
@@ -89,24 +109,36 @@ class Executor(Protocol):
         timeout_s: float = DEFAULT_TIMEOUT_S,
         count_cap: int = DEFAULT_COUNT_CAP,
         raw: bool = False,
+        cost_gate: bool = False,
     ) -> ExecResult:
         """Guard and run one read-only query.
 
         Args:
             sql: Model-written SQL.
             limit: Rows to keep in the result; None keeps the full result, up to
-                :data:`EVAL_MAX_ROWS`, and fails with ``row_cap`` beyond it.
+                :data:`EVAL_MAX_ROWS`, and fails with ``row_cap`` beyond it. When set, the
+                SQL text gets ``LIMIT max(count_cap, limit) + 1``.
             timeout_s: Wall-clock limit in seconds.
             count_cap: Rows to count past the preview before reporting ``row_count_capped``.
             raw: Keep cell values as the driver returns them instead of JSON-safe previews.
+            cost_gate: Plan the query first and refuse it unrun (``error_kind`` ``cost``) when
+                the plan's work estimate is over the engine's threshold. Ignored with
+                ``limit=None``.
 
         Returns:
             The result, or an error result with ``error_kind`` set; this never raises.
         """
         ...
 
-    def explain(self, sql: str, *, timeout_s: float = EXPLAIN_TIMEOUT_S) -> ExecResult:
-        """Guard and plan the query without running it: catches unknown names and type errors."""
+    def plan(
+        self, sql: str, *, timeout_s: float = EXPLAIN_TIMEOUT_S, estimate: bool = True
+    ) -> PlanInfo:
+        """Guard and plan the query without running it (memoised by query text).
+
+        Planning binds every name and checks types, and the plan gives the work estimate the
+        cost gate reads. With ``estimate=False`` only the binding matters: SQLite then skips
+        sizing the tables (``rows`` is None), which the cost gate would need.
+        """
         ...
 
     def catalog(self) -> dict[str, list[str]]:
@@ -122,7 +154,10 @@ class Executor(Protocol):
         ...
 
     def row_count(self, table: str) -> int | None:
-        """Return a table's row count (memoised), or None when unknown or the count timed out."""
+        """Return a table's row count (memoised), or None when unknown or it could not be counted.
+
+        When the count times out, SQLite's ``max(rowid)`` stands in as an upper bound.
+        """
         ...
 
     def close(self) -> None:
@@ -160,6 +195,17 @@ def json_safe(value: Any) -> Any:
     return json_safe(str(value))
 
 
+def _fetch_cap(limit: int | None, count_cap: int) -> int:
+    """Return the most rows a call fetches before reporting ``row_count_capped``.
+
+    That is ``max(count_cap, limit)`` for a preview (at least ``limit``, never negative), and
+    :data:`EVAL_MAX_ROWS` for a full result (``limit=None``).
+    """
+    if limit is None:
+        return EVAL_MAX_ROWS
+    return max(count_cap, limit, 0)
+
+
 def _collect(
     cursor: _Cursor,
     *,
@@ -182,7 +228,7 @@ def _collect(
     """
     columns = [column[0] for column in (cursor.description or [])]
     keep = EVAL_MAX_ROWS if limit is None else max(0, limit)
-    cap = EVAL_MAX_ROWS if limit is None else max(count_cap, keep)
+    cap = _fetch_cap(limit, count_cap)
     rows: list[list[Any]] = []
     seen = 0
     while seen <= cap:  # fetch one row past the cap to tell "exactly cap rows" from "more"
@@ -232,6 +278,68 @@ def _fail(kind: ErrorKind, message: str, started: float | None = None) -> ExecRe
     )
 
 
+def _plan_failed(result: ExecResult) -> PlanInfo:
+    """Return a failed plan carrying a failed ``EXPLAIN``'s error."""
+    return PlanInfo(
+        ok=False, error=result.error, error_kind=result.error_kind, elapsed_ms=result.elapsed_ms
+    )
+
+
+def _names_by_alias(guarded: GuardedSQL) -> dict[str, str | None]:
+    """Map each lowercase alias (or bare name) in the query to the lowercase name it reads.
+
+    That is a table, a view or a CTE. None, unknown, for an alias that reads different names
+    in different scopes (``t`` for ``big`` in a subquery and for ``small`` outside it): the plan
+    does not say which one it scans, so the cost gate fails open on it rather than guess.
+    """
+    candidates: dict[str, set[str]] = {}
+    for table in guarded.tree.find_all(exp.Table):
+        candidates.setdefault(table.alias_or_name.lower(), set()).add(table.name.lower())
+    return {
+        alias: next(iter(names)) if len(names) == 1 else None
+        for alias, names in candidates.items()
+    }
+
+
+def _named_results(tree: exp.Query) -> dict[str, exp.Expression | None]:
+    """Map each lowercase CTE name and subquery alias to its query; None when it names several."""
+    named = [(cte.alias_or_name, cte.this) for cte in tree.find_all(exp.CTE)]
+    named += [(sub.alias, sub.this) for sub in tree.find_all(exp.Subquery) if sub.alias]
+    results: dict[str, exp.Expression | None] = {}
+    for name, query in named:
+        key = name.lower()
+        results[key] = query if key not in results or results[key] is query else None
+    return results
+
+
+def _max_rows(query: exp.Expression | None) -> int | None:
+    """Return at most how many rows a query returns as its SQL says, or None.
+
+    A literal top-level ``LIMIT`` says so, and so does an aggregate without ``GROUP BY``
+    (one row).
+    """
+    if not isinstance(query, exp.Query):
+        return None
+    bounds = [row_limit(query)]
+    if isinstance(query, exp.Select) and _aggregates_to_one_row(query):
+        bounds.append(1)
+    return min((bound for bound in bounds if bound is not None), default=None)
+
+
+def _aggregates_to_one_row(select: exp.Select) -> bool:
+    """Return whether a SELECT aggregates without ``GROUP BY`` (``SELECT max(x) FROM t``).
+
+    Only its own aggregates count: not a window function, and not one inside a subquery.
+    """
+    if select.args.get("group") is not None:
+        return False
+    return any(
+        aggregate.find_ancestor(exp.Select) is select
+        and not isinstance(aggregate.parent, exp.Window)
+        for aggregate in select.find_all(exp.AggFunc)
+    )
+
+
 def _quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
@@ -246,29 +354,128 @@ _TableColumns = tuple[str | None, str, list[str]]
 
 
 class _CatalogExecutor:
-    """Catalog, name resolution and row counts shared by both executors.
+    """Catalog, name resolution, row counts, planning and execution shared by both executors.
 
-    Subclasses provide the trusted introspection and count queries, the engine statement check
-    and the query runner.
+    Subclasses provide the trusted introspection and count queries, the engine statement check,
+    the query runner and the ``EXPLAIN`` that plans a query.
 
     Attributes:
         default_schema: Where the engine resolves a bare name (DuckDB's search path: ``main``).
+        max_plan_rows: The cost gate's threshold on the plan's work estimate
+            (:mod:`schemagraph.agent.cost`).
     """
 
     dialect: str
     name: str
     default_schema: str | None = None
+    max_plan_rows: float = float("inf")
 
     def __init__(self) -> None:
         self._catalog: dict[str, list[str]] | None = None
         self._parts: dict[str, tuple[str | None, str]] = {}  # key -> (schema, table) as stored
         self._counts: dict[str, int | None] = {}
+        # (guarded query text, estimate) -> plan, oldest first
+        self._plans: dict[tuple[str, bool], PlanInfo] = {}
+        self._plans_lock = threading.Lock()  # plans are made from several worker threads
 
     def _introspect(self) -> list[_TableColumns]:
         raise NotImplementedError
 
-    def _count(self, schema: str | None, table: str) -> int | None:
+    def _count(self, schema: str | None, table: str, timeout_s: float) -> int | None:
         raise NotImplementedError
+
+    def _run(
+        self, sql: str, timeout_s: float, then: Callable[[Any, float], ExecResult]
+    ) -> ExecResult:
+        raise NotImplementedError
+
+    def _explain(self, guarded: GuardedSQL, timeout_s: float, *, estimate: bool) -> PlanInfo:
+        raise NotImplementedError
+
+    def execute(
+        self,
+        sql: str,
+        *,
+        limit: int | None = DEFAULT_PREVIEW_ROWS,
+        timeout_s: float = DEFAULT_TIMEOUT_S,
+        count_cap: int = DEFAULT_COUNT_CAP,
+        raw: bool = False,
+        cost_gate: bool = False,
+    ) -> ExecResult:
+        """Guard, gate, cap and run one read-only query (see :meth:`Executor.execute`)."""
+        try:
+            guarded = self._admit(sql)
+        except _Refused as refused:
+            return refused.result
+        plan_rows = None
+        if limit is not None:
+            if cost_gate:
+                plan = self._plan(guarded, min(EXPLAIN_TIMEOUT_S, timeout_s), estimate=True)
+                plan_rows = plan.rows
+                refusal = cost_refusal(plan, self.max_plan_rows)
+                if refusal:
+                    return ExecResult(
+                        ok=False,
+                        error=refusal[:ERROR_CHARS],
+                        error_kind="cost",
+                        elapsed_ms=plan.elapsed_ms,
+                        plan_rows=plan_rows,
+                    )
+            guarded = self._bounded(guarded, _fetch_cap(limit, count_cap) + 1)
+
+        def fetch(cursor: _Cursor, started: float) -> ExecResult:
+            return _collect(cursor, limit=limit, count_cap=count_cap, raw=raw, started=started)
+
+        result = self._run(guarded.sql, timeout_s, fetch)
+        result.plan_rows = plan_rows
+        return result
+
+    def plan(
+        self, sql: str, *, timeout_s: float = EXPLAIN_TIMEOUT_S, estimate: bool = True
+    ) -> PlanInfo:
+        """Guard and plan the query without running it (see :meth:`Executor.plan`)."""
+        try:
+            guarded = self._admit(sql)  # DuckDB would run every statement after EXPLAIN
+        except _Refused as refused:
+            return PlanInfo(
+                ok=False, error=refused.result.error, error_kind=refused.result.error_kind
+            )
+        return self._plan(guarded, timeout_s, estimate=estimate)
+
+    def _plan(self, guarded: GuardedSQL, timeout_s: float, *, estimate: bool) -> PlanInfo:
+        """Return the plan of an admitted query, from the memo when it was planned before.
+
+        A plan, or a binding error, is kept, keyed by the text and ``estimate``; a timeout or
+        a runtime error is not, since the next try may succeed.
+        """
+        key = (guarded.sql, estimate)
+        with self._plans_lock:
+            known = self._plans.get(key)
+        if known is not None:
+            return known
+        plan = self._explain(guarded, timeout_s, estimate=estimate)
+        if plan.ok or plan.error_kind == "syntax":
+            with self._plans_lock:
+                self._plans[key] = plan
+                while len(self._plans) > PLAN_CACHE_SIZE:
+                    self._plans.pop(next(iter(self._plans)))
+        return plan
+
+    def _bounded(self, guarded: GuardedSQL, max_rows: int) -> GuardedSQL:
+        """Return the query with its result capped at ``max_rows`` rows in the SQL text.
+
+        The capped text is admitted again (guard and engine check) and its top-level limit
+        must parse as exactly ``max_rows``; otherwise the query runs as it was, still bounded
+        by the fetch cap and the timeout.
+        """
+        text = bounded_sql(guarded, max_rows)
+        if text == guarded.sql:
+            return guarded
+        try:
+            capped = self._admit(text)
+        except _Refused:
+            return guarded
+        return capped if row_limit(capped.tree) == max_rows else guarded
 
     def _admit(self, sql: str) -> GuardedSQL:
         """Run the guard (layer 1) and the engine statement check (layer 2), or raise _Refused."""
@@ -340,15 +547,21 @@ class _CatalogExecutor:
         schema, table = self._parts[key]
         return _qualified(schema, table)
 
-    def row_count(self, table: str) -> int | None:
-        """Return a table's row count (memoised), or None when unknown or the count failed."""
+    def row_count(self, table: str, *, timeout_s: float = COUNT_TIMEOUT_S) -> int | None:
+        """Return a table's row count (memoised), or None when unknown or the count failed.
+
+        Args:
+            table: A raw table name, resolved like :meth:`resolve_table`.
+            timeout_s: Limit of the count in seconds. SQLite falls back to ``max(rowid)``, an
+                upper bound, when the count times out.
+        """
         key = self.resolve_table(table)
         if key is None:
             return None
         if key not in self._counts:
             schema, name = self._parts[key]
             try:
-                self._counts[key] = self._count(schema, name)
+                self._counts[key] = self._count(schema, name, timeout_s)
             except Exception:
                 self._counts[key] = None
         return self._counts[key]
@@ -364,6 +577,7 @@ class DuckDBExecutor(_CatalogExecutor):
 
     dialect = "duckdb"
     default_schema = "main"
+    max_plan_rows = DUCKDB_MAX_JOIN_ROWS
 
     def __init__(self, path: str | Path, *, schemas: list[str] | None = None):
         """Open ``path`` read-only.
@@ -441,37 +655,22 @@ class DuckDBExecutor(_CatalogExecutor):
             timer.cancel()
             cursor.close()
 
-    def execute(
-        self,
-        sql: str,
-        *,
-        limit: int | None = DEFAULT_PREVIEW_ROWS,
-        timeout_s: float = DEFAULT_TIMEOUT_S,
-        count_cap: int = DEFAULT_COUNT_CAP,
-        raw: bool = False,
-    ) -> ExecResult:
-        """Guard and run one read-only query (see :meth:`Executor.execute`)."""
-        try:
-            guarded = self._admit(sql)
-        except _Refused as refused:
-            return refused.result
+    def _explain(self, guarded: GuardedSQL, timeout_s: float, *, estimate: bool) -> PlanInfo:
+        """Plan an admitted query with ``EXPLAIN (FORMAT json)`` and estimate its join work.
 
-        def fetch(cursor: duckdb.DuckDBPyConnection, started: float) -> ExecResult:
-            return _collect(cursor, limit=limit, count_cap=count_cap, raw=raw, started=started)
+        The estimate is read from the plan itself, so it is made even without ``estimate``.
+        """
+        plans: list[str] = []
 
-        return self._run(guarded.sql, timeout_s, fetch)
-
-    def explain(self, sql: str, *, timeout_s: float = EXPLAIN_TIMEOUT_S) -> ExecResult:
-        """Bind the query without running it: catches unknown tables/columns and type errors."""
-        try:
-            guarded = self._admit(sql)  # DuckDB would run every statement after EXPLAIN
-        except _Refused as refused:
-            return refused.result
-
-        def planned(_cursor: duckdb.DuckDBPyConnection, started: float) -> ExecResult:
+        def planned(cursor: duckdb.DuckDBPyConnection, started: float) -> ExecResult:
+            plans.extend(str(row[1]) for row in cursor.fetchall())
             return ExecResult(ok=True, elapsed_ms=_elapsed_ms(started))
 
-        return self._run("EXPLAIN " + guarded.sql, timeout_s, planned)
+        result = self._run("EXPLAIN (FORMAT json) " + guarded.sql, timeout_s, planned)
+        if not result.ok:
+            return _plan_failed(result)
+        rows, reason = duckdb_plan_cost(plans[0]) if plans else (None, "")
+        return PlanInfo(ok=True, rows=rows, reason=reason, elapsed_ms=result.elapsed_ms)
 
     def _introspect(self) -> list[_TableColumns]:
         cursor = self._con.cursor()
@@ -485,9 +684,9 @@ class DuckDBExecutor(_CatalogExecutor):
                 tables.setdefault((schema, table), []).append(column)
         return [(schema, table, columns) for (schema, table), columns in tables.items()]
 
-    def _count(self, schema: str | None, table: str) -> int | None:
+    def _count(self, schema: str | None, table: str, timeout_s: float) -> int | None:
         cursor = self._con.cursor()
-        timer = threading.Timer(COUNT_TIMEOUT_S, cursor.interrupt)
+        timer = threading.Timer(timeout_s, cursor.interrupt)
         try:
             timer.start()
             # the name comes from the catalog, quoted
@@ -566,6 +765,7 @@ class SQLiteExecutor(_CatalogExecutor):
     """
 
     dialect = "sqlite"
+    max_plan_rows = SQLITE_MAX_LOOP_ROWS
 
     def __init__(self, path: str | Path):
         """Prepare read-only access to ``path``.
@@ -612,38 +812,46 @@ class SQLiteExecutor(_CatalogExecutor):
         finally:
             con.close()
 
-    def execute(
-        self,
-        sql: str,
-        *,
-        limit: int | None = DEFAULT_PREVIEW_ROWS,
-        timeout_s: float = DEFAULT_TIMEOUT_S,
-        count_cap: int = DEFAULT_COUNT_CAP,
-        raw: bool = False,
-    ) -> ExecResult:
-        """Guard and run one read-only query (see :meth:`Executor.execute`)."""
-        try:
-            guarded = self._admit(sql)
-        except _Refused as refused:
-            return refused.result
+    def _explain(self, guarded: GuardedSQL, timeout_s: float, *, estimate: bool) -> PlanInfo:
+        """Plan an admitted query with ``EXPLAIN QUERY PLAN`` and estimate its loop work.
 
-        def fetch(cursor: sqlite3.Cursor, started: float) -> ExecResult:
-            return _collect(cursor, limit=limit, count_cap=count_cap, raw=raw, started=started)
-
-        return self._run(guarded.sql, timeout_s, fetch)
-
-    def explain(self, sql: str, *, timeout_s: float = EXPLAIN_TIMEOUT_S) -> ExecResult:
-        """Plan the query without running it: catches unknown tables/columns."""
-        try:
-            guarded = self._admit(sql)
-        except _Refused as refused:
-            return refused.result
+        The plan names tables by their alias; the query's own tree maps each alias back to its
+        table, whose row count (trusted, memoised) sizes the scan, or to its CTE, which the
+        estimate sizes when the plan materialises it and otherwise counts as unknown.
+        Without ``estimate`` no table is counted and ``rows`` is None. The counts share what is
+        left of ``timeout_s`` after the ``EXPLAIN``, and one that runs out falls back to
+        ``max(rowid)`` (:meth:`row_count`).
+        """
+        planning_started = time.perf_counter()
+        plan_lines: list[tuple[Any, ...]] = []
 
         def planned(cursor: sqlite3.Cursor, started: float) -> ExecResult:
-            cursor.fetchall()
+            plan_lines.extend(cursor.fetchall())
             return ExecResult(ok=True, elapsed_ms=_elapsed_ms(started))
 
-        return self._run("EXPLAIN QUERY PLAN " + guarded.sql, timeout_s, planned)
+        result = self._run("EXPLAIN QUERY PLAN " + guarded.sql, timeout_s, planned)
+        if not result.ok:
+            return _plan_failed(result)
+        if not estimate:
+            return PlanInfo(ok=True, elapsed_ms=result.elapsed_ms)
+        read_by = _names_by_alias(guarded)
+        results = _named_results(guarded.tree)
+
+        def table_rows(name: str) -> int | None:
+            source = read_by.get(name.lower(), name)  # a view's own tables appear by name
+            if source is None or source.lower() in results:
+                return None  # ambiguous, or a CTE the plan did not materialise
+            left_s = max(0.0, timeout_s - (time.perf_counter() - planning_started))
+            return self.row_count(source, timeout_s=left_s)
+
+        names = SqliteNames(
+            table_rows=table_rows,
+            source=lambda name: read_by.get(name.lower()),
+            max_rows=lambda name: _max_rows(results.get(name.lower())),
+        )
+        rows, reason = sqlite_plan_cost(plan_lines, names)
+        elapsed_ms = _elapsed_ms(planning_started)
+        return PlanInfo(ok=True, rows=rows, reason=reason, elapsed_ms=elapsed_ms)
 
     def _trusted_con(self) -> sqlite3.Connection:
         """Return the trusted connection for fixed catalog SQL (no authorizer; call under lock)."""
@@ -667,16 +875,27 @@ class SQLiteExecutor(_CatalogExecutor):
                 tables.append((None, name, columns))
             return tables
 
-    def _count(self, schema: str | None, table: str) -> int | None:
+    def _count(self, schema: str | None, table: str, timeout_s: float) -> int | None:
+        """Count a table's rows; past ``timeout_s``, return its ``max(rowid)`` instead.
+
+        ``max(rowid)`` reads one b-tree path, so it needs no deadline; it is at least the row
+        count (deleted rows leave gaps). A view or a ``WITHOUT ROWID`` table has no rowid, and
+        its count then fails (None, unknown).
+        """
+        name = _quote(table)  # the name comes from the catalog, quoted
         with self._trusted_lock:
             con = self._trusted_con()
-            con.set_progress_handler(_deadline_handler(COUNT_TIMEOUT_S), _SQLITE_PROGRESS_OPS)
+            con.set_progress_handler(_deadline_handler(timeout_s), _SQLITE_PROGRESS_OPS)
             try:
-                # the name comes from the catalog, quoted
-                row = con.execute(f"SELECT count(*) FROM {_quote(table)}").fetchone()
+                row = con.execute(f"SELECT count(*) FROM {name}").fetchone()
+            except sqlite3.OperationalError as error:
+                if _sqlite_error_kind(error) != "timeout":
+                    raise
+                con.set_progress_handler(None, 0)
+                row = con.execute(f"SELECT max(rowid) FROM {name}").fetchone()
             finally:
                 con.set_progress_handler(None, 0)
-            return int(row[0]) if row else None
+            return None if not row or row[0] is None else int(row[0])
 
     def close(self) -> None:
         """Close the trusted connection; query connections are closed after every call."""

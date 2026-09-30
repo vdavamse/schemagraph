@@ -60,6 +60,10 @@ REASONING_MAX_TOKENS = 8192
 REASONING_TIMEOUT_S = 180.0
 # Timeout of counting one join key's rows and distinct values for the judge, in seconds.
 KEY_COUNT_TIMEOUT_S = 10.0
+# Join keys of tables with more rows than this (or an unknown count) are not measured for the
+# judge: the count is a full-table hash aggregate per key, and the judge then just lacks that
+# statistic. The largest Spider2 local table has 540,800 rows.
+KEY_STATS_MAX_ROWS = 10_000_000
 # Budget of all the row and key counts behind one judge call's schema, in seconds; past it the
 # judge sees the tables without counts, so a slow database cannot time the whole node out.
 JUDGE_COUNTS_TIMEOUT_S = 30.0
@@ -366,6 +370,7 @@ class Answerer:
             limit=self.cfg.exec_limit,
             timeout_s=self.cfg.exec_timeout_s,
             count_cap=self.cfg.count_cap,
+            cost_gate=self.cfg.cost_gate,
         )
         candidate.checks = await self._check(guarded, candidate.exec)
         if self.cfg.judge and candidate.exec.ok:
@@ -478,12 +483,17 @@ class Answerer:
         return measured
 
     def _key_stats(self, table: str, column: str) -> tuple[int, int] | None:
-        """Return (non-NULL rows, distinct values) of a table column, or None when the count fails.
+        """Return (non-NULL rows, distinct values) of a table column, or None when not counted.
 
-        NULLs are left out of both: they match no row of an equality join.
+        NULLs are left out of both: they match no row of an equality join. A table larger than
+        :data:`KEY_STATS_MAX_ROWS`, or of unknown size, is not counted.
         """
         key = (table, column.lower())
         if key not in self._key_counts:
+            rows = self.executor.row_count(table)
+            if rows is None or rows > KEY_STATS_MAX_ROWS:
+                self._key_counts[key] = None
+                return None
             quoted = exp.column(column, quoted=True).sql(self.executor.dialect)
             result = self.executor.execute(
                 f"SELECT COUNT({quoted}), COUNT(DISTINCT {quoted}) "

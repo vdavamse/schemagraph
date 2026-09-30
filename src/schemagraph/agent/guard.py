@@ -8,7 +8,9 @@ The guard accepts exactly one query (``SELECT``, ``WITH … SELECT``, set operat
 database: DDL/DML, ``ATTACH``, ``PRAGMA``, ``SET``, ``COPY``, ``INSTALL``/``LOAD``,
 ``SELECT … INTO``, file-reading table functions and file-like table names (DuckDB replacement
 scans). The text that passes is executed as written, not sqlglot's regenerated SQL; a parser
-differential is caught by the engine-side checks.
+differential is caught by the engine-side checks. The one edit is the row cap the executor adds
+(:func:`bounded_sql`), which appends a ``LIMIT`` or rewrites the digits of a literal one in
+place; the capped text goes through the guard and the engine check again.
 """
 
 from __future__ import annotations
@@ -69,6 +71,9 @@ FILE_SUFFIXES = (
     ".sqlite3", ".duckdb", ".gz", ".zst", ".xlsx",
 )  # fmt: skip
 
+# Largest integer literal SQLite and DuckDB accept as a LIMIT; a larger one is an error as written.
+_MAX_LIMIT_LITERAL = 2**63 - 1
+
 _FENCE = re.compile(r"```(?:sql)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
 
 
@@ -81,7 +86,9 @@ class GuardedSQL:
     """A query that passed the guard.
 
     Attributes:
-        sql: The normalised original text. This, not sqlglot's regenerated SQL, is what runs.
+        sql: The normalised original text. This, not sqlglot's regenerated SQL, is what runs;
+            the executor's row cap (:func:`bounded_sql`) only appends a ``LIMIT`` or
+            replaces the digits of a literal one.
         tree: The parsed query.
         dialect: The sqlglot dialect it was parsed as.
     """
@@ -161,3 +168,83 @@ def _check_node(node: exp.Expression) -> None:
 def _looks_like_file(name: str) -> bool:
     """Return whether a lowercase table name is a path, a URL or a data-file name."""
     return "/" in name or "\\" in name or "://" in name or name.endswith(FILE_SUFFIXES)
+
+
+def row_limit(tree: exp.Query) -> int | None:
+    """Return the query's top-level ``LIMIT`` / ``FETCH FIRST`` row count when it is a literal.
+
+    None when there is none, or when it is an expression, a percentage or ``WITH TIES``, whose
+    row count the text does not say.
+    """
+    count = _limit_literal(tree)
+    return None if count is None else int(count.this)
+
+
+def _limit_literal(tree: exp.Query) -> exp.Literal | None:
+    """Return the integer literal of the top-level ``LIMIT`` / ``FETCH FIRST``, or None."""
+    node = tree.args.get("limit")
+    if isinstance(node, exp.Fetch):
+        count = node.args.get("count")
+        options = node.args.get("limit_options")
+        if options is not None and (options.args.get("percent") or options.args.get("with_ties")):
+            return None
+    elif isinstance(node, exp.Limit):
+        count = node.expression
+        options = node.args.get("limit_options")
+        if options is not None and options.args.get("percent"):
+            return None
+    else:
+        return None
+    if isinstance(count, exp.Literal) and not count.is_string and count.this.isdigit():
+        return count
+    return None
+
+
+def bounded_sql(guarded: GuardedSQL, max_rows: int) -> str:
+    """Return the query's text with its result capped at ``max_rows`` rows.
+
+    The cap goes into the SQL text, not only the fetch: a client-side fetch of the first rows
+    still lets many drivers materialise the whole result, and a pipelined plan (scan, filter,
+    nested-loop join) stops early only when the database sees the ``LIMIT``. The rest of the
+    text runs byte for byte as written, so the database still rejects what it would reject.
+
+    * No top-level ``LIMIT``, ``FETCH`` or ``OFFSET``: ``LIMIT max_rows`` is appended to the
+      text as written, on a new line so that a trailing ``--`` comment cannot swallow it.
+    * A literal limit of at most ``max_rows``: unchanged.
+    * A literal limit above it (``LIMIT`` or ``FETCH FIRST``, with any ``OFFSET``): its digits
+      are replaced by ``max_rows`` where they stand in the text (the literal's token span).
+    * Anything else (``OFFSET`` alone, an expression, a percentage, ``WITH TIES``), a
+      literal too large for a 64-bit integer (an error as written) or one whose span cannot
+      be located: unchanged, because the cap cannot be added without changing the result or
+      what the database accepts.
+
+    Callers must pass the returned text through the guard again before running it.
+
+    Args:
+        guarded: A query that passed :func:`guard_sql`.
+        max_rows: The most rows the query may return.
+
+    Returns:
+        The text to run.
+    """
+    tree = guarded.tree
+    if tree.args.get("limit") is None:
+        if tree.args.get("offset") is None:
+            return f"{guarded.sql}\nLIMIT {max_rows}"
+        return guarded.sql
+    count = _limit_literal(tree)
+    if count is None or not max_rows < int(count.this) <= _MAX_LIMIT_LITERAL:
+        return guarded.sql
+    return _splice_literal(guarded.sql, count, str(max_rows))
+
+
+def _splice_literal(text: str, literal: exp.Literal, replacement: str) -> str:
+    """Replace ``literal`` in ``text`` at its token span; ``text`` unchanged if the span is off.
+
+    sqlglot records the source span (``start``/``end``, inclusive) of the token a literal was
+    parsed from in its ``meta``; the span must still spell the literal's digits.
+    """
+    start, end = literal.meta.get("start"), literal.meta.get("end")
+    if start is None or end is None or text[start : end + 1] != literal.this:
+        return text
+    return text[:start] + replacement + text[end + 1 :]
