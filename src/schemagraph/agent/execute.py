@@ -154,10 +154,7 @@ class Executor(Protocol):
         ...
 
     def row_count(self, table: str) -> int | None:
-        """Return a table's row count (memoised), or None when unknown or it could not be counted.
-
-        When the count times out, SQLite's ``max(rowid)`` stands in as an upper bound.
-        """
+        """Return a table's exact row count (memoised), or None when unknown or not counted."""
         ...
 
     def close(self) -> None:
@@ -329,15 +326,22 @@ def _max_rows(query: exp.Expression | None) -> int | None:
 def _aggregates_to_one_row(select: exp.Select) -> bool:
     """Return whether a SELECT aggregates without ``GROUP BY`` (``SELECT max(x) FROM t``).
 
-    Only its own aggregates count: not a window function, and not one inside a subquery.
+    Only its own aggregates count: not a window function (``count(*) FILTER (...) OVER ()``
+    too), not one inside a subquery, and not SQLite's scalar ``max(a, b)`` / ``min(a, b)``,
+    which sqlglot parses as the aggregate with extra arguments.
     """
     if select.args.get("group") is not None:
         return False
     return any(
-        aggregate.find_ancestor(exp.Select) is select
-        and not isinstance(aggregate.parent, exp.Window)
+        aggregate.find_ancestor(exp.Select, exp.Window) is select
+        and not _is_scalar_max_min(aggregate)
         for aggregate in select.find_all(exp.AggFunc)
     )
+
+
+def _is_scalar_max_min(aggregate: exp.AggFunc) -> bool:
+    """Return whether ``aggregate`` is a row-wise ``max(a, b, ...)`` / ``min(a, b, ...)``."""
+    return isinstance(aggregate, (exp.Max, exp.Min)) and bool(aggregate.expressions)
 
 
 def _quote(name: str) -> str:
@@ -373,7 +377,8 @@ class _CatalogExecutor:
     def __init__(self) -> None:
         self._catalog: dict[str, list[str]] | None = None
         self._parts: dict[str, tuple[str | None, str]] = {}  # key -> (schema, table) as stored
-        self._counts: dict[str, int | None] = {}
+        self._counts: dict[str, int] = {}  # key -> exact row count
+        self._uncounted: set[str] = set()  # keys whose count failed or timed out: None
         # (guarded query text, estimate) -> plan, oldest first
         self._plans: dict[tuple[str, bool], PlanInfo] = {}
         self._plans_lock = threading.Lock()  # plans are made from several worker threads
@@ -547,23 +552,25 @@ class _CatalogExecutor:
         schema, table = self._parts[key]
         return _qualified(schema, table)
 
-    def row_count(self, table: str, *, timeout_s: float = COUNT_TIMEOUT_S) -> int | None:
-        """Return a table's row count (memoised), or None when unknown or the count failed.
+    def row_count(self, table: str) -> int | None:
+        """Return a table's exact row count (memoised), or None when unknown or the count failed.
 
-        Args:
-            table: A raw table name, resolved like :meth:`resolve_table`.
-            timeout_s: Limit of the count in seconds. SQLite falls back to ``max(rowid)``, an
-                upper bound, when the count times out.
+        The count runs for at most :data:`COUNT_TIMEOUT_S`; one that fails or times out is not
+        tried again. Two threads may count the same table once each; both store the same count.
         """
         key = self.resolve_table(table)
-        if key is None:
+        if key is None or key in self._uncounted:
             return None
         if key not in self._counts:
             schema, name = self._parts[key]
             try:
-                self._counts[key] = self._count(schema, name, timeout_s)
+                count = self._count(schema, name, COUNT_TIMEOUT_S)
             except Exception:
-                self._counts[key] = None
+                count = None
+            if count is None:
+                self._uncounted.add(key)
+                return None
+            self._counts[key] = count
         return self._counts[key]
 
 
@@ -781,6 +788,8 @@ class SQLiteExecutor(_CatalogExecutor):
         self._uri = self.path.as_uri() + "?mode=ro"
         self._trusted: sqlite3.Connection | None = None
         self._trusted_lock = threading.Lock()  # one trusted connection, shared by worker threads
+        # key -> max(rowid) of a table not counted in time, for cost estimates only
+        self._stand_ins: dict[str, int | None] = {}
 
     def _connect(self, timeout_s: float) -> sqlite3.Connection:
         """Open a fresh hardened connection per call: cheap, and thread-safe by construction."""
@@ -819,10 +828,10 @@ class SQLiteExecutor(_CatalogExecutor):
         table, whose row count (trusted, memoised) sizes the scan, or to its CTE, which the
         estimate sizes when the plan materialises it and otherwise counts as unknown.
         Without ``estimate`` no table is counted and ``rows`` is None. The counts share what is
-        left of ``timeout_s`` after the ``EXPLAIN``, and one that runs out falls back to
-        ``max(rowid)`` (:meth:`row_count`).
+        left of ``timeout_s`` after the ``EXPLAIN`` (:meth:`_planning_rows`).
         """
         planning_started = time.perf_counter()
+        deadline = planning_started + timeout_s
         plan_lines: list[tuple[Any, ...]] = []
 
         def planned(cursor: sqlite3.Cursor, started: float) -> ExecResult:
@@ -841,8 +850,7 @@ class SQLiteExecutor(_CatalogExecutor):
             source = read_by.get(name.lower(), name)  # a view's own tables appear by name
             if source is None or source.lower() in results:
                 return None  # ambiguous, or a CTE the plan did not materialise
-            left_s = max(0.0, timeout_s - (time.perf_counter() - planning_started))
-            return self.row_count(source, timeout_s=left_s)
+            return self._planning_rows(source, deadline)
 
         names = SqliteNames(
             table_rows=table_rows,
@@ -876,26 +884,71 @@ class SQLiteExecutor(_CatalogExecutor):
             return tables
 
     def _count(self, schema: str | None, table: str, timeout_s: float) -> int | None:
-        """Count a table's rows; past ``timeout_s``, return its ``max(rowid)`` instead.
-
-        ``max(rowid)`` reads one b-tree path, so it needs no deadline; it is at least the row
-        count (deleted rows leave gaps). A view or a ``WITHOUT ROWID`` table has no rowid, and
-        its count then fails (None, unknown).
-        """
-        name = _quote(table)  # the name comes from the catalog, quoted
         with self._trusted_lock:
-            con = self._trusted_con()
-            con.set_progress_handler(_deadline_handler(timeout_s), _SQLITE_PROGRESS_OPS)
-            try:
-                row = con.execute(f"SELECT count(*) FROM {name}").fetchone()
-            except sqlite3.OperationalError as error:
-                if _sqlite_error_kind(error) != "timeout":
-                    raise
-                con.set_progress_handler(None, 0)
-                row = con.execute(f"SELECT max(rowid) FROM {name}").fetchone()
-            finally:
-                con.set_progress_handler(None, 0)
-            return None if not row or row[0] is None else int(row[0])
+            return self._count_locked(table, timeout_s)
+
+    def _count_locked(self, table: str, timeout_s: float) -> int | None:
+        """Count a table's rows exactly on the trusted connection (call under the lock).
+
+        Raises:
+            sqlite3.Error: The count failed, or ran past ``timeout_s`` (an interrupt).
+        """
+        con = self._trusted_con()
+        con.set_progress_handler(_deadline_handler(timeout_s), _SQLITE_PROGRESS_OPS)
+        try:
+            # the name comes from the catalog, quoted
+            row = con.execute(f"SELECT count(*) FROM {_quote(table)}").fetchone()
+        finally:
+            con.set_progress_handler(None, 0)
+        return int(row[0]) if row else None
+
+    def _planning_rows(self, table: str, deadline: float) -> int | None:
+        """Return a table's rows for the cost estimate, counted by ``deadline``.
+
+        A count that finishes is memoised in ``_counts`` for every caller, like
+        :meth:`row_count`. A table not counted in time, or whose count failed before, is sized
+        by its ``max(rowid)`` instead, kept in ``_stand_ins`` so later plans neither count it
+        again nor read it as one row; the stand-in never reaches ``_counts``, since the
+        judge's counts and the row-explosion check need the exact count. ``max(rowid)`` reads
+        one b-tree path, so it needs no deadline, and is at least the row count (deleted rows
+        leave gaps); a view or a ``WITHOUT ROWID`` table has none (None, unknown).
+
+        Args:
+            table: A raw table name, resolved like :meth:`resolve_table`.
+            deadline: ``time.perf_counter()`` at which planning must end. What is left is read
+                after the trusted lock is taken, so waiting on another count spends it.
+
+        Returns:
+            The row count, an upper bound of it, or None when unknown.
+        """
+        key = self.resolve_table(table)
+        if key is None:
+            return None
+        name = self._parts[key][1]
+        with self._trusted_lock:
+            if key in self._counts:  # counted before, or while this thread waited
+                return self._counts[key]
+            if key not in self._stand_ins and key not in self._uncounted:
+                try:
+                    count = self._count_locked(name, deadline - time.perf_counter())
+                except sqlite3.Error as error:
+                    if _sqlite_error_kind(error) != "timeout":
+                        self._uncounted.add(key)  # row_count would fail the same way
+                else:
+                    if count is not None:
+                        self._counts[key] = count
+                        return count
+            if key not in self._stand_ins:
+                self._stand_ins[key] = self._max_rowid_locked(name)
+            return self._stand_ins[key]
+
+    def _max_rowid_locked(self, table: str) -> int | None:
+        """Return a table's largest rowid, or None without one (call under the trusted lock)."""
+        try:
+            row = self._trusted_con().execute(f"SELECT max(rowid) FROM {_quote(table)}").fetchone()
+        except sqlite3.Error:
+            return None  # a view or a WITHOUT ROWID table
+        return None if not row or row[0] is None else int(row[0])
 
     def close(self) -> None:
         """Close the trusted connection; query connections are closed after every call."""

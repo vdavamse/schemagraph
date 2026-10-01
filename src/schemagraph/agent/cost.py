@@ -210,9 +210,11 @@ def sqlite_plan_cost(
     A materialised CTE or subquery (``MATERIALIZE c``, ``CO-ROUTINE x``) is sized by the scan
     product of the nest that fills it, or by the smaller bound its SQL states (a literal
     ``LIMIT``; one row for an aggregate without ``GROUP BY``), so each later ``SCAN`` of it
-    multiplies by that size. Both are upper bounds: a ``GROUP BY`` or ``DISTINCT`` inside
-    returns fewer rows, which the plan does not say. A CTE that SQLite flattens into the query
-    shows up as scans of its base tables instead.
+    multiplies by that size. The scan product is an upper bound only for a nest of scans: an
+    index ``SEARCH``'s rows per lookup are not in the plan and are not counted, so a
+    low-selectivity equi-join through an index is left to the timeout. A ``GROUP BY`` or
+    ``DISTINCT`` inside returns fewer rows. A CTE that SQLite flattens into the query shows up
+    as scans of its base tables instead.
     A table whose size is still unknown (a view that could not be counted, a recursive CTE)
     counts as one row: a false refusal costs more than a slow query, which the timeout still
     bounds.
@@ -245,8 +247,9 @@ class _Nest(NamedTuple):
     Attributes:
         work: Estimated row visits of the nest and its sub-plans, times the runs.
         reason: The largest single term, for the refusal message.
-        rows: Upper bound of the rows one run of the nest yields: the product of its scans,
-            else the sum of its sub-plans (the arms of a compound query), else 1.
+        rows: The rows one run of the nest yields, as sized: the product of its scans (an
+            index ``SEARCH`` adds no rows), else the sum of its sub-plans (the arms of a
+            compound query), else 1.
     """
 
     work: float
@@ -260,7 +263,7 @@ class _SqliteWalk:
     Attributes:
         children: Plan rows by parent id, as (id, detail).
         names: See :func:`sqlite_plan_cost`.
-        filled: Upper-bound rows of each ``MATERIALIZE`` / ``CO-ROUTINE`` result seen so far,
+        filled: Sized rows of each ``MATERIALIZE`` / ``CO-ROUTINE`` result seen so far,
             by lowercase name. SQLite lists a result's sub-plan before the scans that read it.
     """
 

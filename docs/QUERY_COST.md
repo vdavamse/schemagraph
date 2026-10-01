@@ -44,13 +44,16 @@ Every call through `Executor.execute` with a `limit`:
    SCAN word_list (373,804 rows) × SCAN word_list (373,804 rows)); add join conditions or
    filters, filter or aggregate before joining, and avoid correlated subqueries over large
    tables"*. Plans are memoised by query text (the output validator and scoring plan the same
-   query); a timed-out or failed `EXPLAIN` is not memoised. Planning is bounded by the smaller of
+   query); a timed-out `EXPLAIN` or a runtime error is not memoised, while a plan or a binding
+   (syntax) error is. Planning is bounded by the smaller of
    `EXPLAIN_TIMEOUT_S` (10 s) and the call's own timeout.
 3. **Cap**: append `LIMIT max(count_cap, limit) + 1` to the SQL text (`guard.bounded_sql`) and
    admit the capped text again. The one extra row is how the collector tells "exactly the cap"
    from "more", so `row_count` and `row_count_capped` mean what they did. A query with its own
    literal `LIMIT` / `FETCH FIRST` at or below the cap runs as written; for one above it, the
-   digits of the literal are replaced where they stand (the literal's token span), so the rest
+   digits of the literal are replaced where they stand (the literal's token span; `1_000_000`
+   too), and so is a count that spells "no limit" (SQLite's `LIMIT -1`, minus sign included;
+   DuckDB's `LIMIT ALL` / `LIMIT NULL`; DuckDB rejects `LIMIT -1`, so it stays), so the rest
    of the text runs byte for byte and the database still rejects what it would reject as
    written (SQLite refuses `FETCH FIRST 500 ROWS ONLY` either way). The capped text must parse
    back to a top-level limit of exactly the cap, else the query runs as written. `OFFSET` alone,
@@ -104,7 +107,9 @@ plan is not read and the gate fails open): operators only, no row estimates. The
 from the plan's shape and the base tables' row counts (the executor's trusted, memoised
 `count(*)`, sized only when the gate is on; the counts share what is left of the planning
 timeout, and a count that runs out falls back to `max(rowid)`, an upper bound that reads one
-b-tree path):
+b-tree path. The stand-in is memoised for later estimates only, so a slow table is counted
+once; `row_count` (the judge, the row-explosion check) memoises exact counts only and never
+returns it):
 
 * rows under one parent are loop levels, outer to inner; each full `SCAN` multiplies the
   running product by the table's size and visits that many rows;
@@ -115,9 +120,11 @@ b-tree path):
 * a materialised CTE or subquery (`MATERIALIZE c`, `CO-ROUTINE x`) is sized by the scan product
   of the nest that fills it, capped by what its SQL states (a literal `LIMIT`; one row for an
   aggregate without `GROUP BY`), so each later `SCAN` of it multiplies by that size: a CTE
-  referenced twice, or two `GROUP BY` subqueries cross-joined, cost what they read. Both are
-  upper bounds, since a `GROUP BY` or `DISTINCT` inside returns fewer rows than the plan can
-  say; a CTE SQLite flattens shows up as scans of its base tables;
+  referenced twice, or two `GROUP BY` subqueries cross-joined, cost what they read. The scan
+  product is an upper bound only for a nest of scans: an index `SEARCH`'s rows per lookup are
+  not in the plan and are not counted, so a low-selectivity equi-join through an index (a
+  self-join on a 7-value key) is left to the timeout. A `GROUP BY` or `DISTINCT` inside returns
+  fewer rows than the plan can say; a CTE SQLite flattens shows up as scans of its base tables;
 * plan names are aliases, resolved through the query's own parse tree; an alias that names
   different tables in different scopes, a view that could not be counted and a recursive
   CTE count as one row, since a false refusal costs more than a slow query the timeout still
@@ -150,8 +157,8 @@ Sizing a materialised result by its scan product alone (without the `LIMIT` / un
 aggregate bounds) refused 8 candidates at 1e11, 6 of them wrong answers that ran in 0.1 s or
 less: `hi` / `lo` CTEs with `LIMIT 1` over a `GROUP BY` of a `DISTINCT` × `DISTINCT` grid
 (estimated 1e15), and a `MAX()` CTE cross-joined with its 101k-row source (1.2e11). The
-bounds the SQL states are exact upper bounds, so they keep the estimate an upper bound while
-removing those; no correct candidate was refused either way.
+bounds the SQL states are exact upper bounds, so they never raise the estimate while removing
+those; no correct candidate was refused either way.
 
 ## What stays timeout-bound
 

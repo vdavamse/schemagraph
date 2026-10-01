@@ -386,6 +386,18 @@ BOUNDED = [
     ("duckdb", "select a from t offset 5", None),  # OFFSET alone: no LIMIT to add after it
     ("duckdb", "select a from t limit 10%", None),  # a percentage: the cap would change it
     ("duckdb", "select a from t limit 1 + 100", None),
+    # digit separators, and the counts that spell "no limit", get the cap the same way
+    ("duckdb", "select a from t limit 1_000_000 -- note", "select a from t limit 21 -- note"),
+    ("sqlite", "select a /* -1 */ from t limit -1 -- note", "select a /* -1 */ from t limit 21 -- note"),
+    ("sqlite", "select a from t limit - 1 offset 3", "select a from t limit 21 offset 3"),
+    ("sqlite", "select a from t limit 5, -1", "select a from t limit 5, 21"),
+    ("sqlite", "select a from t limit -0", None),  # zero rows, not "no limit"
+    ("duckdb", "select a from t limit -1", None),  # DuckDB rejects a negative limit
+    ("duckdb", "select a /* limit all */ from t limit all -- note",
+     "select a /* limit all */ from t limit 21 -- note"),
+    ("duckdb", "select a from t limit NULL offset 2", "select a from t limit 21 offset 2"),
+    ("duckdb", "select a from (select a from t limit all) s",
+     "select a from (select a from t limit all) s\nLIMIT 21"),
 ]  # fmt: skip
 
 
@@ -442,6 +454,22 @@ def test_execute_puts_the_count_cap_in_the_sql(numbers, monkeypatch):
     assert exact.row_count == 20 and not exact.row_count_capped  # its own LIMIT runs as written
     full = numbers.execute("select id from nums", limit=None)
     assert ran[-1] == "select id from nums" and full.row_count == 100  # evaluation: never capped
+
+
+def test_no_limit_spellings_run_with_the_cap(numbers, monkeypatch):
+    ran = _spy_runs(numbers, monkeypatch)
+    spellings = {
+        "sqlite": ["select id from nums limit -1"],
+        "duckdb": [
+            "select id from nums limit 1_000_000",
+            "select id from nums limit all",
+            "select id from nums limit null",
+        ],
+    }[numbers.dialect]
+    for sql in spellings:
+        probe = numbers.execute(f"{sql} -- note", limit=20, count_cap=20)
+        assert ran[-1] == "select id from nums limit 21 -- note", sql
+        assert probe.ok and probe.row_count == 20 and probe.row_count_capped, sql
 
 
 def test_the_cap_keeps_duplicate_column_names(numbers):
@@ -579,7 +607,7 @@ def test_sqlite_counts_tables_only_for_an_estimate(tmp_path, monkeypatch):
     executor = SQLiteExecutor(path)
     counted: list[str] = []
     monkeypatch.setattr(
-        executor, "_count", lambda schema, table, timeout_s: counted.append(table) or 10
+        executor, "_count_locked", lambda table, timeout_s: counted.append(table) or 10
     )
     try:
         bind_only = executor.plan("select id from nums", estimate=False)
@@ -589,7 +617,8 @@ def test_sqlite_counts_tables_only_for_an_estimate(tmp_path, monkeypatch):
         executor.close()
 
 
-def test_sqlite_count_timeout_falls_back_to_max_rowid(tmp_path, monkeypatch):
+def _gaps_sqlite(tmp_path) -> Path:
+    """Write a 3-row table whose rowids reach 50, and a view over it."""
     path = tmp_path / "gaps.sqlite"
     con = sqlite3.connect(path)
     con.execute("CREATE TABLE t (a INT)")
@@ -597,13 +626,74 @@ def test_sqlite_count_timeout_falls_back_to_max_rowid(tmp_path, monkeypatch):
     con.execute("CREATE VIEW v AS SELECT * FROM t")
     con.commit()
     con.close()
-    # every count is interrupted at its first progress check
+    return path
+
+
+def _interrupt_spent_budgets(monkeypatch):
+    """Interrupt every SQLite statement whose time budget is already spent, at its first check."""
     monkeypatch.setattr(execute, "_SQLITE_PROGRESS_OPS", 1)
-    monkeypatch.setattr(execute, "_deadline_handler", lambda timeout_s: lambda: 1)
-    executor = SQLiteExecutor(path)
+    monkeypatch.setattr(
+        execute, "_deadline_handler", lambda timeout_s: lambda: 1 if timeout_s <= 0 else 0
+    )
+
+
+def test_sqlite_count_timeout_falls_back_to_max_rowid(tmp_path, monkeypatch):
+    _interrupt_spent_budgets(monkeypatch)
+    executor = SQLiteExecutor(_gaps_sqlite(tmp_path))
     try:
-        assert executor.row_count("t") == 50  # an upper bound of the 3 rows
-        assert executor.row_count("v") is None  # a view has no rowid: unknown
+        # the planning budget is spent: the estimate reads max(rowid), an upper bound of 3 rows
+        assert executor.plan("select * from t", timeout_s=1e-9).rows == 50
+        assert executor._planning_rows("v", deadline=0.0) is None  # a view has no rowid: unknown
+        assert executor._counts == {}  # neither stand-in is memoised as a count
+    finally:
+        executor.close()
+
+
+def test_sqlite_row_count_after_a_planning_timeout_is_exact(tmp_path, monkeypatch):
+    _interrupt_spent_budgets(monkeypatch)
+    executor = SQLiteExecutor(_gaps_sqlite(tmp_path))
+    try:
+        executor.plan("select * from t, v", timeout_s=1e-9)
+        assert executor.row_count("t") == 3 and executor.row_count("v") == 3
+        # the exact counts are memoised and size later estimates, whatever their budget
+        assert executor.plan("select a from t", timeout_s=1e-9).rows == 3
+    finally:
+        executor.close()
+
+
+def _never_counts(executor, monkeypatch) -> list[float]:
+    """Make every count of ``executor`` time out; return the budgets the counts were given."""
+    budgets: list[float] = []
+
+    def interrupted(table, timeout_s):
+        budgets.append(timeout_s)
+        raise sqlite3.OperationalError("interrupted")
+
+    monkeypatch.setattr(executor, "_count_locked", interrupted)
+    return budgets
+
+
+def test_sqlite_plans_count_a_slow_table_once_and_reuse_its_stand_in(tmp_path, monkeypatch):
+    executor = SQLiteExecutor(_gaps_sqlite(tmp_path))
+    budgets = _never_counts(executor, monkeypatch)
+    try:
+        assert executor.plan("select a from t").rows == 50
+        assert executor.plan("select x.a from t x, t y").rows == 50 + 50 * 50
+        assert len(budgets) == 1  # the second plan reuses max(rowid), no second count
+        assert executor._counts == {}
+    finally:
+        executor.close()
+
+
+def test_sqlite_plans_after_a_row_count_timeout_use_max_rowid(tmp_path, monkeypatch):
+    executor = SQLiteExecutor(_gaps_sqlite(tmp_path))
+    budgets = _never_counts(executor, monkeypatch)
+    try:
+        assert executor.row_count("t") is None  # timed out with the full budget
+        assert executor.row_count("t") is None and len(budgets) == 1  # and is not retried
+        # the plan neither counts again nor sizes the table as one row
+        assert executor.plan("select x.a from t x, t y").rows == 50 + 50 * 50
+        assert len(budgets) == 1
     finally:
         executor.close()
 
@@ -664,6 +754,10 @@ def test_sqlite_sizes_materialised_results_by_what_fills_them(tmp_path):
         for sql in (
             f"select count(*) from {grouped} x, {grouped} y",  # GROUP BY subqueries
             "with c as materialized (select * from big) select count(*) from c c1, c c2",
+            # one row per input row: SQLite's scalar max(a, b), and a windowed aggregate
+            "with c as materialized (select max(id, k) m from big) select count(*) from c x, c y",
+            "with c as materialized (select count(*) filter (where k > 1) over () n from big) "
+            "select count(*) from c x, c y",
         ):
             assert executor.plan(sql).rows >= 2000 * 2000, sql
         # what the SQL states bounds the size: LIMIT 1, and one row for an ungrouped aggregate

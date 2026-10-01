@@ -9,8 +9,8 @@ database: DDL/DML, ``ATTACH``, ``PRAGMA``, ``SET``, ``COPY``, ``INSTALL``/``LOAD
 ``SELECT … INTO``, file-reading table functions and file-like table names (DuckDB replacement
 scans). The text that passes is executed as written, not sqlglot's regenerated SQL; a parser
 differential is caught by the engine-side checks. The one edit is the row cap the executor adds
-(:func:`bounded_sql`), which appends a ``LIMIT`` or rewrites the digits of a literal one in
-place; the capped text goes through the guard and the engine check again.
+(:func:`bounded_sql`), which appends a ``LIMIT`` or rewrites a literal one (or a count that
+means "no limit") in place; the capped text goes through the guard and the engine check again.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from dataclasses import dataclass
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ErrorLevel
+from sqlglot.tokens import TokenType
 
 # Longest query the guard parses; model-written SQL is far shorter, anything longer is abuse.
 MAX_SQL_CHARS = 50_000
@@ -88,7 +89,7 @@ class GuardedSQL:
     Attributes:
         sql: The normalised original text. This, not sqlglot's regenerated SQL, is what runs;
             the executor's row cap (:func:`bounded_sql`) only appends a ``LIMIT`` or
-            replaces the digits of a literal one.
+            replaces the count of an existing one.
         tree: The parsed query.
         dialect: The sqlglot dialect it was parsed as.
     """
@@ -211,8 +212,12 @@ def bounded_sql(guarded: GuardedSQL, max_rows: int) -> str:
     * No top-level ``LIMIT``, ``FETCH`` or ``OFFSET``: ``LIMIT max_rows`` is appended to the
       text as written, on a new line so that a trailing ``--`` comment cannot swallow it.
     * A literal limit of at most ``max_rows``: unchanged.
-    * A literal limit above it (``LIMIT`` or ``FETCH FIRST``, with any ``OFFSET``): its digits
-      are replaced by ``max_rows`` where they stand in the text (the literal's token span).
+    * A literal limit above it (``LIMIT`` or ``FETCH FIRST``, with any ``OFFSET``; digit
+      separators as in ``1_000_000`` too): its digits are replaced by ``max_rows`` where they
+      stand in the text (the literal's token span).
+    * A count that spells "no limit": SQLite's negative literal (``LIMIT -1``) and DuckDB's
+      ``LIMIT ALL`` / ``LIMIT NULL`` are replaced by ``max_rows`` the same way. DuckDB
+      rejects a negative limit, so there it stays, an error as written.
     * Anything else (``OFFSET`` alone, an expression, a percentage, ``WITH TIES``), a
       literal too large for a 64-bit integer (an error as written) or one whose span cannot
       be located: unchanged, because the cap cannot be added without changing the result or
@@ -227,24 +232,83 @@ def bounded_sql(guarded: GuardedSQL, max_rows: int) -> str:
     Returns:
         The text to run.
     """
-    tree = guarded.tree
-    if tree.args.get("limit") is None:
-        if tree.args.get("offset") is None:
-            return f"{guarded.sql}\nLIMIT {max_rows}"
-        return guarded.sql
+    tree, text = guarded.tree, guarded.sql
+    span = _no_limit_span(guarded) or _over_cap_literal_span(tree, text, max_rows)
+    if span is not None:
+        start, end = span
+        return text[:start] + str(max_rows) + text[end + 1 :]
+    if tree.args.get("limit") is None and tree.args.get("offset") is None:
+        return f"{text}\nLIMIT {max_rows}"
+    return text
+
+
+def _over_cap_literal_span(tree: exp.Query, text: str, max_rows: int) -> tuple[int, int] | None:
+    """Return the span of the top-level literal limit when it exceeds ``max_rows``, or None."""
     count = _limit_literal(tree)
     if count is None or not max_rows < int(count.this) <= _MAX_LIMIT_LITERAL:
-        return guarded.sql
-    return _splice_literal(guarded.sql, count, str(max_rows))
+        return None
+    return _literal_span(text, count)
 
 
-def _splice_literal(text: str, literal: exp.Literal, replacement: str) -> str:
-    """Replace ``literal`` in ``text`` at its token span; ``text`` unchanged if the span is off.
+def _literal_span(text: str, literal: exp.Literal) -> tuple[int, int] | None:
+    """Return the inclusive span of ``literal`` in ``text``, or None when it is off.
 
     sqlglot records the source span (``start``/``end``, inclusive) of the token a literal was
-    parsed from in its ``meta``; the span must still spell the literal's digits.
+    parsed from in its ``meta``; the span must still spell the literal's digits, digit
+    separators aside (``1_000_000`` parses as ``1000000``).
     """
     start, end = literal.meta.get("start"), literal.meta.get("end")
-    if start is None or end is None or text[start : end + 1] != literal.this:
-        return text
-    return text[:start] + replacement + text[end + 1 :]
+    if start is None or end is None or text[start : end + 1].replace("_", "") != literal.this:
+        return None
+    return start, end
+
+
+def _no_limit_span(guarded: GuardedSQL) -> tuple[int, int] | None:
+    """Return the inclusive span of a top-level ``LIMIT`` count that means "no limit", or None."""
+    if guarded.dialect == "sqlite":
+        return _sqlite_negative_limit(guarded)
+    if guarded.dialect == "duckdb":
+        return _duckdb_no_limit_keyword(guarded.sql)
+    return None
+
+
+def _sqlite_negative_limit(guarded: GuardedSQL) -> tuple[int, int] | None:
+    """Return the span of SQLite's negative ``LIMIT`` literal, minus sign included, or None.
+
+    ``LIMIT -1`` and ``LIMIT 5, -1`` mean no limit; ``-0`` is a limit of zero rows, and a
+    literal below the smallest 64-bit integer is an error as written.
+    """
+    node = guarded.tree.args.get("limit")
+    count = node.expression if isinstance(node, exp.Limit) else None
+    if not (isinstance(count, exp.Neg) and isinstance(count.this, exp.Literal)):
+        return None
+    literal = count.this
+    if literal.is_string or not literal.this.isdigit():
+        return None
+    if not 0 < int(literal.this) <= _MAX_LIMIT_LITERAL + 1:
+        return None
+    span = _literal_span(guarded.sql, literal)
+    if span is None:
+        return None
+    before = guarded.sql[: span[0]].rstrip()
+    return (len(before) - 1, span[1]) if before.endswith("-") else None
+
+
+def _duckdb_no_limit_keyword(text: str) -> tuple[int, int] | None:
+    """Return the span of ``ALL`` / ``NULL`` right after DuckDB's top-level ``LIMIT``, or None."""
+    tokens = sqlglot.Dialect.get_or_raise("duckdb").tokenize(text)
+    depth = 0
+    last_limit = None
+    for index, token in enumerate(tokens):
+        if token.token_type == TokenType.L_PAREN:
+            depth += 1
+        elif token.token_type == TokenType.R_PAREN:
+            depth -= 1
+        elif token.token_type == TokenType.LIMIT and depth == 0:
+            last_limit = index
+    if last_limit is None or last_limit + 1 >= len(tokens):
+        return None
+    keyword = tokens[last_limit + 1]
+    if keyword.token_type not in (TokenType.ALL, TokenType.NULL):
+        return None
+    return keyword.start, keyword.end
