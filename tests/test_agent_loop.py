@@ -36,9 +36,11 @@ from typer.testing import CliRunner  # noqa: E402
 from schemagraph.agent import agents  # noqa: E402
 from schemagraph.agent import models as agent_models  # noqa: E402
 from schemagraph.agent.answer import (  # noqa: E402
+    REASONING_BUDGET_PERCENT,
     REASONING_MAX_TOKENS,
     REASONING_TIMEOUT_S,
     Answerer,
+    reasoning_headroom,
 )
 from schemagraph.agent.execute import AgentError, DuckDBExecutor, SQLiteExecutor  # noqa: E402
 from schemagraph.agent.models import AgentModels, model_names  # noqa: E402
@@ -270,6 +272,20 @@ def test_openrouter_models_reason_and_report_their_cost(monkeypatch):
     monkeypatch.setenv("SCHEMAGRAPH_REASONING", "max")
     with pytest.raises(ValueError, match="SCHEMAGRAPH_REASONING"):
         agent_models.resolve_model("openrouter:qwen/qwen3.8-max")
+
+
+def test_high_reasoning_keeps_the_answer_its_own_tokens(monkeypatch):
+    # OpenRouter gives thinking ~80 % of max_tokens at high effort: the extra tokens must leave
+    # the generator's 4096 for the answer (a flat 8192 left Gemini ~2450 and it answered nothing).
+    names = {"generator": "openrouter:google/gemini-3.8-flash"}
+    models = AgentModels(None, None, None, None, names)
+    for level, cap in (("low", 4096 + 8192), ("medium", 4096 + 8192), ("high", 4096 * 5)):
+        monkeypatch.setenv("SCHEMAGRAPH_REASONING", level)
+        limits = Answerer._limits(SimpleNamespace(models=models), "generator", 4096, 120.0)
+        assert limits["max_tokens"] == cap
+        thinking = cap * REASONING_BUDGET_PERCENT[level] // 100
+        assert cap - thinking >= 4096
+    assert reasoning_headroom(800) == REASONING_MAX_TOKENS  # the critic keeps the floor
 
 
 def test_usage_records_billed_cost_reasoning_tokens_and_fallback_prices():
@@ -709,6 +725,83 @@ def test_without_the_cost_gate_an_expensive_query_runs(store, monkeypatch):
     cfg = AgentConfig(strategy="single", judge=False, cost_gate=False)
     candidate = _answer(store, cfg, _models(gen)).candidates[0]
     assert candidate.exec.ok and candidate.exec.rows == [[36]] and candidate.exec.plan_rows is None
+
+
+def _returns_by_tool(messages) -> dict[str, list[object]]:
+    """Tool name -> contents of all its tool returns, in order."""
+    returns: dict[str, list[object]] = {}
+    for message in messages:
+        for part in message.parts:
+            if isinstance(part, ToolReturnPart):
+                returns.setdefault(part.tool_name, []).append(part.content)
+    return returns
+
+
+def _batches(*batches: list[ToolCallPart]):
+    """A generator model that sends each batch of parallel tool calls in turn, then GOOD."""
+    seen: dict[str, list[object]] = {}
+
+    def gen(messages, info):
+        turn = sum(isinstance(message, ModelResponse) for message in messages)
+        if turn < len(batches):
+            return ModelResponse(parts=batches[turn])
+        seen.update(_returns_by_tool(messages))
+        return _output(info, sql=GOOD)
+
+    return gen, seen
+
+
+def _sample_states(count: int) -> list[ToolCallPart]:
+    """``count`` parallel ``sample_values`` calls, each with its own call id."""
+    arguments = {"table": "customer", "column": "state"}
+    return [ToolCallPart("sample_values", arguments) for _ in range(count)]
+
+
+def _spy_executor(store, monkeypatch) -> list[str]:
+    """Record the SQL of every query the store's executor runs."""
+    _, executor = store
+    executed: list[str] = []
+    execute = executor.execute
+
+    def spy(sql, **options):
+        executed.append(sql)
+        return execute(sql, **options)
+
+    monkeypatch.setattr(executor, "execute", spy)
+    return executed
+
+
+def test_parallel_batches_past_the_tool_budget_still_return_sql(store, monkeypatch):
+    """Two batches of six calls: the budget of eight runs, the other four get the message."""
+    executed = _spy_executor(store, monkeypatch)
+    probes = [f"select {index}" for index in range(1, 7)]
+    gen, seen = _batches(
+        [ToolCallPart("get_table", {"fqn": "orders"}) for _ in range(4)] + _sample_states(2),
+        [ToolCallPart("run_query", {"sql": sql}) for sql in probes],
+    )
+    cfg = AgentConfig(strategy="single", judge=False, probe_limit=6)
+    result = _answer(store, cfg, _models(gen))
+    assert result.sql == GOOD
+    assert result.usage.by_role["generator"].tool_calls == 12  # under the hard backstop
+    assert all(table["fqn"] == "main.orders" for table in seen["get_table"])  # MCP calls spend
+    assert all("'CA'" in text for text in seen["sample_values"])
+    assert seen["run_query"].count(agents.TOOL_BUDGET_SPENT) == 4
+    assert sorted(sql for sql in executed if sql in probes) == probes[:2]  # the rest never ran
+
+
+def test_schema_tools_past_the_tool_budget_are_not_called(store, monkeypatch):
+    executed = _spy_executor(store, monkeypatch)
+    budget = agents.GENERATOR_TOOL_BUDGET
+    gen, seen = _batches(
+        _sample_states(budget),
+        [ToolCallPart("get_table", {"fqn": "orders"}) for _ in range(6)],
+        _sample_states(1),
+    )
+    result = _answer(store, AgentConfig(strategy="single", judge=False), _models(gen))
+    assert result.sql == GOOD
+    assert seen["get_table"] == [agents.TOOL_BUDGET_SPENT] * 6
+    assert seen["sample_values"][-1] == agents.TOOL_BUDGET_SPENT
+    assert sum("DISTINCT" in sql for sql in executed) == budget
 
 
 # ------------------------------------------------------------------ checks over MCP lookups
