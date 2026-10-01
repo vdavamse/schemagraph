@@ -15,7 +15,8 @@ Asks and results are replayed in the order they happened (``Candidate.asked_afte
 ``told``), so lockstep batches and rolling searches both replay truthfully; records written
 before those fields existed replay one node at a time in ask order. A panel shows the selected
 node's SQL, generator prompt (each schema DDL is written once per page, and the prompts link to
-it), score parts, judge rubric, feedback and errors.
+it), score parts, judge rubric, feedback and errors; the planner's specification, when the
+answer had one, is folded away under the facts.
 
 Everything is server-rendered and HTML-escaped, and readable without script: the final tree and
 every node's section. The one script (:data:`schemagraph.agent.viz_assets.PLAYER_JS`) is a
@@ -26,8 +27,8 @@ The tree is built from our own candidates, not TreeQuest's state, in the one rec
 `candidate_record` defines: :func:`tree_from_answer` reads an `AnswerResult`, and
 :func:`tree_from_records` reads those records as the exec benchmark's ``*_candidates.jsonl``
 stores them (:func:`schemagraph.bench.spider2_exec.load_search_trees`). Core dependencies only
-(the stdlib and `schemagraph.agent.results`), so the offline viewer runs without the ``agent``
-extra.
+(the stdlib, `schemagraph.agent.results` and `schemagraph.agent.prompts`), so the offline viewer
+runs without the ``agent`` extra.
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from schemagraph.agent.prompts import spec_text
 from schemagraph.agent.results import SCHEMA_MARKER, candidate_record
 from schemagraph.agent.viz_assets import CSS, PLAYER_JS
 
@@ -194,6 +196,7 @@ class SearchTree:
         facts: Label and value pairs shown under the title.
         contexts: The schema DDL of each context key the prompts name.
         instructions: The generator's system instructions, when recorded.
+        spec: The planner's specification as text, when the answer had one.
     """
 
     key: str
@@ -206,6 +209,7 @@ class SearchTree:
     facts: tuple[tuple[str, str], ...] = ()
     contexts: Mapping[str, str] = field(default_factory=dict)
     instructions: str = ""
+    spec: str = ""
 
     def node(self, node_id: str | None) -> TreeNode | None:
         """Return the node with this id, or None."""
@@ -226,6 +230,7 @@ def tree_from_records(
     facts: Iterable[tuple[str, str]] = (),
     contexts: Mapping[str, str] | None = None,
     instructions: str = "",
+    spec: str = "",
 ) -> SearchTree:
     """Build a search tree from candidate records, the one place records are normalised.
 
@@ -244,6 +249,7 @@ def tree_from_records(
         facts: Label and value pairs shown under the title.
         contexts: The schema DDL by context key, to put back into the prompts.
         instructions: The generator's system instructions.
+        spec: The planner's specification as text (:func:`~schemagraph.agent.prompts.spec_text`).
 
     Returns:
         The tree, with nodes in depth-first pre-order and children in ask order.
@@ -264,6 +270,7 @@ def tree_from_records(
         facts=tuple((str(label), str(value)) for label, value in facts),
         contexts={str(name): str(ddl) for name, ddl in (contexts or {}).items()},
         instructions=instructions,
+        spec=spec,
     )
 
 
@@ -299,6 +306,7 @@ def tree_from_answer(result: AnswerResult, *, generators: Sequence[str] = ()) ->
         facts=facts,
         contexts=result.contexts,
         instructions=result.instructions,
+        spec=spec_text(result.spec) if result.spec else "",
     )
 
 
@@ -709,9 +717,10 @@ def _events_json(tree: SearchTree, events: Sequence[ReplayEvent]) -> str:
 def render_search_html(tree: SearchTree) -> str:
     """Render one search tree as a standalone HTML page with the replay player.
 
-    The page has the title and facts, a legend (each model's family colour, node count, best
-    score and correct nodes when known; the key to the marks), the player (controls, caption and
-    the tree) beside the node panel, and the replay steps as a JSON data block.
+    The page has the title and facts, the planner's specification when there is one, a legend
+    (each model's family colour, node count, best score and correct nodes when known; the key to
+    the marks), the player (controls, caption and the tree) beside the node panel, and the replay
+    steps as a JSON data block.
     """
     colors = model_colors(tree.models)
     layout = layout_tree(tree)
@@ -720,6 +729,7 @@ def render_search_html(tree: SearchTree) -> str:
         [
             f"<h1>{_escape(tree.title)}</h1>",
             _facts(tree),
+            _spec(tree.spec),
             _legend(tree, colors),
             '<div class="player"><div class="player-main" id="player">',
             _controls(),
@@ -773,6 +783,16 @@ def _facts(tree: SearchTree) -> str:
         return ""
     items = "".join(f"<dt>{_escape(label)}</dt><dd>{_escape(value)}</dd>" for label, value in facts)
     return f'<dl class="facts">{items}</dl>'
+
+
+def _spec(text: str) -> str:
+    """Render the planner's specification, folded away; nothing without one."""
+    if not text:
+        return ""
+    return (
+        '<details class="spec"><summary>specification (planner)</summary>'
+        f"<pre>{_escape(text)}</pre></details>"
+    )
 
 
 def _marks(node: TreeNode, tree: SearchTree) -> list[str]:

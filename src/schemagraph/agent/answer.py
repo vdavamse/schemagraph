@@ -1,4 +1,4 @@
-"""The answer loop: link, generate, guard and execute, check, judge, score; then the final pick.
+"""The answer loop: link, plan (optional), generate, guard and execute, check, judge, score; pick.
 
 :mod:`schemagraph.agent.search` decides which nodes to generate.
 
@@ -11,6 +11,7 @@ server's tools link in worker threads, so the Engine lock is never held across a
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 import time
 from dataclasses import dataclass, field, replace
@@ -33,6 +34,7 @@ from schemagraph.agent.results import (
     ExecResult,
     Finding,
     Judgement,
+    QuestionSpec,
     RubricBase,
     SqlCandidate,
     Transcript,
@@ -54,6 +56,12 @@ GEN_TIMEOUT_S = 120.0
 JUDGE_TIMEOUT_S = 30.0
 # Output tokens of the critic's advice.
 CRITIC_MAX_TOKENS = 800
+# Output tokens of the planner's specification, before reasoning headroom: the offline study's
+# specifications were 2,300 to 3,900 characters of JSON, well under this
+# (bench_results/planner_study).
+PLANNER_MAX_TOKENS = 4096
+# Timeout of the planner request, in seconds: one call per answer, reasoning at high effort.
+PLANNER_TIMEOUT_S = 300.0
 # Extra output tokens and request timeout of a role whose model reasons: reasoning counts
 # against ``max_tokens``, and a reasoning request takes longer (the node timeout still bounds
 # the whole node, ``AgentConfig.node_timeout_s``). The extra tokens are at least this many.
@@ -75,6 +83,8 @@ KEY_STATS_MAX_ROWS = 10_000_000
 JUDGE_COUNTS_TIMEOUT_S = 30.0
 # Usage roles whose records are attached to the node they ran for.
 _NODE_ROLES = frozenset({"generator", "judge"})
+
+_log = logging.getLogger(__name__)
 
 
 def reasoning_headroom(answer_tokens: int) -> int:
@@ -118,11 +128,13 @@ class Answerer:
         schema: The orchestrator's schema lookups; its ``mcp_url`` also serves the generator.
         executor: Where queries run.
         cfg: The answer's settings.
-        models: The four roles' models.
+        models: The roles' models.
         records: Every model call for the current question, including failed and cancelled
             ones.
         question: The question being answered (set by :meth:`prepare`).
         evidence: Its external knowledge, if any.
+        spec: The planner's specification of the question, when ``cfg.spec`` is on and the
+            planner succeeded; None otherwise.
     """
 
     def __init__(
@@ -141,6 +153,7 @@ class Answerer:
         self._key_counts: dict[tuple[str, str], tuple[int, int] | None] = {}
         self.question = ""
         self.evidence: str | None = None
+        self.spec: QuestionSpec | None = None
         self._toolset = agents.schema_toolset(schema.mcp_url)
         self._link_text = ""
         self._wide = LinkedSchema(ddl="", tables=())
@@ -151,10 +164,11 @@ class Answerer:
 
     # ----------------------------------------------------------- entry points
     async def prepare(self, question: str, *, evidence: str | None = None) -> None:
-        """Set the question, reset the per-question state and link its wide context.
+        """Set the question, reset the per-question state, link its wide context and plan.
 
-        :meth:`answer` calls this; the judge study calls it directly before re-judging stored
-        candidates.
+        With ``cfg.spec`` on, the planner then reads the question and that context once and
+        writes the specification every later prompt shows. :meth:`answer` calls this; the judge
+        study calls it directly before re-judging stored candidates.
         """
         self.records = []
         self.transcripts = [] if self.cfg.trace else None
@@ -168,6 +182,7 @@ class Answerer:
         if evidence:
             self._link_text += f"\n\n{evidence[: self.cfg.evidence_chars]}"
         self._wide = await self._link("wide")
+        self.spec = await self._plan() if self.cfg.spec else None
 
     async def answer(self, question: str, *, evidence: str | None = None) -> AnswerResult:
         """Search for SQL that answers ``question`` and pick the final query.
@@ -204,7 +219,34 @@ class Answerer:
             instructions=prompts.generator_instructions(
                 self.executor.dialect, self.cfg.probe_limit
             ),
+            spec=self.spec,
         )
+
+    async def _plan(self) -> QuestionSpec | None:
+        """Run the planner on the question and the wide context; None when it fails.
+
+        A failure (no key, a refusal, an invalid specification) never fails the answer: its
+        usage record keeps the error, and the search runs without a specification.
+        """
+        prompt = prompts.planner_prompt(
+            self.question, self.evidence, self._wide.ddl, evidence_chars=self.cfg.evidence_chars
+        )
+        try:
+            output, _, _ = await agents.run_agent(
+                "planner",
+                agents.planner(),
+                prompt,
+                model=self.models.planner,
+                model_name=self.models.names.get("planner", ""),
+                sink=self.records,
+                transcripts=self.transcripts,
+                model_settings=self._limits("planner", PLANNER_MAX_TOKENS, PLANNER_TIMEOUT_S),
+                retries={"output": self.cfg.output_retries},
+            )
+        except Exception as error:
+            _log.warning("planner failed, answering without a specification: %s", error)
+            return None
+        return output
 
     def _limits(
         self, role: str, max_tokens: int | None, timeout: float, *, model_name: str | None = None
@@ -322,6 +364,7 @@ class Answerer:
             parent,
             evidence_chars=self.cfg.evidence_chars,
             siblings=siblings,
+            spec=self.spec,
         )
 
     async def _write_sql(
@@ -525,7 +568,9 @@ class Answerer:
     async def judge(self, candidate: Candidate) -> Judgement | None:
         """Judge an executed candidate; None when the judge call failed (it is in the records)."""
         rubric = rubric_type(
-            await self.missing_options(candidate), readings=self.cfg.judge_ambiguity
+            await self.missing_options(candidate),
+            readings=self.cfg.judge_ambiguity,
+            spec=self.spec is not None,
         )
         findings = candidate.checks.findings if candidate.checks else []
         material = prompts.judge_material(
@@ -538,6 +583,7 @@ class Answerer:
             schema=await self._judge_schema(candidate) if self.cfg.judge_schema else None,
             findings=[finding.message for finding in findings] if self.cfg.judge_findings else None,
             stats=self.cfg.judge_stats,
+            spec=self.spec,
         )
         model_name = self.models.names["judge"]
         try:
@@ -573,7 +619,7 @@ class Answerer:
             if parent.advice is not None:
                 return
             linked = await self._link(parent.action)
-            prompt = prompts.critic_prompt(self.question, parent, linked.ddl)
+            prompt = prompts.critic_prompt(self.question, parent, linked.ddl, spec=self.spec)
             try:
                 output, _, _ = await agents.run_agent(
                     "critic",
@@ -594,7 +640,7 @@ class Answerer:
     async def _pick_material(self, a: Candidate, b: Candidate) -> str:
         """Build the selector's prompt for a pair, with the judge's context when configured."""
         if not self.cfg.selector_context:
-            return prompts.pick_material(self.question, a, b)
+            return prompts.pick_material(self.question, a, b, spec=self.spec)
         schema_a, schema_b = await asyncio.gather(self._judge_schema(a), self._judge_schema(b))
         return prompts.pick_material(
             self.question,
@@ -607,6 +653,7 @@ class Answerer:
             rows=self.cfg.preview_rows,
             stats=True,
             findings=True,
+            spec=self.spec,
         )
 
     async def _pick(self, a: Candidate, b: Candidate) -> float:

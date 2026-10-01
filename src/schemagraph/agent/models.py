@@ -1,8 +1,10 @@
 """Which model plays which role, resolved once per answer.
 
 Generator and critic default to Qwen on Alibaba DashScope (``ALIBABA_API_KEY`` or
-``DASHSCOPE_API_KEY``); judge and selector default to TypeSafe Jev (``TYPESAFE_API_KEY``). Any
-pydantic-ai model string works for each role through the ``SCHEMAGRAPH_*_MODEL`` variables.
+``DASHSCOPE_API_KEY``); judge and selector default to TypeSafe Jev (``TYPESAFE_API_KEY``); the
+planner, which runs only with ``AgentConfig.spec``, defaults to Claude Opus through OpenRouter
+(``OPENROUTER_API_KEY``). Any pydantic-ai model string works for each role through the
+``SCHEMAGRAPH_*_MODEL`` variables.
 ``openrouter:`` models reason at ``SCHEMAGRAPH_REASONING`` effort (default medium) and report
 their billed cost; Jev goes through OpenRouter with ``TYPESAFE_BASE_URL=https://openrouter.ai/api``.
 """
@@ -17,9 +19,13 @@ from schemagraph.agent.results import AgentConfig
 
 DEFAULT_GEN_MODEL = "alibaba:qwen3.8-max"
 DEFAULT_JUDGE_MODEL = "typesafe:jev-1.13.0"
+# The planner's default: the model that matched the gold reading on 18 of 21 tasks offline
+# (bench_results/planner_study), at high reasoning.
+DEFAULT_PLANNER_MODEL = "openrouter:anthropic/claude-opus-5.5"
 ENV_GEN = "SCHEMAGRAPH_GEN_MODEL"
 ENV_JUDGE = "SCHEMAGRAPH_JUDGE_MODEL"
 ENV_CRITIC = "SCHEMAGRAPH_CRITIC_MODEL"
+ENV_PLANNER = "SCHEMAGRAPH_PLANNER_MODEL"
 ENV_ALIBABA_BASE_URL = "SCHEMAGRAPH_ALIBABA_BASE_URL"
 ENV_REASONING = "SCHEMAGRAPH_REASONING"
 # Reasoning effort of ``openrouter:`` models; ``off`` asks the route not to reason.
@@ -30,13 +36,18 @@ DEFAULT_REASONING = "medium"
 def model_names(cfg: AgentConfig) -> dict[str, str]:
     """Name the model of each role: the config first, then the environment, then the default.
 
-    With several generator models (``cfg.gen_models``) the generator is the first of them.
+    With several generator models (``cfg.gen_models``) the generator is the first of them. The
+    planner is named only when ``cfg.spec`` is on, so the names of runs without it (recorded in
+    the benchmark's config hash) are unchanged.
     """
     configured = cfg.gen_models[0] if cfg.gen_models else cfg.gen_model
     generator = configured or os.environ.get(ENV_GEN) or DEFAULT_GEN_MODEL
     judge = cfg.judge_model or os.environ.get(ENV_JUDGE) or DEFAULT_JUDGE_MODEL
     critic = cfg.critic_model or os.environ.get(ENV_CRITIC) or generator
-    return {"generator": generator, "judge": judge, "selector": judge, "critic": critic}
+    names = {"generator": generator, "judge": judge, "selector": judge, "critic": critic}
+    if cfg.spec:
+        names["planner"] = cfg.planner_model or os.environ.get(ENV_PLANNER) or DEFAULT_PLANNER_MODEL
+    return names
 
 
 def reasoning_level() -> str:
@@ -138,6 +149,7 @@ def _roles_used(cfg: AgentConfig) -> dict[str, bool]:
         "judge": cfg.judge,
         "selector": cfg.selector and cfg.strategy != "single",
         "critic": cfg.strategy in {"refine", "abmcts"},
+        "planner": cfg.spec,
     }
 
 
@@ -150,10 +162,12 @@ class AgentModels:
         judge: Judge model, or None when the judge is off.
         selector: Pairwise selector model, or None when it does not run.
         critic: Critic model, or None when the strategy never refines.
-        names: Model name by role, including roles that do not run.
+        names: Model name by role, including roles that do not run (except the planner, named
+            only when ``AgentConfig.spec`` is on).
         generators: The models of ``AgentConfig.gen_models`` by name, when the strategy
             searches them together (``best_of_n``, ``abmcts``); empty otherwise, and the one
             generator is ``gen``.
+        planner: Planner model, or None when ``AgentConfig.spec`` is off.
     """
 
     gen: Any
@@ -162,6 +176,7 @@ class AgentModels:
     critic: Any
     names: dict[str, str] = field(default_factory=dict)
     generators: dict[str, Any] = field(default_factory=dict)
+    planner: Any = None
 
     @classmethod
     def resolve(cls, cfg: AgentConfig) -> AgentModels:
@@ -189,6 +204,7 @@ class AgentModels:
             model_for("critic"),
             names,
             {name: resolved(name) for name in cfg.searched_generators()},
+            model_for("planner"),
         )
 
     def reasoning(self, role: str) -> bool:

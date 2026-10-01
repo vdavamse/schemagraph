@@ -1,4 +1,4 @@
-"""The four agents: generator (with tools), judge and selector (typed judgements), critic (text).
+"""The agents: generator (tools), judge and selector (typed), critic (text), planner (typed spec).
 
 Agents are built once with ``defer_model_check=True`` and no model; the model is passed per run,
 so building never needs a key and tests swap models per run. The generator's schema tools are
@@ -33,6 +33,7 @@ from schemagraph.agent.guard import GuardError, guard_sql
 from schemagraph.agent.results import (
     AgentConfig,
     Pick,
+    QuestionSpec,
     RubricBase,
     SqlCandidate,
     Transcript,
@@ -330,6 +331,17 @@ def selector() -> Agent[None, Pick]:
 
 
 @cache
+def planner() -> Agent[None, QuestionSpec]:
+    """Build the planner, which writes a :class:`QuestionSpec` before any SQL (no tools)."""
+    return Agent(
+        None,
+        output_type=QuestionSpec,
+        instructions=prompts.PLANNER_INSTRUCTIONS,
+        defer_model_check=True,
+    )
+
+
+@cache
 def critic() -> Agent[None, str]:
     """Build the critic, which writes refinement advice as text."""
     return Agent(
@@ -463,7 +475,7 @@ async def run_agent(
     every exit (success, failure, cancellation by the node timeout), so spend is never lost.
 
     Args:
-        role: The usage role: ``generator``, ``judge``, ``selector`` or ``critic``.
+        role: The usage role: ``generator``, ``judge``, ``selector``, ``critic`` or ``planner``.
         agent: The agent to run.
         prompt: The user prompt.
         model: The model to run it on.
