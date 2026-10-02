@@ -464,7 +464,7 @@ def test_the_candidates_file_record_and_the_answer_give_the_same_tree():
     assert shared == [
         "id", "parent_id", "depth", "action", "generator", "sql", "rationale", "advice",
         "feedback", "score", "score_parts", "rubric", "missing", "findings", "ok", "row_count",
-        "error", "exec_error", "prompt", "context_key", "asked_after", "told", "start_ms",
+        "plan_rows", "error", "exec_error", "prompt", "context_key", "asked_after", "told", "start_ms",
         "end_ms",
     ]  # fmt: skip
     assert list(records[0]) == ["instance_id", *shared, "fingerprint", "ex"]  # the bench adds 3

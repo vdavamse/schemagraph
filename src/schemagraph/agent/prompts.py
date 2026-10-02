@@ -20,7 +20,8 @@ GENERATOR_INSTRUCTIONS = (
     "find_join_path, and business terms with list_glossary. "
     "Prefer the join columns listed in the schema. "
     "Check literal values with sample_values before filtering on them. "
-    "You may probe with run_query (at most {probes} times, small results only). "
+    "You may probe with run_query (at most {probes} times, small results only; probes show at "
+    "most 20 rows and expensive plans are refused unrun). "
     "Return the final query through the output tool: no markdown, no comments, no trailing "
     "semicolon. {notes}"
 )

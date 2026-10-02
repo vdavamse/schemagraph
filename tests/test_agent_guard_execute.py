@@ -22,8 +22,15 @@ from schemagraph.agent.execute import (
     executor_for_connection,
     executor_for_path,
 )
-from schemagraph.agent.guard import GuardedSQL, GuardError, guard_sql, normalize
-from schemagraph.agent.results import ExecResult
+from schemagraph.agent.guard import (
+    GuardedSQL,
+    GuardError,
+    bounded_sql,
+    guard_sql,
+    normalize,
+    row_limit,
+)
+from schemagraph.agent.results import ExecResult, PlanInfo
 from schemagraph.connectors.duckdb_conn import DuckDBConfig, introspect_duckdb
 from schemagraph.engine import Engine
 
@@ -147,9 +154,10 @@ def test_full_result_beyond_the_eval_cap_is_a_row_cap_error(executor, monkeypatc
 def test_execute_error_kinds(executor):
     assert executor.execute("drop table orders").error_kind == "guard"
     assert executor.execute("select nope from orders").error_kind == "syntax"
-    assert executor.explain("select id from orders").ok
-    assert executor.explain("select nope from orders").error_kind == "syntax"
-    assert executor.explain("drop table orders").error_kind == "guard"
+    assert executor.plan("select id from orders").ok
+    assert executor.plan("select nope from orders").error_kind == "syntax"
+    assert executor.plan("drop table orders").error_kind == "guard"
+    assert executor.plan("explain select 1").error_kind == "guard"  # the model cannot EXPLAIN
 
 
 def test_timeout(executor):
@@ -271,7 +279,7 @@ def test_duckdb_explain_checks_statements(store_duckdb, monkeypatch):
     monkeypatch.setattr(execute, "guard_sql", no_guard)
     duck = DuckDBExecutor(store_duckdb)
     try:
-        for run in (duck.explain, duck.execute):
+        for run in (duck.plan, duck.execute):
             result = run("select 1; create temp table z (a int)")
             assert result.error_kind == "guard" and "one SELECT" in result.error
     finally:
@@ -348,5 +356,432 @@ def test_join_key_counts_quote_reserved_names_and_leave_out_nulls(tmp_path):
         # coupon is unique among the rows that can match a join; the NULLs match nothing
         assert Answerer._key_stats(host, executor.resolve_table("order"), "coupon") == (2, 2)
         assert Answerer._key_stats(host, executor.resolve_table("order"), "id") == (4, 4)
+    finally:
+        executor.close()
+
+
+# ------------------------------------------------------------------ row cap in the SQL text
+
+# (dialect, query, text after bounded_sql(..., 21)); None means unchanged.
+BOUNDED = [
+    ("sqlite", "select a from t", "select a from t\nLIMIT 21"),
+    ("duckdb", "select a from t", "select a from t\nLIMIT 21"),
+    ("sqlite", "with x as (select a from t) select a from x order by a",
+     "with x as (select a from t) select a from x order by a\nLIMIT 21"),
+    ("duckdb", "select a from t union select b from u", "select a from t union select b from u\nLIMIT 21"),
+    ("sqlite", "select a from t union all select b from u",
+     "select a from t union all select b from u\nLIMIT 21"),
+    ("duckdb", "from t", "from t\nLIMIT 21"),
+    ("sqlite", "select a from t -- trailing comment", "select a from t -- trailing comment\nLIMIT 21"),
+    ("duckdb", "select a from t limit 5", None),
+    ("sqlite", "select a from t limit 5, 10", None),  # SQLite's LIMIT offset, count
+    # a literal above the cap: its digits are replaced in place, the rest runs as written
+    ("sqlite", "select a from t limit 50 offset 5", "select a from t limit 21 offset 5"),
+    ("sqlite", "select a from t limit 5, 500", "select a from t limit 5, 21"),
+    ("duckdb", "select a from t fetch first 30 rows only", "select a from t fetch first 21 rows only"),
+    ("duckdb", "select a /* keep */ from t\n  LIMIT   50 -- note",
+     "select a /* keep */ from t\n  LIMIT   21 -- note"),
+    ("duckdb", "select a from t limit +500", "select a from t limit +21"),
+    ("sqlite", "select a from t limit 18446744073709551616", None),  # an error as written
+    ("duckdb", "select a from t offset 5", None),  # OFFSET alone: no LIMIT to add after it
+    ("duckdb", "select a from t limit 10%", None),  # a percentage: the cap would change it
+    ("duckdb", "select a from t limit 1 + 100", None),
+    # digit separators, and the counts that spell "no limit", get the cap the same way
+    ("duckdb", "select a from t limit 1_000_000 -- note", "select a from t limit 21 -- note"),
+    ("sqlite", "select a /* -1 */ from t limit -1 -- note", "select a /* -1 */ from t limit 21 -- note"),
+    ("sqlite", "select a from t limit - 1 offset 3", "select a from t limit 21 offset 3"),
+    ("sqlite", "select a from t limit 5, -1", "select a from t limit 5, 21"),
+    ("sqlite", "select a from t limit -0", None),  # zero rows, not "no limit"
+    ("duckdb", "select a from t limit -1", None),  # DuckDB rejects a negative limit
+    ("duckdb", "select a /* limit all */ from t limit all -- note",
+     "select a /* limit all */ from t limit 21 -- note"),
+    ("duckdb", "select a from t limit NULL offset 2", "select a from t limit 21 offset 2"),
+    ("duckdb", "select a from (select a from t limit all) s",
+     "select a from (select a from t limit all) s\nLIMIT 21"),
+]  # fmt: skip
+
+
+@pytest.mark.parametrize(("dialect", "sql", "expected"), BOUNDED)
+def test_bounded_sql_caps_the_text_and_passes_the_guard_again(dialect, sql, expected):
+    guarded = guard_sql(sql, dialect)
+    text = bounded_sql(guarded, 21)
+    assert text == (expected or guarded.sql)
+    capped = guard_sql(text, dialect)
+    if expected is not None:
+        assert row_limit(capped.tree) == 21
+
+
+@pytest.fixture(params=["duckdb", "sqlite"])
+def numbers(request, tmp_path):
+    """An executor over one table of 100 rows: nums(id, k) with k = id % 7."""
+    rows = ", ".join(f"({i}, {i % 7})" for i in range(100))
+    if request.param == "duckdb":
+        path = tmp_path / "nums.duckdb"
+        con = duckdb.connect(str(path))
+        con.execute(f"CREATE TABLE nums (id INT, k INT); INSERT INTO nums VALUES {rows}")
+        con.close()
+        opened: Executor = DuckDBExecutor(path)
+    else:
+        path = tmp_path / "nums.sqlite"
+        con = sqlite3.connect(path)
+        con.executescript(f"CREATE TABLE nums (id INT, k INT); INSERT INTO nums VALUES {rows};")
+        con.close()
+        opened = SQLiteExecutor(path)
+    yield opened
+    opened.close()
+
+
+def _spy_runs(executor, monkeypatch) -> list[str]:
+    """Record the SQL text of every query the executor runs."""
+    ran: list[str] = []
+    run = executor._run
+
+    def spy(sql, timeout_s, then):
+        ran.append(sql)
+        return run(sql, timeout_s, then)
+
+    monkeypatch.setattr(executor, "_run", spy)
+    return ran
+
+
+def test_execute_puts_the_count_cap_in_the_sql(numbers, monkeypatch):
+    ran = _spy_runs(numbers, monkeypatch)
+    probe = numbers.execute("select id from nums", limit=20, count_cap=20)
+    assert ran == ["select id from nums\nLIMIT 21"]
+    assert probe.row_count == 20 and probe.row_count_capped and len(probe.rows) == 20
+    assert probe.plan_rows is None  # not gated
+    exact = numbers.execute("select id from nums limit 20", limit=20, count_cap=20)
+    assert exact.row_count == 20 and not exact.row_count_capped  # its own LIMIT runs as written
+    full = numbers.execute("select id from nums", limit=None)
+    assert ran[-1] == "select id from nums" and full.row_count == 100  # evaluation: never capped
+
+
+def test_no_limit_spellings_run_with_the_cap(numbers, monkeypatch):
+    ran = _spy_runs(numbers, monkeypatch)
+    spellings = {
+        "sqlite": ["select id from nums limit -1"],
+        "duckdb": [
+            "select id from nums limit 1_000_000",
+            "select id from nums limit all",
+            "select id from nums limit null",
+        ],
+    }[numbers.dialect]
+    for sql in spellings:
+        probe = numbers.execute(f"{sql} -- note", limit=20, count_cap=20)
+        assert ran[-1] == "select id from nums limit 21 -- note", sql
+        assert probe.ok and probe.row_count == 20 and probe.row_count_capped, sql
+
+
+def test_the_cap_keeps_duplicate_column_names(numbers):
+    result = numbers.execute("select a.id, b.id from nums a join nums b on a.id = b.id", limit=5)
+    assert result.ok and result.columns == ["id", "id"] and result.row_count == 100
+
+
+def test_cost_gate_refuses_an_expensive_plan_unrun(numbers, monkeypatch):
+    cross = "select count(*) from nums a, nums b, nums c"
+    monkeypatch.setattr(numbers, "max_plan_rows", 1e5)
+    ran = _spy_runs(numbers, monkeypatch)
+    refused = numbers.execute(cross, limit=20, cost_gate=True)
+    assert not refused.ok and refused.error_kind == "cost"
+    assert refused.plan_rows is not None and refused.plan_rows > 1e5
+    assert "the plan would process about" in refused.error and "rows" in refused.error
+    assert not any(sql.startswith("select count") for sql in ran)  # only the EXPLAIN ran
+    assert numbers.execute(cross, limit=20).rows == [[1_000_000]]  # ungated, it runs
+    assert numbers.execute(cross, limit=None, cost_gate=True).ok  # evaluation is never gated
+    cheap = numbers.execute("select id from nums a", limit=5, cost_gate=True)
+    assert cheap.ok and cheap.plan_rows is not None and cheap.plan_rows <= 1e5
+
+
+def test_plan_estimates_resolve_aliases_and_are_memoised(numbers, monkeypatch):
+    calls: list[str] = []
+    explain = numbers._explain
+
+    def counting(guarded, timeout_s, *, estimate):
+        calls.append(guarded.sql)
+        return explain(guarded, timeout_s, estimate=estimate)
+
+    monkeypatch.setattr(numbers, "_explain", counting)
+    plan = numbers.plan("select x.id from nums x, nums y")
+    # SQLite: the scans of x and y, sized through their aliases; DuckDB: the cross product
+    assert plan.ok and plan.rows == (100 + 100 * 100 if numbers.dialect == "sqlite" else 100 * 100)
+    assert plan.reason
+    assert numbers.plan("select x.id from nums x, nums y") is plan
+    assert numbers.plan("select x.id from nums x, nums y;") is plan  # the same guarded text
+    assert len(calls) == 1
+    assert numbers.plan("select nope from nums").error_kind == "syntax"
+    cte = numbers.plan("with c as (select id from nums) select * from c c1, c c2")
+    assert cte.ok and cte.rows is not None
+
+
+def test_a_capped_probe_runs_the_text_as_written_apart_from_the_limit(numbers, monkeypatch):
+    ran = _spy_runs(numbers, monkeypatch)
+    probe = numbers.execute(
+        "select id /* ids */ from nums\n  limit   50 -- note", limit=20, count_cap=20
+    )
+    assert ran == ["select id /* ids */ from nums\n  limit   21 -- note"]
+    assert probe.row_count == 20 and probe.row_count_capped
+    commented = numbers.execute("select id from nums -- trailing comment", limit=20, count_cap=20)
+    assert ran[-1] == "select id from nums -- trailing comment\nLIMIT 21"
+    assert commented.ok and commented.row_count == 20 and commented.row_count_capped
+
+
+def test_sqlite_still_rejects_syntax_it_would_reject_as_written(tmp_path):
+    path = tmp_path / "nums.sqlite"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE nums (id INT)")
+    con.close()
+    executor = SQLiteExecutor(path)
+    try:
+        for sql in (
+            "select id from nums fetch first 500 rows only",  # not SQLite syntax
+            "from nums select id limit 500",  # DuckDB's FROM-first
+        ):
+            result = executor.execute(sql, limit=20, count_cap=20)
+            assert not result.ok and result.error_kind == "syntax", sql
+    finally:
+        executor.close()
+
+
+@pytest.mark.parametrize(
+    "capped",
+    [
+        "select 1; select 2",
+        "select * from read_csv('x.csv')",
+        "select id from nums\nLIMIT 500",  # a limit, but not the cap
+    ],
+)
+def test_capped_text_that_fails_re_admission_runs_the_original(numbers, monkeypatch, capped):
+    monkeypatch.setattr(execute, "bounded_sql", lambda guarded, max_rows: capped)
+    ran = _spy_runs(numbers, monkeypatch)
+    result = numbers.execute("select id from nums", limit=20, count_cap=20)
+    assert ran == ["select id from nums"]
+    assert result.ok and result.row_count == 20 and result.row_count_capped  # the fetch cap
+
+
+def test_plan_memo_keeps_plans_not_timeouts_and_drops_the_oldest(numbers, monkeypatch):
+    calls: list[str] = []
+    explain = numbers._explain
+    outcome = {"fail": "timeout"}
+
+    def flaky(guarded, timeout_s, *, estimate):
+        calls.append(guarded.sql)
+        if outcome["fail"]:
+            return PlanInfo(ok=False, error="boom", error_kind=outcome["fail"])
+        return explain(guarded, timeout_s, estimate=estimate)
+
+    monkeypatch.setattr(numbers, "_explain", flaky)
+    monkeypatch.setattr(execute, "PLAN_CACHE_SIZE", 2)
+    assert numbers.plan("select 1").error_kind == "timeout"
+    outcome["fail"] = "runtime"
+    assert numbers.plan("select 1").error_kind == "runtime"
+    outcome["fail"] = None
+    assert numbers.plan("select 1").ok
+    assert calls == ["select 1"] * 3  # neither failure was kept
+    numbers.plan("select 1")
+    assert len(calls) == 3  # the plan was
+    numbers.plan("select 2")
+    numbers.plan("select 3")  # evicts "select 1", the oldest
+    numbers.plan("select 1")
+    assert calls[3:] == ["select 2", "select 3", "select 1"]
+
+
+def test_planning_honours_the_callers_timeout(numbers, monkeypatch):
+    timeouts: list[float] = []
+    explain = numbers._explain
+
+    def recording(guarded, timeout_s, *, estimate):
+        timeouts.append(timeout_s)
+        return explain(guarded, timeout_s, estimate=estimate)
+
+    monkeypatch.setattr(numbers, "_explain", recording)
+    numbers.execute("select id from nums", limit=5, timeout_s=2.0, cost_gate=True)
+    numbers.execute("select k from nums", limit=5, timeout_s=60.0, cost_gate=True)
+    assert timeouts == [2.0, execute.EXPLAIN_TIMEOUT_S]
+
+
+def test_sqlite_counts_tables_only_for_an_estimate(tmp_path, monkeypatch):
+    path = tmp_path / "nums.sqlite"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE nums (id INT)")
+    con.close()
+    executor = SQLiteExecutor(path)
+    counted: list[str] = []
+    monkeypatch.setattr(
+        executor, "_count_locked", lambda table, timeout_s: counted.append(table) or 10
+    )
+    try:
+        bind_only = executor.plan("select id from nums", estimate=False)
+        assert bind_only.ok and bind_only.rows is None and counted == []
+        assert executor.plan("select id from nums").rows == 10 and counted == ["nums"]
+    finally:
+        executor.close()
+
+
+def _gaps_sqlite(tmp_path) -> Path:
+    """Write a 3-row table whose rowids reach 50, and a view over it."""
+    path = tmp_path / "gaps.sqlite"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE t (a INT)")
+    con.executemany("INSERT INTO t (rowid, a) VALUES (?, ?)", [(1, 1), (2, 2), (50, 3)])
+    con.execute("CREATE VIEW v AS SELECT * FROM t")
+    con.commit()
+    con.close()
+    return path
+
+
+def _interrupt_spent_budgets(monkeypatch):
+    """Interrupt every SQLite statement whose time budget is already spent, at its first check."""
+    monkeypatch.setattr(execute, "_SQLITE_PROGRESS_OPS", 1)
+    monkeypatch.setattr(
+        execute, "_deadline_handler", lambda timeout_s: lambda: 1 if timeout_s <= 0 else 0
+    )
+
+
+def test_sqlite_count_timeout_falls_back_to_max_rowid(tmp_path, monkeypatch):
+    _interrupt_spent_budgets(monkeypatch)
+    executor = SQLiteExecutor(_gaps_sqlite(tmp_path))
+    try:
+        # the planning budget is spent: the estimate reads max(rowid), an upper bound of 3 rows
+        assert executor.plan("select * from t", timeout_s=1e-9).rows == 50
+        assert executor._planning_rows("v", deadline=0.0) is None  # a view has no rowid: unknown
+        assert executor._counts == {}  # neither stand-in is memoised as a count
+    finally:
+        executor.close()
+
+
+def test_sqlite_row_count_after_a_planning_timeout_is_exact(tmp_path, monkeypatch):
+    _interrupt_spent_budgets(monkeypatch)
+    executor = SQLiteExecutor(_gaps_sqlite(tmp_path))
+    try:
+        executor.plan("select * from t, v", timeout_s=1e-9)
+        assert executor.row_count("t") == 3 and executor.row_count("v") == 3
+        # the exact counts are memoised and size later estimates, whatever their budget
+        assert executor.plan("select a from t", timeout_s=1e-9).rows == 3
+    finally:
+        executor.close()
+
+
+def _never_counts(executor, monkeypatch) -> list[float]:
+    """Make every count of ``executor`` time out; return the budgets the counts were given."""
+    budgets: list[float] = []
+
+    def interrupted(table, timeout_s):
+        budgets.append(timeout_s)
+        raise sqlite3.OperationalError("interrupted")
+
+    monkeypatch.setattr(executor, "_count_locked", interrupted)
+    return budgets
+
+
+def test_sqlite_plans_count_a_slow_table_once_and_reuse_its_stand_in(tmp_path, monkeypatch):
+    executor = SQLiteExecutor(_gaps_sqlite(tmp_path))
+    budgets = _never_counts(executor, monkeypatch)
+    try:
+        assert executor.plan("select a from t").rows == 50
+        assert executor.plan("select x.a from t x, t y").rows == 50 + 50 * 50
+        assert len(budgets) == 1  # the second plan reuses max(rowid), no second count
+        assert executor._counts == {}
+    finally:
+        executor.close()
+
+
+def test_sqlite_plans_after_a_row_count_timeout_use_max_rowid(tmp_path, monkeypatch):
+    executor = SQLiteExecutor(_gaps_sqlite(tmp_path))
+    budgets = _never_counts(executor, monkeypatch)
+    try:
+        assert executor.row_count("t") is None  # timed out with the full budget
+        assert executor.row_count("t") is None and len(budgets) == 1  # and is not retried
+        # the plan neither counts again nor sizes the table as one row
+        assert executor.plan("select x.a from t x, t y").rows == 50 + 50 * 50
+        assert len(budgets) == 1
+    finally:
+        executor.close()
+
+
+def test_key_stats_skip_tables_over_the_row_limit(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from schemagraph.agent import answer
+    from schemagraph.agent.answer import Answerer
+
+    path = tmp_path / "keys.sqlite"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE t (id INTEGER)")
+    con.executemany("INSERT INTO t VALUES (?)", [(1,), (2,), (3,)])
+    con.commit()
+    con.close()
+    monkeypatch.setattr(answer, "KEY_STATS_MAX_ROWS", 2)
+    executor = SQLiteExecutor(path)
+    ran = _spy_runs(executor, monkeypatch)
+    try:
+        host = SimpleNamespace(executor=executor, _key_counts={})
+        assert Answerer._key_stats(host, "t", "id") is None
+        assert ran == [] and host._key_counts == {("t", "id"): None}  # memoised, never counted
+    finally:
+        executor.close()
+
+
+def test_an_alias_naming_different_tables_is_sized_as_unknown(tmp_path):
+    path = tmp_path / "alias.sqlite"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE big (id INT)")
+    con.execute("CREATE TABLE small (id INT)")
+    con.executemany("INSERT INTO big VALUES (?)", [(i,) for i in range(1000)])
+    con.executemany("INSERT INTO small VALUES (?)", [(i,) for i in range(3)])
+    con.commit()
+    con.close()
+    tree = guard_sql("select * from small t where exists (select 1 from big t)", "sqlite")
+    assert execute._names_by_alias(tree) == {"t": None}
+    executor = SQLiteExecutor(path)
+    try:
+        # both scans of `t` count as one row, whichever table the plan meant
+        plan = executor.plan("select count(*) from big t where exists (select 1 from small t)")
+        assert plan.ok and plan.rows is not None and plan.rows < 10
+    finally:
+        executor.close()
+
+
+def test_sqlite_sizes_materialised_results_by_what_fills_them(tmp_path):
+    path = tmp_path / "big.sqlite"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE big (id INT, k INT)")
+    con.executemany("INSERT INTO big VALUES (?, ?)", [(i, i % 7) for i in range(2000)])
+    con.commit()
+    con.close()
+    executor = SQLiteExecutor(path)
+    grouped = "(select k, count(*) n from big group by id)"
+    try:
+        for sql in (
+            f"select count(*) from {grouped} x, {grouped} y",  # GROUP BY subqueries
+            "with c as materialized (select * from big) select count(*) from c c1, c c2",
+            # one row per input row: SQLite's scalar max(a, b), and a windowed aggregate
+            "with c as materialized (select max(id, k) m from big) select count(*) from c x, c y",
+            "with c as materialized (select count(*) filter (where k > 1) over () n from big) "
+            "select count(*) from c x, c y",
+        ):
+            assert executor.plan(sql).rows >= 2000 * 2000, sql
+        # what the SQL states bounds the size: LIMIT 1, and one row for an ungrouped aggregate
+        bounded = (
+            "with hi as (select id from big order by k desc limit 1), "
+            "mx as (select max(id) m from big) "
+            "select count(*) from hi, mx, big where big.id > hi.id"
+        )
+        assert executor.plan(bounded).rows < 20_000
+    finally:
+        executor.close()
+
+
+def test_duckdb_refuses_a_large_inequality_join(tmp_path):
+    path = tmp_path / "big.duckdb"
+    con = duckdb.connect(str(path))
+    con.execute("CREATE TABLE big AS SELECT range AS id FROM range(200000)")
+    con.close()
+    executor = DuckDBExecutor(path)
+    try:
+        # DuckDB estimates ~1.4e7 rows for this piecewise merge join; it emits 2e10
+        result = executor.execute(
+            "select count(*) from big a join big b on a.id < b.id", limit=20, cost_gate=True
+        )
+        assert result.error_kind == "cost" and "PIECEWISE_MERGE_JOIN" in result.error
     finally:
         executor.close()

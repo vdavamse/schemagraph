@@ -28,7 +28,7 @@ SCHEMA_MARKER = "<<schema {key}>>"
 MAX_OPTIONS = 255
 _MIN_OPTIONS = 2
 
-ErrorKind = Literal["guard", "syntax", "runtime", "timeout", "row_cap"]
+ErrorKind = Literal["guard", "syntax", "runtime", "timeout", "row_cap", "cost"]
 FindingCode = Literal[
     "guard",
     "parse",
@@ -39,6 +39,7 @@ FindingCode = Literal[
     "ungrouped_column",
     "exec_error",
     "timeout",
+    "cost",
     "empty_result",
     "null_column",
     "row_explosion",
@@ -58,6 +59,8 @@ class ExecResult(BaseModel):
         row_count_capped: Counting stopped at ``count_cap``.
         truncated: ``row_count`` exceeds ``len(rows)``.
         elapsed_ms: Wall time of the execution.
+        plan_rows: The plan's work estimate when the cost gate planned the query
+            (:mod:`schemagraph.agent.cost`), else None.
     """
 
     ok: bool
@@ -68,6 +71,28 @@ class ExecResult(BaseModel):
     row_count: int = 0
     row_count_capped: bool = False
     truncated: bool = False
+    elapsed_ms: float = 0.0
+    plan_rows: float | None = None
+
+
+@dataclass(frozen=True)
+class PlanInfo:
+    """The database's plan of one query, which was not run.
+
+    Attributes:
+        ok: Whether the database planned it (names bound, types checked).
+        error: Why it did not.
+        error_kind: Which stage rejected it.
+        rows: The plan's work estimate (:mod:`schemagraph.agent.cost`); None when unknown.
+        reason: The operator behind the estimate, for a refusal message.
+        elapsed_ms: Wall time of the planning.
+    """
+
+    ok: bool
+    error: str | None = None
+    error_kind: ErrorKind | None = None
+    rows: float | None = None
+    reason: str = ""
     elapsed_ms: float = 0.0
 
 
@@ -503,6 +528,7 @@ def candidate_record(candidate: Candidate) -> dict[str, Any]:
         else [],
         "ok": bool(result and result.ok),
         "row_count": result.row_count if result else None,
+        "plan_rows": result.plan_rows if result else None,
         "error": candidate.error,
         "exec_error": exec_error_text(result),
         "prompt": candidate.prompt,
@@ -594,6 +620,9 @@ class AgentConfig:
         exec_limit: Rows fetched per execution.
         exec_timeout_s: Execution timeout in seconds.
         count_cap: Rows counted per execution before counting stops.
+        cost_gate: Plan every query the agent runs (probes, candidates) with EXPLAIN and refuse
+            one estimated far beyond the timeout (``error_kind`` ``cost``) before it reaches the
+            database.
         draft_temperature: Generator temperature for fresh drafts.
         refine_temperature: Generator temperature for refinements.
         node_timeout_s: Timeout of one generator node in seconds.
@@ -639,6 +668,7 @@ class AgentConfig:
     exec_limit: int = 1000
     exec_timeout_s: float = 30.0
     count_cap: int = 100_000
+    cost_gate: bool = True
     draft_temperature: float = 0.8
     refine_temperature: float = 0.4
     node_timeout_s: float = 300.0

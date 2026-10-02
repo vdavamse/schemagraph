@@ -89,6 +89,7 @@ _LEGACY_VALUES = {
     "selector_context": False,
     "gen_models": (),
     "generator_selection": 1,
+    "cost_gate": False,  # no CLI flag: CLI runs keep the gate on and get a new config hash
 }
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6

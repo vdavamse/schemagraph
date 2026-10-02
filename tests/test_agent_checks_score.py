@@ -190,6 +190,17 @@ def test_result_checks(duck):
     assert result_checks(generated, {"orders": 3}, count_cap=100_000, guarded=recursive) == []
 
 
+def test_a_cost_refusal_is_an_error_finding_scored_as_a_failure():
+    refusal = "the plan would process about 2.0e+11 rows (nested loop: SCAN a × SCAN b); rewrite"
+    refused = ExecResult(ok=False, error=refusal, error_kind="cost", plan_rows=2e11)
+    findings = result_checks(refused, {}, count_cap=100)
+    assert [(f.code, f.severity) for f in findings] == [("cost", "error")]
+    assert findings[0].message == f"refused before running: {refusal}"
+    report = CheckReport(parsed=True, findings=findings)
+    assert combine(report, refused, None) == (0.05, {"det": 1.0, "judge": None, "x": 0.0})
+    assert feedback(report, None) == [f"refused before running: {refusal}"]
+
+
 def test_a_capped_count_is_an_explosion_only_below_the_cap(duck):
     guarded = guard_sql("select * from orders o, order_items i, customer", "duckdb")
     capped = ExecResult(ok=True, columns=["a"], rows=[[1]], row_count=10, row_count_capped=True)
