@@ -296,6 +296,8 @@ def judge_material(
     if evidence and evidence_chars > 0:
         sections.append(f"Notes: {evidence[:evidence_chars]}")
     if spec is not None:
+        # whole and uncut, as in the measured runs: a planner writes 2-4k characters, and a
+        # compact judge's version (no alternatives) waits for a judge study
         sections.append(spec_section(spec))
     if schema:
         sections.append(f"Tables the query reads:\n{schema[:JUDGE_SCHEMA_CHARS]}")

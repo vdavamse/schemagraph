@@ -5,8 +5,9 @@ Generator and critic default to Qwen on Alibaba DashScope (``ALIBABA_API_KEY`` o
 planner, which runs only with ``AgentConfig.spec``, defaults to Claude Opus through OpenRouter
 (``OPENROUTER_API_KEY``). Any pydantic-ai model string works for each role through the
 ``SCHEMAGRAPH_*_MODEL`` variables.
-``openrouter:`` models reason at ``SCHEMAGRAPH_REASONING`` effort (default medium) and report
-their billed cost; Jev goes through OpenRouter with ``TYPESAFE_BASE_URL=https://openrouter.ai/api``.
+``openrouter:`` models reason at ``SCHEMAGRAPH_REASONING`` effort (default medium), the planner at
+``SCHEMAGRAPH_PLANNER_REASONING`` (default high), and report their billed cost; Jev goes through
+OpenRouter with ``TYPESAFE_BASE_URL=https://openrouter.ai/api``.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from schemagraph.agent.results import AgentConfig
 DEFAULT_GEN_MODEL = "alibaba:qwen3.8-max"
 DEFAULT_JUDGE_MODEL = "typesafe:jev-1.13.0"
 # The planner's default: the model that matched the gold reading on 18 of 21 tasks offline
-# (bench_results/planner_study), at high reasoning.
+# (bench_results/planner_study), at high reasoning (DEFAULT_PLANNER_REASONING).
 DEFAULT_PLANNER_MODEL = "openrouter:anthropic/claude-opus-5.5"
 ENV_GEN = "SCHEMAGRAPH_GEN_MODEL"
 ENV_JUDGE = "SCHEMAGRAPH_JUDGE_MODEL"
@@ -31,6 +32,10 @@ ENV_REASONING = "SCHEMAGRAPH_REASONING"
 # Reasoning effort of ``openrouter:`` models; ``off`` asks the route not to reason.
 REASONING_LEVELS = ("off", "low", "medium", "high")
 DEFAULT_REASONING = "medium"
+ENV_PLANNER_REASONING = "SCHEMAGRAPH_PLANNER_REASONING"
+# The planner's own effort: the offline study and the live runs planned at high, and it is one
+# call per answer, so high costs little next to the search.
+DEFAULT_PLANNER_REASONING = "high"
 
 
 def model_names(cfg: AgentConfig) -> dict[str, str]:
@@ -50,22 +55,30 @@ def model_names(cfg: AgentConfig) -> dict[str, str]:
     return names
 
 
-def reasoning_level() -> str:
-    """Return the reasoning effort of ``openrouter:`` models, from the environment.
+def reasoning_level(role: str | None = None) -> str:
+    """Return the reasoning effort of ``openrouter:`` models in ``role``, from the environment.
+
+    The planner reads ``SCHEMAGRAPH_PLANNER_REASONING`` (default high); every other role reads
+    ``SCHEMAGRAPH_REASONING`` (default medium).
 
     Raises:
-        ValueError: ``SCHEMAGRAPH_REASONING`` is not one of :data:`REASONING_LEVELS`.
+        ValueError: The variable is not one of :data:`REASONING_LEVELS`.
     """
-    level = os.environ.get(ENV_REASONING, DEFAULT_REASONING).strip().lower() or DEFAULT_REASONING
+    if role == "planner":
+        env, default = ENV_PLANNER_REASONING, DEFAULT_PLANNER_REASONING
+    else:
+        env, default = ENV_REASONING, DEFAULT_REASONING
+    level = os.environ.get(env, default).strip().lower() or default
     if level not in REASONING_LEVELS:
         expected = ", ".join(REASONING_LEVELS)
-        raise ValueError(f"{ENV_REASONING}={level!r}: expected one of {expected}")
+        raise ValueError(f"{env}={level!r}: expected one of {expected}")
     return level
 
 
-def reasons(name: Any) -> bool:
+def reasons(name: Any, role: str | None = None) -> bool:
     """Whether the model named ``name`` is asked to reason (an ``openrouter:`` model, not off)."""
-    return isinstance(name, str) and name.startswith("openrouter:") and reasoning_level() != "off"
+    is_openrouter = isinstance(name, str) and name.startswith("openrouter:")
+    return is_openrouter and reasoning_level(role) != "off"
 
 
 def _no_forced_tools() -> Any:
@@ -94,8 +107,8 @@ def _alibaba_model(model: str) -> Any:
     return OpenAIChatModel(model, provider=provider, profile=profile)
 
 
-def _openrouter_model(model: str) -> Any:
-    """Build an OpenRouter model that reasons at :func:`reasoning_level` and reports its cost.
+def _openrouter_model(model: str, level: str) -> Any:
+    """Build an OpenRouter model that reasons at effort ``level`` and reports its cost.
 
     Reasoning uses OpenRouter's unified ``reasoning`` field, which the gateway translates for the
     upstream (Qwen's thinking mode included); ``usage.include`` asks for the billed cost of every
@@ -106,7 +119,6 @@ def _openrouter_model(model: str) -> Any:
     from pydantic_ai.profiles import merge_profile
     from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-    level = reasoning_level()
     settings = OpenRouterModelSettings(openrouter_usage={"include": True})
     if level == "off":
         settings["openrouter_reasoning"] = {"enabled": False}
@@ -134,12 +146,19 @@ def resolve_model(name: Any) -> Any:
     if provider == "alibaba":
         return _alibaba_model(model)
     if provider == "openrouter":
-        return _openrouter_model(model)
+        return _openrouter_model(model, reasoning_level())
     if provider == "typesafe":
         from pydantic_ai.models.typesafe import TypeSafeModel
 
         return TypeSafeModel(model)
     return name
+
+
+def _resolve_planner(name: Any) -> Any:
+    """Return the planner's model: :func:`resolve_model`, but reasoning at the planner's effort."""
+    if isinstance(name, str) and name.startswith("openrouter:"):
+        return _openrouter_model(name.partition(":")[2], reasoning_level("planner"))
+    return resolve_model(name)
 
 
 def _roles_used(cfg: AgentConfig) -> dict[str, bool]:
@@ -204,14 +223,14 @@ class AgentModels:
             model_for("critic"),
             names,
             {name: resolved(name) for name in cfg.searched_generators()},
-            model_for("planner"),
+            _resolve_planner(names["planner"]) if used["planner"] else None,
         )
 
     def reasoning(self, role: str) -> bool:
         """Whether ``role``'s model is asked to reason; for the generator, any of its models."""
         if role == "generator" and self.generators:
             return any(reasons(name) for name in self.generators)
-        return reasons(self.names.get(role))
+        return reasons(self.names.get(role), role)
 
     def generator(self, name: str | None) -> tuple[Any, str]:
         """Return a generator model and its name; None, or the default's name, is ``gen``.

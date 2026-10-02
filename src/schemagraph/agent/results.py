@@ -225,6 +225,12 @@ SPEC_DESCRIPTION = (
     "Does the result follow the specification: one row as its row definition says, its "
     "columns, and every quantity in its own column?"
 )
+# Every rubric field's question, opt-in fields included, for the judge's refine feedback.
+RUBRIC_DESCRIPTIONS: dict[str, str] = {
+    **{name: str(info.description) for name, info in RubricBase.model_fields.items()},
+    READINGS_FIELD: READINGS_DESCRIPTION,
+    SPEC_FIELD: SPEC_DESCRIPTION,
+}
 
 
 @lru_cache(maxsize=256)

@@ -426,7 +426,8 @@ def _run_config(
     written before the field existed. ``trace`` is left out too: it records, it changes no
     answer. Fields added later (:data:`_LEGACY_VALUES`) count only when they differ from the
     behaviour earlier runs had, for the same reason as ``mcp_url``; so does
-    ``reasoning_node_timeout_s``, which counts only when the generator reasons.
+    ``reasoning_node_timeout_s``, which counts only when the generator reasons, and the
+    planner's own effort, which counts only when it differs from the shared one.
     """
     from schemagraph.agent.models import reasoning_level
 
@@ -454,6 +455,11 @@ def _run_config(
         # the reasoning effort changes the answers; recorded only when a model reads it, so the
         # hash of runs on other providers is unchanged
         config["reasoning"] = reasoning_level()
+    planner_reads_it = models.names.get("planner", "").startswith("openrouter:")
+    if planner_reads_it and reasoning_level("planner") != reasoning_level():
+        # recorded only when it differs: the planner reasoned at the shared effort before it had
+        # its own, so runs planned at that effort keep their hash and resume
+        config["planner_reasoning"] = reasoning_level("planner")
     config["config_hash"] = config_hash(config)
     return config
 

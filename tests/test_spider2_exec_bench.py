@@ -295,6 +295,23 @@ def test_the_reasoning_node_timeout_counts_only_for_a_reasoning_generator(monkey
     assert chash(None) != chash(600.0)
 
 
+def test_config_records_the_planner_effort_only_when_it_differs(monkeypatch):
+    from schemagraph.agent.results import AgentConfig
+    from schemagraph.bench.spider2_exec import _run_config
+
+    models = _Models().agent_models()
+    models.names = {**models.names, "planner": "openrouter:anthropic/claude-opus-5.5"}
+    monkeypatch.delenv("SCHEMAGRAPH_PLANNER_REASONING", raising=False)
+
+    def config_at(level):
+        monkeypatch.setenv("SCHEMAGRAPH_REASONING", level)
+        return _run_config(AgentConfig(spec=True), models, seed=0, use_docs=True, concurrency=1)
+
+    # the live --spec runs planned at the shared high effort, so they keep their hash
+    assert "planner_reasoning" not in config_at("high")
+    assert config_at("medium")["planner_reasoning"] == "high"
+
+
 def test_config_records_the_reasoning_effort_only_for_openrouter_models(monkeypatch):
     from schemagraph.agent.results import AgentConfig
     from schemagraph.bench.spider2_exec import _run_config

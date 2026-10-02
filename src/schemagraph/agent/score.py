@@ -10,11 +10,10 @@ The judge's ``missing`` tables are feedback, not score.
 from __future__ import annotations
 
 from schemagraph.agent.results import (
-    RUBRIC_FIELDS,
+    RUBRIC_DESCRIPTIONS,
     CheckReport,
     ExecResult,
     Judgement,
-    RubricBase,
     ScoreWeights,
 )
 
@@ -77,12 +76,11 @@ def feedback(checks: CheckReport | None, judgement: Judgement | None) -> list[st
 
 
 def _judge_feedback(judgement: Judgement) -> list[str]:
-    """Return the rubric fields the judge doubted, then the tables it thinks are missing."""
+    """Return the rubric fields the judge doubted, opt-in ones included, then missing tables."""
     lines: list[str] = []
-    for name in RUBRIC_FIELDS:
-        probability = judgement.fields.get(name)
-        if probability is not None and probability < DOUBT_P:
-            description = RubricBase.model_fields[name].description
+    for name, probability in judgement.fields.items():
+        description = RUBRIC_DESCRIPTIONS.get(name)
+        if description is not None and probability < DOUBT_P:
             lines.append(f"reviewer doubts: {description} (p={probability:.2f})")
     likely = sorted(
         (

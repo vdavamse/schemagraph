@@ -36,6 +36,8 @@ from typer.testing import CliRunner  # noqa: E402
 from schemagraph.agent import agents, prompts  # noqa: E402
 from schemagraph.agent import models as agent_models  # noqa: E402
 from schemagraph.agent.answer import (  # noqa: E402
+    PLANNER_MAX_TOKENS,
+    PLANNER_TIMEOUT_S,
     REASONING_BUDGET_PERCENT,
     REASONING_MAX_TOKENS,
     REASONING_TIMEOUT_S,
@@ -1082,6 +1084,26 @@ class Planned:
             FunctionModel(script.gen), judge, judge, FunctionModel(self.critic), names,
             planner=FunctionModel(self.plan),
         )  # fmt: skip
+
+
+def test_the_planner_reasons_at_its_own_effort(monkeypatch):
+    pytest.importorskip("openai")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "x")
+    monkeypatch.setenv("SCHEMAGRAPH_REASONING", "low")  # the other roles' effort
+    monkeypatch.delenv("SCHEMAGRAPH_PLANNER_REASONING", raising=False)
+    planner = "openrouter:anthropic/claude-opus-5.5"
+    cfg = AgentConfig(strategy="single", judge=False, gen_model="test", spec=True)
+    models = AgentModels.resolve(replace(cfg, planner_model=planner))
+    assert models.planner.settings["openrouter_reasoning"] == {"enabled": True, "effort": "high"}
+    limits = Answerer._limits(
+        SimpleNamespace(models=models), "planner", PLANNER_MAX_TOKENS, PLANNER_TIMEOUT_S
+    )
+    assert limits == {"max_tokens": PLANNER_MAX_TOKENS * 5, "timeout": PLANNER_TIMEOUT_S}
+
+    monkeypatch.setenv("SCHEMAGRAPH_PLANNER_REASONING", "off")
+    models = AgentModels.resolve(replace(cfg, planner_model=planner))
+    assert models.planner.settings["openrouter_reasoning"] == {"enabled": False}
+    assert not models.reasoning("planner")
 
 
 def test_model_names_add_the_planner_only_with_the_spec(monkeypatch):

@@ -8,6 +8,9 @@ from schemagraph.agent.checks import result_checks, static_checks
 from schemagraph.agent.execute import DuckDBExecutor, SQLiteExecutor
 from schemagraph.agent.guard import guard_sql
 from schemagraph.agent.results import (
+    READINGS_FIELD,
+    SPEC_DESCRIPTION,
+    SPEC_FIELD,
     CheckReport,
     ExecResult,
     Finding,
@@ -267,6 +270,15 @@ def test_feedback_order():
     assert lines[:2] == ["err", "info"]
     assert "reviewer doubts" in lines[2]
     assert lines[3] == "may need table(s): main.products (p=0.80)"
+
+
+def test_feedback_names_doubted_opt_in_rubric_fields():
+    # a result the judge thinks breaks the specification must tell the refinement why
+    judged = judgement(0.9)
+    judged.fields[READINGS_FIELD] = 0.9
+    judged.fields[SPEC_FIELD] = 0.1
+    lines = feedback(CheckReport(parsed=True), judged)
+    assert lines == [f"reviewer doubts: {SPEC_DESCRIPTION} (p=0.10)"]
 
 
 def test_rubric_type():

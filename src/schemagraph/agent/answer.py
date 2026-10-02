@@ -60,7 +60,8 @@ CRITIC_MAX_TOKENS = 800
 # specifications were 2,300 to 3,900 characters of JSON, well under this
 # (bench_results/planner_study).
 PLANNER_MAX_TOKENS = 4096
-# Timeout of the planner request, in seconds: one call per answer, reasoning at high effort.
+# Timeout of the planner request, in seconds: one call per answer, by default reasoning at high
+# effort (DEFAULT_PLANNER_REASONING).
 PLANNER_TIMEOUT_S = 300.0
 # Extra output tokens and request timeout of a role whose model reasons: reasoning counts
 # against ``max_tokens``, and a reasoning request takes longer (the node timeout still bounds
@@ -87,14 +88,14 @@ _NODE_ROLES = frozenset({"generator", "judge"})
 _log = logging.getLogger(__name__)
 
 
-def reasoning_headroom(answer_tokens: int) -> int:
+def reasoning_headroom(answer_tokens: int, *, role: str | None = None) -> int:
     """Return the extra output tokens a reasoning model gets on top of its answer's cap.
 
     Sized so the answer keeps ``answer_tokens`` after OpenRouter's thinking share
-    (:data:`REASONING_BUDGET_PERCENT` at :func:`reasoning_level`), and never below
+    (:data:`REASONING_BUDGET_PERCENT` at ``role``'s :func:`reasoning_level`), and never below
     :data:`REASONING_MAX_TOKENS`.
     """
-    percent = REASONING_BUDGET_PERCENT[reasoning_level()]
+    percent = REASONING_BUDGET_PERCENT[reasoning_level(role)]
     return max(REASONING_MAX_TOKENS, math.ceil(answer_tokens * percent / (100 - percent)))
 
 
@@ -264,7 +265,7 @@ class Answerer:
         """
         reasoning = reasons(model_name) if model_name else self.models.reasoning(role)
         if reasoning:
-            max_tokens = (max_tokens or 0) + reasoning_headroom(max_tokens or 0)
+            max_tokens = (max_tokens or 0) + reasoning_headroom(max_tokens or 0, role=role)
             timeout = max(timeout, REASONING_TIMEOUT_S)
         limits: dict[str, Any] = {"timeout": timeout}
         if max_tokens is not None:
