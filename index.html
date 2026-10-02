@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>schemagraph demos</title>
+<meta name="description" content="Interactive pages from schemagraph: how the graph linker picks tables, and replays of the AB-MCTS SQL search.">
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #141d26; --muted: #57636e;
+  --rule: #d4dbe2; --accent: #2b54c4; --good: #1d7d46;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1419; --surface: #151d25; --ink: #e3e9ee; --muted: #9aa7b2;
+    --rule: #26323d; --accent: #86a7ff; --good: #5cc98a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 880px; margin: 0 auto; padding: 48px 16px 64px; }
+h1 { font-size: clamp(28px, 4vw, 40px); margin: 0 0 8px; line-height: 1.15; }
+.lede { color: var(--muted); margin: 0 0 32px; max-width: 64ch; }
+h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 32px 0 12px; }
+.card {
+  display: block; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 18px 20px; margin-bottom: 12px; text-decoration: none; color: inherit;
+}
+.card:hover, .card:focus-visible { border-color: var(--accent); outline: none; }
+.card b { display: block; font-size: 18px; color: var(--accent); margin-bottom: 4px; }
+.card span { color: var(--muted); font-size: 15px; }
+.card .tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--good); margin-left: 6px; }
+footer { margin-top: 40px; color: var(--muted); font-size: 14px; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>schemagraph demos</h1>
+  <p class="lede">Interactive pages from <a href="https://github.com/vdavamse/schemagraph">schemagraph</a>, a schema context engine for text-to-SQL. All examples use Spider 2.0-Lite task <code>local008</code>: <em>“the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.”</em></p>
+
+  <h2>How the graph picks the tables</h2>
+  <a class="card" href="linking/local008.html">
+    <b>Table retrieval, stage by stage</b>
+    <span>Question words seed the graph, personalized PageRank spreads the activation, PPR and BM25F rankings fuse, anchors are chosen, join paths pull in bridge tables, and the budget cuts the sub-schema. No LLM, deterministic.</span>
+  </a>
+
+  <h2>Search replays (AB-MCTS-M, Jev judge)</h2>
+  <a class="card" href="replays/local008_qwen16.html">
+    <b>One model, 16 nodes: the tree finds the answer <span class="tag">every draft wrong → refinement correct</span></b>
+    <span>Qwen 3.8 Max alone. All 6 first drafts are wrong; the critic's advice leads refinements to 4 correct queries, and a depth-1 refinement is picked.</span>
+  </a>
+  <a class="card" href="replays/local008_multi20.html">
+    <b>Five models, 20 nodes</b>
+    <span>Qwen, GLM-5.3, Grok 4.7, Gemini 3.8 Flash and GPT-6 Sol searched together; the search samples a model for every node. 6 correct queries, 3 of them first drafts; a depth-2 refinement is picked.</span>
+  </a>
+
+  <footer>Generated from the repository's benchmark runs (<code>schemagraph viz-search</code>, <code>bench_results/link_viz</code>). Press ▶ or Space on a replay to play it; click a node for its SQL and prompt.</footer>
+</main>
+</body>
+</html>

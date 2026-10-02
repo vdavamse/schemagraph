@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schema Linking Walkthrough</title>
+<style>
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --ink: #1d2128; --muted: #5d6573; --line: #c9ccd3;
+  --node: #e9ebef; --node-stroke: #8a92a0;
+  --heat: #e8590c; --accent: #1c64d8; --path: #7b3fd0; --fill: #138a52; --cut: #c92a2a;
+  --gold: #d69e00; --chip: #e6efff; --chip-ink: #13408c; --code: #f1f2f5;
+  --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 18px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --surface: #1b1f27; --ink: #e9ecf2; --muted: #9aa3b2; --line: #3a404c;
+    --node: #2a303b; --node-stroke: #6d7686;
+    --heat: #ff8a3d; --accent: #5b9dff; --path: #b18cff; --fill: #3fcf8e; --cut: #ff6b6b;
+    --gold: #ffd34d; --chip: #1f3255; --chip-ink: #cfe0ff; --code: #151920;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 18px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151b; --surface: #1b1f27; --ink: #e9ecf2; --muted: #9aa3b2; --line: #3a404c;
+  --node: #2a303b; --node-stroke: #6d7686;
+  --heat: #ff8a3d; --accent: #5b9dff; --path: #b18cff; --fill: #3fcf8e; --cut: #ff6b6b;
+  --gold: #ffd34d; --chip: #1f3255; --chip-ink: #cfe0ff; --code: #151920;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 18px rgba(0,0,0,.3);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100vh; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow-x: hidden;
+}
+header { padding: 12px 20px 8px; display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; }
+header h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; }
+header .meta { color: var(--muted); font-size: 13px; }
+.question { flex-basis: 100%; margin: 2px 0 0; font-size: 15px; color: var(--ink); }
+.question q { font-style: italic; }
+main {
+  display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(340px, 1fr);
+  gap: 14px; padding: 0 20px; min-height: 0;
+}
+.canvas, .panel { background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); min-height: 0; }
+.canvas { position: relative; display: flex; flex-direction: column; }
+.canvas svg { width: 100%; height: 100%; min-height: 0; flex: 1; display: block; }
+.overlay { padding: 0 14px; font-size: 13px; color: var(--muted); min-height: 1.4em; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 6px 14px 10px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; gap: 6px; align-items: center; }
+.sw { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 2px solid transparent; }
+.panel { padding: 16px 18px; overflow-y: auto; }
+.kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.panel h2 { font-size: 21px; margin: 2px 0 8px; letter-spacing: -.01em; }
+.panel p { margin: 0 0 10px; }
+.panel .callout { border-left: 3px solid var(--gold); padding: 6px 10px; background: color-mix(in srgb, var(--gold) 10%, transparent); border-radius: 0 6px 6px 0; margin: 10px 0; font-size: 14px; }
+.panel .callout.bad { border-color: var(--cut); background: color-mix(in srgb, var(--cut) 10%, transparent); }
+.big { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 12px; }
+.stats div { background: var(--bg); border-radius: 8px; padding: 6px 10px; }
+.stats small { display: block; color: var(--muted); font-size: 12px; }
+table.mini { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+table.mini th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+table.mini td { padding: 3px 4px; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); vertical-align: top; }
+td.num, th.num { text-align: right; }
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12.5px; }
+.tag { display: inline-block; font-size: 11.5px; padding: 0 6px; border-radius: 9px; border: 1px solid currentColor; line-height: 17px; white-space: nowrap; }
+.tag.anchor { color: var(--accent); } .tag.path { color: var(--path); } .tag.fill { color: var(--fill); }
+.tag.cut { color: var(--cut); } .tag.gold { color: var(--gold); } .tag.seed { color: var(--heat); }
+.bars { display: grid; grid-template-columns: 9.5em 1fr 1fr 4.2em; gap: 3px 8px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.bars .hdr { font-size: 12px; color: var(--muted); font-weight: 600; }
+.bar { position: relative; height: 16px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 4px; transition: width .7s cubic-bezier(.2,.7,.2,1); }
+.bar b { position: absolute; left: 5px; top: 0; font-size: 11px; line-height: 16px; font-weight: 600; color: var(--ink); }
+.bar.ppr i { background: color-mix(in srgb, var(--heat) 70%, transparent); }
+.bar.bm25 i { background: color-mix(in srgb, var(--accent) 60%, transparent); }
+.bar.ev i { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.bar .gate { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .7; }
+.fused { font-weight: 650; text-align: right; }
+.rowname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rowname.anchor { color: var(--accent); font-weight: 650; }
+pre.ddl { background: var(--code); border-radius: 8px; padding: 10px 12px; max-height: 40vh; overflow: auto; margin: 8px 0 0; font-size: 12px; line-height: 1.4; white-space: pre; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: 4px 0 6px; }
+.seg button { border: 0; background: transparent; color: var(--ink); padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+nav.stepper { display: flex; align-items: center; gap: 10px; padding: 10px 20px 12px; flex-wrap: wrap; }
+.ctrl { width: 38px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 16px; cursor: pointer; }
+.ctrl:hover { border-color: var(--accent); }
+.stages { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+.stages button { flex: 1 1 auto; min-width: 74px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 13px; cursor: pointer; position: relative; overflow: hidden; }
+.stages button .n { font-weight: 700; margin-right: 4px; }
+.stages button[aria-current="step"] { color: var(--ink); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.stages button .prog { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--accent); }
+button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.hint { color: var(--muted); font-size: 12px; }
+#tip { position: fixed; pointer-events: none; z-index: 10; max-width: 340px; background: var(--ink); color: var(--bg); padding: 7px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.4; opacity: 0; transition: opacity .12s; white-space: pre-line; }
+/* SVG */
+.edge { stroke: var(--line); stroke-width: 1.6; transition: opacity .5s, stroke .5s; }
+.edge.dim { opacity: .25; }
+.pathline { stroke: var(--path); stroke-width: 5; stroke-linecap: round; fill: none; opacity: .85; transition: stroke-dashoffset 0.9s ease-in-out; }
+.link { fill: none; stroke: var(--heat); stroke-linecap: round; transition: stroke-dashoffset .7s ease-out, opacity .4s; }
+.node { cursor: default; transition: opacity .5s; }
+.node .base { fill: var(--node); stroke: var(--node-stroke); stroke-width: 1.5; transition: fill .5s, stroke .5s; }
+.node .heat { fill: var(--heat); transition: opacity .55s; }
+.node .ring { fill: none; stroke: var(--accent); stroke-width: 4; opacity: 0; transform-box: fill-box; transform-origin: center; transition: opacity .4s, transform .5s cubic-bezier(.2,1.6,.4,1); transform: scale(1.6); }
+.node .ring.on { opacity: 1; transform: scale(1); }
+.node .bridge { fill: none; stroke: var(--path); stroke-width: 3; stroke-dasharray: 5 4; opacity: 0; transition: opacity .4s; }
+.node .label { font-size: 14px; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; font-weight: 550; }
+.node .sub { font-size: 12.5px; fill: var(--muted); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; text-anchor: middle; }
+.node .badge circle { fill: var(--ink); }
+.node .badge text { fill: var(--surface); font-size: 12px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.node .badge, .node .star, .node .xmark { opacity: 0; transition: opacity .4s; }
+.node .star { fill: var(--gold); stroke: var(--surface); stroke-width: 1.5; }
+.node .xmark { stroke: var(--cut); stroke-width: 3.5; stroke-linecap: round; }
+.node.faded { opacity: .22; }
+.node.kept-anchor .base { fill: color-mix(in srgb, var(--accent) 30%, var(--node)); stroke: var(--accent); }
+.node.kept-path .base { fill: color-mix(in srgb, var(--path) 30%, var(--node)); stroke: var(--path); }
+.node.kept-fill .base { fill: color-mix(in srgb, var(--fill) 30%, var(--node)); stroke: var(--fill); }
+.node.cut-gold .base { stroke: var(--cut); stroke-width: 3; stroke-dasharray: 4 3; }
+.chip rect { fill: var(--chip); stroke: var(--accent); stroke-width: 1.2; }
+.chip text { fill: var(--chip-ink); font-size: 15px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+.chip.unmatched rect { fill: transparent; stroke: var(--line); stroke-dasharray: 4 3; }
+.chip.unmatched text { fill: var(--muted); font-weight: 450; }
+.chip { transition: opacity .4s; }
+.band-label { font-size: 12px; fill: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.overlay-title { font-size: 13px; fill: var(--muted); }
+body.instant *, body.instant *::before { transition: none !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before { transition: none !important; animation: none !important; } }
+@media (max-width: 980px) {
+  body { display: block; }
+  main { grid-template-columns: minmax(0, 1fr); }
+  .canvas svg { height: auto; }
+  .panel { max-height: none; }
+  .stages button { min-width: 0; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>How schemagraph picks the tables for a question</h1>
+  <span class="meta" id="meta"></span>
+  <p class="question" id="question"></p>
+</header>
+<main>
+  <section class="canvas" aria-label="Schema graph of the database">
+    <svg id="svg" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="svgTitle">
+      <title id="svgTitle">Tables of the database as a graph; colours and marks change with the stage</title>
+      <g id="chipsLayer"></g>
+      <g id="edgesLayer"></g>
+      <g id="pathsLayer"></g>
+      <g id="linksLayer"></g>
+      <g id="nodesLayer"></g>
+    </svg>
+    <div class="overlay" id="overlay" aria-live="polite"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</main>
+<nav class="stepper" aria-label="Stages">
+  <button class="ctrl" id="prev" aria-label="Previous stage" title="Previous stage (Left arrow)">&#9664;</button>
+  <button class="ctrl" id="play" aria-label="Play" title="Play / pause (Space)">&#9654;</button>
+  <button class="ctrl" id="next" aria-label="Next stage" title="Next stage (Right arrow)">&#9654;&#xFE0E;&#xFE0E;</button>
+  <div class="stages" id="stages"></div>
+  <span class="hint">&larr; &rarr; step &middot; space play</span>
+</nav>
+<div id="tip" role="tooltip"></div>
+<script>
+const DATA = {"task":"local008","db":"Baseball","question":"I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.","tables":[{"fqn":"all_star","x":90.9,"y":392.0,"ncols":8,"desc":""},{"fqn":"appearances","x":172.7,"y":452.0,"ncols":21,"desc":""},{"fqn":"batting","x":254.5,"y":392.0,"ncols":22,"desc":""},{"fqn":"batting_postseason","x":336.4,"y":452.0,"ncols":22,"desc":""},{"fqn":"college","x":893.8,"y":232.0,"ncols":5,"desc":""},{"fqn":"fielding","x":418.2,"y":392.0,"ncols":18,"desc":""},{"fqn":"fielding_outfield","x":106.2,"y":178.0,"ncols":6,"desc":""},{"fqn":"fielding_postseason","x":500.0,"y":452.0,"ncols":17,"desc":""},{"fqn":"hall_of_fame","x":218.8,"y":232.0,"ncols":9,"desc":""},{"fqn":"home_game","x":125.0,"y":582.0,"ncols":9,"desc":""},{"fqn":"manager","x":581.8,"y":392.0,"ncols":10,"desc":""},{"fqn":"manager_award","x":331.2,"y":178.0,"ncols":6,"desc":""},{"fqn":"manager_award_vote","x":443.8,"y":232.0,"ncols":7,"desc":""},{"fqn":"manager_half","x":663.6,"y":452.0,"ncols":10,"desc":""},{"fqn":"park","x":275.0,"y":604.0,"ncols":6,"desc":""},{"fqn":"pitching","x":745.5,"y":392.0,"ncols":30,"desc":""},{"fqn":"pitching_postseason","x":827.3,"y":452.0,"ncols":30,"desc":""},{"fqn":"player","x":500.0,"y":300.0,"ncols":24,"desc":""},{"fqn":"player_award","x":556.2,"y":178.0,"ncols":6,"desc":""},{"fqn":"player_award_vote","x":668.8,"y":232.0,"ncols":7,"desc":""},{"fqn":"player_college","x":781.2,"y":178.0,"ncols":3,"desc":""},{"fqn":"postseason","x":875.0,"y":582.0,"ncols":9,"desc":""},{"fqn":"salary","x":909.1,"y":392.0,"ncols":5,"desc":""},{"fqn":"team","x":500.0,"y":520.0,"ncols":48,"desc":""},{"fqn":"team_franchise","x":425.0,"y":582.0,"ncols":4,"desc":""},{"fqn":"team_half","x":725.0,"y":604.0,"ncols":10,"desc":""}],"edges":[{"a":"all_star","b":"player","weight":2.5,"kinds":["inferred"],"on":["all_star.player_id = player.player_id"]},{"a":"all_star","b":"team","weight":2.5,"kinds":["inferred"],"on":["all_star.team_id = team.team_id"]},{"a":"appearances","b":"team","weight":2.5,"kinds":["inferred"],"on":["appearances.team_id = team.team_id"]},{"a":"appearances","b":"player","weight":2.5,"kinds":["inferred"],"on":["appearances.player_id = player.player_id"]},{"a":"batting","b":"player","weight":2.5,"kinds":["inferred"],"on":["batting.player_id = player.player_id"]},{"a":"batting","b":"team","weight":2.5,"kinds":["inferred"],"on":["batting.team_id = team.team_id"]},{"a":"batting_postseason","b":"player","weight":2.5,"kinds":["inferred"],"on":["batting_postseason.player_id = player.player_id"]},{"a":"batting_postseason","b":"team","weight":2.5,"kinds":["inferred"],"on":["batting_postseason.team_id = team.team_id"]},{"a":"college","b":"player_college","weight":2.5,"kinds":["inferred"],"on":["player_college.college_id = college.college_id"]},{"a":"fielding","b":"player","weight":2.5,"kinds":["inferred"],"on":["fielding.player_id = player.player_id"]},{"a":"fielding","b":"team","weight":2.5,"kinds":["inferred"],"on":["fielding.team_id = team.team_id"]},{"a":"fielding_outfield","b":"player","weight":2.5,"kinds":["inferred"],"on":["fielding_outfield.player_id = player.player_id"]},{"a":"fielding_postseason","b":"player","weight":2.5,"kinds":["inferred"],"on":["fielding_postseason.player_id = player.player_id"]},{"a":"fielding_postseason","b":"team","weight":2.5,"kinds":["inferred"],"on":["fielding_postseason.team_id = team.team_id"]},{"a":"hall_of_fame","b":"player","weight":2.5,"kinds":["inferred"],"on":["hall_of_fame.player_id = player.player_id"]},{"a":"home_game","b":"team","weight":2.5,"kinds":["inferred"],"on":["home_game.team_id = team.team_id"]},{"a":"home_game","b":"park","weight":2.5,"kinds":["inferred"],"on":["home_game.park_id = park.park_id"]},{"a":"manager","b":"player","weight":2.5,"kinds":["inferred"],"on":["manager.player_id = player.player_id"]},{"a":"manager","b":"team","weight":2.5,"kinds":["inferred"],"on":["manager.team_id = team.team_id"]},{"a":"manager_award","b":"player","weight":2.5,"kinds":["inferred"],"on":["manager_award.player_id = player.player_id"]},{"a":"manager_award","b":"manager_award_vote","weight":2.5,"kinds":["inferred"],"on":["manager_award.award_id = manager_award_vote.award_id"]},{"a":"manager_award","b":"player_award","weight":2.5,"kinds":["inferred"],"on":["manager_award.award_id = player_award.award_id"]},{"a":"manager_award","b":"player_award_vote","weight":2.5,"kinds":["inferred"],"on":["manager_award.award_id = player_award_vote.award_id"]},{"a":"manager_award_vote","b":"player","weight":2.5,"kinds":["inferred"],"on":["manager_award_vote.player_id = player.player_id"]},{"a":"manager_award_vote","b":"player_award","weight":2.5,"kinds":["inferred"],"on":["manager_award_vote.award_id = player_award.award_id"]},{"a":"manager_award_vote","b":"player_award_vote","weight":2.5,"kinds":["inferred"],"on":["manager_award_vote.award_id = player_award_vote.award_id"]},{"a":"manager_half","b":"player","weight":2.5,"kinds":["inferred"],"on":["manager_half.player_id = player.player_id"]},{"a":"manager_half","b":"team","weight":2.5,"kinds":["inferred"],"on":["manager_half.team_id = team.team_id"]},{"a":"pitching","b":"player","weight":2.5,"kinds":["inferred"],"on":["pitching.player_id = player.player_id"]},{"a":"pitching","b":"team","weight":2.5,"kinds":["inferred"],"on":["pitching.team_id = team.team_id"]},{"a":"pitching_postseason","b":"player","weight":2.5,"kinds":["inferred"],"on":["pitching_postseason.player_id = player.player_id"]},{"a":"pitching_postseason","b":"team","weight":2.5,"kinds":["inferred"],"on":["pitching_postseason.team_id = team.team_id"]},{"a":"player","b":"player_award","weight":2.5,"kinds":["inferred"],"on":["player_award.player_id = player.player_id"]},{"a":"player","b":"player_award_vote","weight":2.5,"kinds":["inferred"],"on":["player_award_vote.player_id = player.player_id"]},{"a":"player","b":"player_college","weight":2.5,"kinds":["inferred"],"on":["player_college.player_id = player.player_id"]},{"a":"player","b":"salary","weight":2.5,"kinds":["inferred"],"on":["salary.player_id = player.player_id"]},{"a":"player_award","b":"player_award_vote","weight":2.5,"kinds":["inferred"],"on":["player_award.award_id = player_award_vote.award_id"]},{"a":"salary","b":"team","weight":2.5,"kinds":["inferred"],"on":["salary.team_id = team.team_id"]},{"a":"team","b":"team_half","weight":2.5,"kinds":["inferred"],"on":["team_half.team_id = team.team_id","team.div_id = team_half.div_id"]},{"a":"team","b":"team_franchise","weight":2.5,"kinds":["inferred"],"on":["team.franchise_id = team_franchise.franchise_id"]}],"gold":["batting","player"],"options":{"max_tables":20,"anchor_k":6,"min_anchor_ratio":0.15,"fill_ratio":0.06,"ppr_alpha":0.85,"rrf_k":60,"large_threshold":30,"adaptive_widened":false},"chips":[{"word":"know","seeded":false},{"word":"names","seeded":true},{"word":"baseball","seeded":false},{"word":"players","seeded":true},{"word":"achieved","seeded":false},{"word":"value","seeded":false},{"word":"games","seeded":true},{"word":"played","seeded":false},{"word":"runs","seeded":false},{"word":"hits","seeded":false},{"word":"home","seeded":true},{"word":"score","seeded":false},{"word":"values","seeded":false}],"seeds":[{"node":"c:home_game.games","table":"home_game","column":"games","weight":1.502,"reasons":["token 'games'","lemma 'game'"],"words":["games"]},{"node":"t:home_game","table":"home_game","column":null,"weight":1.502,"reasons":["lemma 'game'","token 'home'"],"words":["games","home"]},{"node":"c:college.name_full","table":"college","column":"name_full","weight":0.925,"reasons":["fuzzy 'names'~'name'","lemma 'name'"],"words":["names"]},{"node":"c:park.park_name","table":"park","column":"park_name","weight":0.925,"reasons":["fuzzy 'names'~'name'","lemma 'name'"],"words":["names"]},{"node":"c:player.name_first","table":"player","column":"name_first","weight":0.925,"reasons":["fuzzy 'names'~'name'","lemma 'name'"],"words":["names"]},{"node":"c:player.name_given","table":"player","column":"name_given","weight":0.925,"reasons":["fuzzy 'names'~'name'","lemma 'name'"],"words":["names"]},{"node":"c:player.name_last","table":"player","column":"name_last","weight":0.925,"reasons":["fuzzy 'names'~'name'","lemma 'name'"],"words":["names"]},{"node":"c:team.name","table":"team","column":"name","weight":0.925,"reasons":["fuzzy 'names'~'name'","lemma 'name'"],"words":["names"]},{"node":"c:team_franchise.franchise_name","table":"team_franchise","column":"franchise_name","weight":0.925,"reasons":["fuzzy 'names'~'name'","lemma 'name'"],"words":["names"]},{"node":"c:all_star.player_id","table":"all_star","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:appearances.player_id","table":"appearances","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:batting.player_id","table":"batting","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:batting_postseason.player_id","table":"batting_postseason","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:fielding.player_id","table":"fielding","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:fielding_outfield.player_id","table":"fielding_outfield","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:fielding_postseason.player_id","table":"fielding_postseason","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:hall_of_fame.player_id","table":"hall_of_fame","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:manager.player_id","table":"manager","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:manager_award.player_id","table":"manager_award","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:manager_award_vote.player_id","table":"manager_award_vote","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:manager_half.player_id","table":"manager_half","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:pitching.player_id","table":"pitching","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:pitching_postseason.player_id","table":"pitching_postseason","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:player.player_id","table":"player","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:player_award.player_id","table":"player_award","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:player_award_vote.player_id","table":"player_award_vote","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:player_college.player_id","table":"player_college","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:salary.player_id","table":"salary","column":"player_id","weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"t:player","table":"player","column":null,"weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"t:player_award","table":"player_award","column":null,"weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"t:player_award_vote","table":"player_award_vote","column":null,"weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"t:player_college","table":"player_college","column":null,"weight":0.656,"reasons":["fuzzy 'players'~'player'","lemma 'player'"],"words":["players"]},{"node":"c:all_star.game_id","table":"all_star","column":"game_id","weight":0.57,"reasons":["lemma 'game'"],"words":["games"]},{"node":"c:all_star.game_num","table":"all_star","column":"game_num","weight":0.57,"reasons":["lemma 'game'"],"words":["games"]},{"node":"c:player.final_game","table":"player","column":"final_game","weight":0.57,"reasons":["lemma 'game'"],"words":["games"]}],"links":[{"word":"games","table":"home_game","weight":3.004,"items":["games: token 'games', lemma 'game'","(table name): lemma 'game', token 'home'"]},{"word":"names","table":"player","weight":2.775,"items":["name_first: fuzzy 'names'~'name', lemma 'name'","name_given: fuzzy 'names'~'name', lemma 'name'","name_last: fuzzy 'names'~'name', lemma 'name'"]},{"word":"home","table":"home_game","weight":1.502,"items":["(table name): lemma 'game', token 'home'"]},{"word":"players","table":"player","weight":1.311,"items":["player_id: fuzzy 'players'~'player', lemma 'player'","(table name): fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"player_award","weight":1.311,"items":["player_id: fuzzy 'players'~'player', lemma 'player'","(table name): fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"player_award_vote","weight":1.311,"items":["player_id: fuzzy 'players'~'player', lemma 'player'","(table name): fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"player_college","weight":1.311,"items":["player_id: fuzzy 'players'~'player', lemma 'player'","(table name): fuzzy 'players'~'player', lemma 'player'"]},{"word":"games","table":"all_star","weight":1.141,"items":["game_id: lemma 'game'","game_num: lemma 'game'"]},{"word":"names","table":"college","weight":0.925,"items":["name_full: fuzzy 'names'~'name', lemma 'name'"]},{"word":"names","table":"park","weight":0.925,"items":["park_name: fuzzy 'names'~'name', lemma 'name'"]},{"word":"names","table":"team","weight":0.925,"items":["name: fuzzy 'names'~'name', lemma 'name'"]},{"word":"names","table":"team_franchise","weight":0.925,"items":["franchise_name: fuzzy 'names'~'name', lemma 'name'"]},{"word":"players","table":"all_star","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"appearances","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"batting","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"batting_postseason","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"fielding","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"fielding_outfield","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"fielding_postseason","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"hall_of_fame","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"manager","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"manager_award","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"manager_award_vote","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"manager_half","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"pitching","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"pitching_postseason","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"players","table":"salary","weight":0.656,"items":["player_id: fuzzy 'players'~'player', lemma 'player'"]},{"word":"games","table":"player","weight":0.57,"items":["final_game: lemma 'game'"]}],"nSeeds":35,"ppr":[{"step":0,"heat":{"all_star":0.303,"appearances":0.0729,"batting":0.0729,"batting_postseason":0.0729,"college":0.3079,"fielding":0.0729,"fielding_outfield":0.0729,"fielding_postseason":0.0729,"hall_of_fame":0.0729,"home_game":1.0,"manager":0.0729,"manager_award":0.0729,"manager_award_vote":0.0729,"manager_half":0.0729,"park":0.3079,"pitching":0.0729,"pitching_postseason":0.0729,"player":0.7623,"player_award":0.2911,"player_award_vote":0.2911,"player_college":0.2911,"salary":0.0729,"team":0.3079,"team_franchise":0.3079}},{"step":1,"heat":{"all_star":0.1745,"appearances":0.0344,"batting":0.0344,"batting_postseason":0.0344,"college":0.219,"fielding":0.0344,"fielding_outfield":0.0344,"fielding_postseason":0.0344,"hall_of_fame":0.0344,"home_game":0.3635,"manager":0.0344,"manager_award":0.0974,"manager_award_vote":0.0974,"manager_half":0.0344,"park":0.2569,"pitching":0.0344,"pitching_postseason":0.0344,"player":1.0,"player_award":0.1079,"player_award_vote":0.1091,"player_college":0.0873,"salary":0.0344,"team":0.2993,"team_franchise":0.1569}},{"step":2,"heat":{"all_star":0.4167,"appearances":0.1373,"batting":0.1373,"batting_postseason":0.1373,"college":0.4164,"fielding":0.1375,"fielding_outfield":0.1175,"fielding_postseason":0.1375,"hall_of_fame":0.1171,"home_game":1.0,"manager":0.1382,"manager_award":0.2009,"manager_award_vote":0.2118,"manager_half":0.1381,"park":0.4324,"pitching":0.137,"pitching_postseason":0.137,"player":0.9878,"player_award":0.2928,"player_award_vote":0.3025,"player_college":0.3491,"postseason":0.0135,"salary":0.1389,"team":0.5668,"team_franchise":0.3413,"team_half":0.0302}},{"step":3,"heat":{"all_star":0.2372,"appearances":0.0734,"batting":0.0733,"batting_postseason":0.0734,"college":0.2872,"fielding":0.0732,"fielding_outfield":0.0595,"fielding_postseason":0.0731,"hall_of_fame":0.0603,"home_game":0.5277,"manager":0.0723,"manager_award":0.1295,"manager_award_vote":0.1377,"manager_half":0.0724,"park":0.3131,"pitching":0.0741,"pitching_postseason":0.0742,"player":1.0,"player_award":0.1662,"player_award_vote":0.1751,"player_college":0.1482,"postseason":0.0099,"salary":0.0693,"team":0.4543,"team_franchise":0.1936,"team_half":0.0213}},{"step":5,"heat":{"all_star":0.2645,"appearances":0.1021,"batting":0.102,"batting_postseason":0.1022,"college":0.3045,"fielding":0.1006,"fielding_outfield":0.0749,"fielding_postseason":0.1003,"hall_of_fame":0.0791,"home_game":0.5931,"manager":0.0967,"manager_award":0.1538,"manager_award_vote":0.1634,"manager_half":0.0972,"park":0.335,"pitching":0.1048,"pitching_postseason":0.105,"player":1.0,"player_award":0.2017,"player_award_vote":0.2116,"player_college":0.188,"postseason":0.0199,"salary":0.0907,"team":0.5365,"team_franchise":0.2104,"team_half":0.0391}},{"step":8,"heat":{"all_star":0.2987,"appearances":0.1392,"batting":0.1378,"batting_postseason":0.1381,"college":0.3071,"fielding":0.1344,"fielding_outfield":0.0962,"fielding_postseason":0.1338,"hall_of_fame":0.1029,"home_game":0.6703,"manager":0.1261,"manager_award":0.1852,"manager_award_vote":0.1947,"manager_half":0.1268,"park":0.3552,"pitching":0.1439,"pitching_postseason":0.1443,"player":1.0,"player_award":0.2424,"player_award_vote":0.2521,"player_college":0.2483,"postseason":0.029,"salary":0.1159,"team":0.6103,"team_franchise":0.2336,"team_half":0.0567}},{"step":13,"heat":{"all_star":0.2797,"appearances":0.1343,"batting":0.1338,"batting_postseason":0.1344,"college":0.295,"fielding":0.1296,"fielding_outfield":0.0905,"fielding_postseason":0.129,"hall_of_fame":0.0978,"home_game":0.6252,"manager":0.1198,"manager_award":0.1776,"manager_award_vote":0.1868,"manager_half":0.1207,"park":0.3348,"pitching":0.1415,"pitching_postseason":0.1421,"player":1.0,"player_award":0.2326,"player_award_vote":0.2419,"player_college":0.223,"postseason":0.0312,"salary":0.1096,"team":0.6021,"team_franchise":0.2212,"team_half":0.057}},{"step":21,"heat":{"all_star":0.2804,"appearances":0.1367,"batting":0.1362,"batting_postseason":0.1368,"college":0.2932,"fielding":0.1316,"fielding_outfield":0.0915,"fielding_postseason":0.131,"hall_of_fame":0.0991,"home_game":0.6251,"manager":0.1211,"manager_award":0.1788,"manager_award_vote":0.1879,"manager_half":0.1221,"park":0.3324,"pitching":0.1448,"pitching_postseason":0.1454,"player":1.0,"player_award":0.2341,"player_award_vote":0.2433,"player_college":0.2245,"postseason":0.0318,"salary":0.1107,"team":0.6049,"team_franchise":0.2218,"team_half":0.0579}},{"step":"converged","heat":{"all_star":0.2805,"appearances":0.137,"batting":0.1365,"batting_postseason":0.1371,"college":0.2931,"fielding":0.1318,"fielding_outfield":0.0916,"fielding_postseason":0.1312,"hall_of_fame":0.0992,"home_game":0.6251,"manager":0.1213,"manager_award":0.1789,"manager_award_vote":0.188,"manager_half":0.1222,"park":0.3321,"pitching":0.1451,"pitching_postseason":0.1458,"player":1.0,"player_award":0.2342,"player_award_vote":0.2434,"player_college":0.2246,"postseason":0.0319,"salary":0.1108,"team":0.605,"team_franchise":0.2219,"team_half":0.058}}],"ranking":{"rows":[{"fqn":"home_game","fused":0.03252,"fusedRel":1.0,"fusedRank":1,"ppr":0.1296248842465138,"pprWalk":0.06228121220785958,"pprRel":0.7984,"pprRank":2,"bm25":7.919,"bm25Rel":1.0,"bm25Rank":1,"evidence":1.0,"topColumns":[["games",0.02],["park_id",0.00408],["span_last",0.00395],["span_first",0.00321],["openings",0.00271]]},{"fqn":"player","fused":0.03252,"fusedRel":1.0,"fusedRank":2,"ppr":0.16235705925406746,"pprWalk":0.09963419030975376,"pprRel":1.0,"pprRank":1,"bm25":2.959,"bm25Rel":0.3737,"bm25Rank":2,"evidence":1.0,"topColumns":[["player_id",0.0265],["name_given",0.0133],["name_last",0.0123],["name_first",0.0116],["final_game",0.00883]]},{"fqn":"all_star","fused":0.0308,"fusedRel":0.947,"fusedRank":3,"ppr":0.045845801467326655,"pprWalk":0.027949158254690645,"pprRel":0.2824,"pprRank":7,"bm25":2.56,"bm25Rel":0.3233,"bm25Rank":3,"evidence":0.3233,"topColumns":[["game_num",0.0104],["game_id",0.00766],["player_id",0.0044],["team_id",0.00155],["league_id",0.00119]]},{"fqn":"team","fused":0.0308,"fusedRel":0.947,"fusedRank":4,"ppr":0.06949254310716872,"pprWalk":0.060277277468114544,"pprRel":0.428,"pprRank":3,"bm25":0.68,"bm25Rel":0.0858,"bm25Rank":7,"evidence":0.428,"topColumns":[["name",0.0106],["team_id",0.00645],["franchise_id",0.00246],["div_id",0.00128],["team_id_retro",0.00111]]},{"fqn":"college","fused":0.03012,"fusedRel":0.9261,"fusedRank":5,"ppr":0.03841683100165514,"pprWalk":0.02920156536260097,"pprRel":0.2366,"pprRank":9,"bm25":1.695,"bm25Rel":0.214,"bm25Rank":4,"evidence":0.2366,"topColumns":[["name_full",0.0141],["college_id",0.00277],["city",0.00136],["state",0.00136],["country",0.00136]]},{"fqn":"player_award","fused":0.02988,"fusedRel":0.9187,"fusedRank":6,"ppr":0.0527314030668561,"pprWalk":0.023336558843418762,"pprRel":0.3248,"pprRank":5,"bm25":0.375,"bm25Rel":0.0473,"bm25Rank":9,"evidence":0.3248,"topColumns":[["player_id",0.00439],["award_id",0.0025],["league_id",0.00118],["notes",0.000818],["year",0.000692]]},{"fqn":"park","fused":0.02986,"fusedRel":0.9181,"fusedRank":7,"ppr":0.04230866403225732,"pprWalk":0.03309339839320315,"pprRel":0.2606,"pprRank":8,"bm25":1.569,"bm25Rel":0.1981,"bm25Rank":6,"evidence":0.2606,"topColumns":[["park_name",0.0123],["park_id",0.00384],["park_alias",0.00303],["city",0.00161],["state",0.00161]]},{"fqn":"player_college","fused":0.02986,"fusedRel":0.9181,"fusedRank":8,"ppr":0.05176951523101739,"pprWalk":0.022374671007580053,"pprRel":0.3189,"pprRank":6,"bm25":0.404,"bm25Rel":0.051,"bm25Rank":8,"evidence":0.3189,"topColumns":[["player_id",0.0048],["college_id",0.00269],["year",0.0011]]},{"fqn":"player_award_vote","fused":0.02971,"fusedRel":0.9135,"fusedRank":9,"ppr":0.053649029975619426,"pprWalk":0.02425418575218209,"pprRel":0.3304,"pprRank":4,"bm25":0.336,"bm25Rel":0.0424,"bm25Rank":11,"evidence":0.3304,"topColumns":[["player_id",0.00438],["award_id",0.0025],["votes_first",0.00187],["league_id",0.00117],["points_won",0.00093]]},{"fqn":"team_franchise","fused":0.02967,"fusedRel":0.9123,"fusedRank":10,"ppr":0.03132411696064603,"pprWalk":0.022108851321591853,"pprRel":0.1929,"pprRank":10,"bm25":1.695,"bm25Rel":0.214,"bm25Rank":5,"evidence":0.214,"topColumns":[["franchise_name",0.0118],["franchise_id",0.00276],["na_assoc",0.00119],["active",0.000987]]},{"fqn":"manager_award","fused":0.02759,"fusedRel":0.8483,"fusedRank":11,"ppr":0.024357251766480417,"pprWalk":0.01782506416127212,"pprRel":0.15,"pprRank":12,"bm25":0.306,"bm25Rel":0.0386,"bm25Rank":13,"evidence":0.15,"topColumns":[["player_id",0.00422],["award_id",0.00236],["league_id",0.00101],["notes",0.000655],["year",0.000529]]},{"fqn":"manager_award_vote","fused":0.02707,"fusedRel":0.8324,"fusedRank":12,"ppr":0.025262583269999167,"pprWalk":0.01873039566479087,"pprRel":0.1556,"pprRank":11,"bm25":0.268,"bm25Rel":0.0338,"bm25Rank":17,"evidence":0.1556,"topColumns":[["player_id",0.00422],["award_id",0.00236],["votes_first",0.00171],["league_id",0.00101],["points_won",0.000775]]},{"fqn":"fielding_outfield","fused":0.02619,"fusedRel":0.8053,"fusedRank":13,"ppr":0.015662481009549305,"pprWalk":0.009130293404341008,"pprRel":0.0965,"pprRank":24,"bm25":0.347,"bm25Rel":0.0438,"bm25Rank":10,"evidence":0.0965,"topColumns":[["player_id",0.00417],["year",0.00047],["glf",0.000439],["gcf",0.000439],["grf",0.000439]]},{"fqn":"salary","fused":0.02608,"fusedRel":0.802,"fusedRank":14,"ppr":0.017568469282563896,"pprWalk":0.011036281677355597,"pprRel":0.1082,"pprRank":22,"bm25":0.321,"bm25Rel":0.0405,"bm25Rank":12,"evidence":0.1082,"topColumns":[["player_id",0.00417],["team_id",0.00132],["league_id",0.000959],["year",0.000474],["salary",0.00047]]},{"fqn":"manager_half","fused":0.02601,"fusedRel":0.7999,"fusedRank":15,"ppr":0.018704763383446683,"pprWalk":0.012172575778238385,"pprRel":0.1152,"pprRank":20,"bm25":0.306,"bm25Rel":0.0386,"bm25Rank":14,"evidence":0.1152,"topColumns":[["player_id",0.00413],["team_id",0.00128],["league_id",0.000921],["year",0.000435],["half",0.000394]]},{"fqn":"appearances","fused":0.02566,"fusedRel":0.7889,"fusedRank":16,"ppr":0.02018122599221893,"pprWalk":0.01364903838701063,"pprRel":0.1243,"pprRank":16,"bm25":0.238,"bm25Rel":0.0301,"bm25Rank":20,"evidence":0.1243,"topColumns":[["player_id",0.00407],["team_id",0.00122],["league_id",0.000863],["g_all",0.000427],["year",0.000377]]},{"fqn":"pitching_postseason","fused":0.0256,"fusedRel":0.7873,"fusedRank":17,"ppr":0.021057322369262804,"pprWalk":0.014525134764054506,"pprRel":0.1297,"pprRank":13,"bm25":0.211,"bm25Rel":0.0267,"bm25Rank":24,"evidence":0.1297,"topColumns":[["player_id",0.00404],["team_id",0.00119],["league_id",0.000832],["ipouts",0.000353],["year",0.000346]]},{"fqn":"pitching","fused":0.02556,"fusedRel":0.786,"fusedRank":18,"ppr":0.020991975855598605,"pprWalk":0.014459788250390309,"pprRel":0.1293,"pprRank":14,"bm25":0.211,"bm25Rel":0.0267,"bm25Rank":23,"evidence":0.1293,"topColumns":[["player_id",0.00404],["team_id",0.00119],["league_id",0.000833],["ipouts",0.000354],["year",0.000348]]},{"fqn":"batting_postseason","fused":0.02553,"fusedRel":0.7849,"fusedRank":19,"ppr":0.020190009976099516,"pprWalk":0.013657822370891219,"pprRel":0.1244,"pprRank":15,"bm25":0.238,"bm25Rel":0.0301,"bm25Rank":22,"evidence":0.1244,"topColumns":[["player_id",0.00407],["team_id",0.00122],["league_id",0.000857],["year",0.000371],["ab",0.000317]]},{"fqn":"manager","fused":0.0255,"fusedRel":0.7842,"fusedRank":20,"ppr":0.018614634940594253,"pprWalk":0.012082447335385955,"pprRel":0.1147,"pprRank":21,"bm25":0.292,"bm25Rel":0.0369,"bm25Rank":16,"evidence":0.1147,"topColumns":[["player_id",0.00413],["team_id",0.00129],["league_id",0.000925],["plyr_mgr",0.000645],["year",0.000439]]},{"fqn":"fielding","fused":0.02548,"fusedRel":0.7834,"fusedRank":21,"ppr":0.01966815120871538,"pprWalk":0.013135963603507083,"pprRel":0.1211,"pprRank":18,"bm25":0.248,"bm25Rel":0.0313,"bm25Rank":19,"evidence":0.1211,"topColumns":[["player_id",0.00409],["team_id",0.00124],["league_id",0.000876],["inn_outs",0.000451],["year",0.000391]]},{"fqn":"fielding_postseason","fused":0.02548,"fusedRel":0.7834,"fusedRank":22,"ppr":0.019601418247639817,"pprWalk":0.013069230642431519,"pprRel":0.1207,"pprRank":19,"bm25":0.252,"bm25Rel":0.0319,"bm25Rank":18,"evidence":0.1207,"topColumns":[["player_id",0.00409],["team_id",0.00124],["league_id",0.000878],["inn_outs",0.000452],["year",0.000392]]},{"fqn":"hall_of_fame","fused":0.02538,"fusedRel":0.7804,"fusedRank":23,"ppr":0.016416641575479927,"pprWalk":0.009884453970271628,"pprRel":0.1011,"pprRank":23,"bm25":0.299,"bm25Rel":0.0377,"bm25Rank":15,"evidence":0.1011,"topColumns":[["player_id",0.00413],["votes",0.000748],["needed_note",0.000513],["ballots",0.000463],["yearid",0.000384]]},{"fqn":"batting","fused":0.02533,"fusedRel":0.7789,"fusedRank":24,"ppr":0.020130213219807062,"pprWalk":0.013598025614598766,"pprRel":0.124,"pprRank":17,"bm25":0.238,"bm25Rel":0.0301,"bm25Rank":21,"evidence":0.124,"topColumns":[["player_id",0.00407],["team_id",0.00122],["league_id",0.000859],["year",0.000374],["ab",0.000319]]},{"fqn":"team_half","fused":0.01176,"fusedRel":0.3617,"fusedRank":25,"ppr":0.005774266882885658,"pprWalk":0.005774266882885658,"pprRel":0.0356,"pprRank":25,"bm25":0.0,"bm25Rel":0.0,"bm25Rank":null,"evidence":0.0356,"topColumns":[["team_id",0.00119],["div_id",0.00118],["league_id",0.000832],["div_win",0.000392],["year",0.000346]]},{"fqn":"postseason","fused":0.01163,"fusedRel":0.3575,"fusedRank":26,"ppr":0.0031771188835738456,"pprWalk":0.0031771188835738456,"pprRel":0.0196,"pprRank":26,"bm25":0.0,"bm25Rel":0.0,"bm25Rank":null,"evidence":0.0196,"topColumns":[["league_id_winner",0.000888],["league_id_loser",0.000888],["team_id_winner",0.000877],["team_id_loser",0.000877],["ties",0.000334]]}],"rrfK":60},"anchors":{"anchors":["home_game","player","all_star","team","college","player_award"],"k":6,"minRatio":0.15,"rows":[{"fqn":"home_game","evidence":1.0,"qualified":true,"anchor":true},{"fqn":"player","evidence":1.0,"qualified":true,"anchor":true},{"fqn":"all_star","evidence":0.3233,"qualified":true,"anchor":true},{"fqn":"team","evidence":0.428,"qualified":true,"anchor":true},{"fqn":"college","evidence":0.2366,"qualified":true,"anchor":true},{"fqn":"player_award","evidence":0.3248,"qualified":true,"anchor":true},{"fqn":"park","evidence":0.2606,"qualified":true,"anchor":false},{"fqn":"player_college","evidence":0.3189,"qualified":true,"anchor":false},{"fqn":"player_award_vote","evidence":0.3304,"qualified":true,"anchor":false},{"fqn":"team_franchise","evidence":0.214,"qualified":true,"anchor":false},{"fqn":"manager_award","evidence":0.15,"qualified":true,"anchor":false},{"fqn":"manager_award_vote","evidence":0.1556,"qualified":true,"anchor":false},{"fqn":"fielding_outfield","evidence":0.0965,"qualified":false,"anchor":false},{"fqn":"salary","evidence":0.1082,"qualified":false,"anchor":false},{"fqn":"manager_half","evidence":0.1152,"qualified":false,"anchor":false},{"fqn":"appearances","evidence":0.1243,"qualified":false,"anchor":false},{"fqn":"pitching_postseason","evidence":0.1297,"qualified":false,"anchor":false},{"fqn":"pitching","evidence":0.1293,"qualified":false,"anchor":false},{"fqn":"batting_postseason","evidence":0.1244,"qualified":false,"anchor":false},{"fqn":"manager","evidence":0.1147,"qualified":false,"anchor":false},{"fqn":"fielding","evidence":0.1211,"qualified":false,"anchor":false},{"fqn":"fielding_postseason","evidence":0.1207,"qualified":false,"anchor":false},{"fqn":"hall_of_fame","evidence":0.1011,"qualified":false,"anchor":false},{"fqn":"batting","evidence":0.124,"qualified":false,"anchor":false},{"fqn":"team_half","evidence":0.0356,"qualified":false,"anchor":false},{"fqn":"postseason","evidence":0.0196,"qualified":false,"anchor":false}]},"paths":{"candidates":75,"hops":[1,2,3,4,5],"union":["all_star","appearances","batting","batting_postseason","college","fielding","fielding_postseason","home_game","manager","manager_half","pitching","pitching_postseason","player","player_award","player_college","salary","team"],"candidateTables":["all_star","appearances","batting","batting_postseason","college","fielding","fielding_postseason","home_game","manager","manager_half","pitching","pitching_postseason","player","player_award","player_college","salary","team"],"pruned":[{"tables":["home_game","team","all_star","player","player_award"],"reliability":1.5271,"steps":[{"from":"home_game","to":"team","kind":"inferred","on":"home_game.team_id = team.team_id"},{"from":"team","to":"all_star","kind":"inferred","on":"all_star.team_id = team.team_id"},{"from":"all_star","to":"player","kind":"inferred","on":"all_star.player_id = player.player_id"},{"from":"player","to":"player_award","kind":"inferred","on":"player_award.player_id = player.player_id"}]},{"tables":["home_game","team","appearances","player","player_award"],"reliability":1.3235,"steps":[{"from":"home_game","to":"team","kind":"inferred","on":"home_game.team_id = team.team_id"},{"from":"team","to":"appearances","kind":"inferred","on":"appearances.team_id = team.team_id"},{"from":"appearances","to":"player","kind":"inferred","on":"appearances.player_id = player.player_id"},{"from":"player","to":"player_award","kind":"inferred","on":"player_award.player_id = player.player_id"}]},{"tables":["home_game","team","batting","player","player_award"],"reliability":1.3235,"steps":[{"from":"home_game","to":"team","kind":"inferred","on":"home_game.team_id = team.team_id"},{"from":"team","to":"batting","kind":"inferred","on":"batting.team_id = team.team_id"},{"from":"batting","to":"player","kind":"inferred","on":"batting.player_id = player.player_id"},{"from":"player","to":"player_award","kind":"inferred","on":"player_award.player_id = player.player_id"}]},{"tables":["home_game","team","batting_postseason","player","player_award"],"reliability":1.3235,"steps":[{"from":"home_game","to":"team","kind":"inferred","on":"home_game.team_id = team.team_id"},{"from":"team","to":"batting_postseason","kind":"inferred","on":"batting_postseason.team_id = team.team_id"},{"from":"batting_postseason","to":"player","kind":"inferred","on":"batting_postseason.player_id = player.player_id"},{"from":"player","to":"player_award","kind":"inferred","on":"player_award.player_id = player.player_id"}]},{"tables":["home_game","team","fielding","player","player_award"],"reliability":1.3235,"steps":[{"from":"home_game","to":"team","kind":"inferred","on":"home_game.team_id = team.team_id"},{"from":"team","to":"fielding","kind":"inferred","on":"fielding.team_id = team.team_id"},{"from":"fielding","to":"player","kind":"inferred","on":"fielding.player_id = player.player_id"},{"from":"player","to":"player_award","kind":"inferred","on":"player_award.player_id = player.player_id"}]},{"tables":["home_game","team","fielding_postseason","player","player_award"],"reliability":1.3235,"steps":[{"from":"home_game","to":"team","kind":"inferred","on":"home_game.team_id = team.team_id"},{"from":"team","to":"fielding_postseason","kind":"inferred","on":"fielding_postseason.team_id = team.team_id"},{"from":"fielding_postseason","to":"player","kind":"inferred","on":"fielding_postseason.player_id = player.player_id"},{"from":"player","to":"player_award","kind":"inferred","on":"player_award.player_id = player.player_id"}]},{"tables":["home_game","team","manager","player","player_award"],"reliability":1.3235,"steps":[{"from":"home_game","to":"team","kind":"inferred","on":"home_game.team_id = team.team_id"},{"from":"team","to":"manager","kind":"inferred","on":"manager.team_id = team.team_id"},{"from":"manager","to":"player","kind":"inferred","on":"manager.player_id = player.player_id"},{"from":"player","to":"player_award","kind":"inferred","on":"player_award.player_id = player.player_id"}]},{"tables":["home_game","team","manager_half","player","player_award"],"reliability":1.3235,"steps":[{"from":"home_game","to":"team","kind":"inferred","on":"home_game.team_id = team.team_id"},{"from":"team","to":"manager_half","kind":"inferred","on":"manager_half.team_id = team.team_id"},{"from":"manager_half","to":"player","kind":"inferred","on":"manager_half.player_id = player.player_id"},{"from":"player","to":"player_award","kind":"inferred","on":"player_award.player_id = player.player_id"}]}],"pruneTopK":8},"budget":{"maxTables":20,"bypass":false,"fillRatio":0.06,"kept":[{"fqn":"home_game","why":"anchor"},{"fqn":"player","why":"anchor"},{"fqn":"all_star","why":"anchor"},{"fqn":"team","why":"anchor"},{"fqn":"college","why":"anchor"},{"fqn":"player_award","why":"anchor"},{"fqn":"park","why":"fill"},{"fqn":"player_college","why":"fill"},{"fqn":"player_award_vote","why":"fill"},{"fqn":"team_franchise","why":"fill"},{"fqn":"manager_award","why":"fill"},{"fqn":"manager_award_vote","why":"fill"},{"fqn":"fielding_outfield","why":"fill"},{"fqn":"manager_half","why":"join path"},{"fqn":"appearances","why":"join path"},{"fqn":"batting_postseason","why":"join path"},{"fqn":"manager","why":"join path"},{"fqn":"fielding","why":"join path"},{"fqn":"fielding_postseason","why":"join path"},{"fqn":"batting","why":"join path"}],"dropped":[{"fqn":"hall_of_fame","why":"budget full"},{"fqn":"pitching","why":"budget full"},{"fqn":"pitching_postseason","why":"budget full"},{"fqn":"postseason","why":"evidence below fill_ratio"},{"fqn":"salary","why":"budget full"},{"fqn":"team_half","why":"evidence below fill_ratio"}],"candidates":20},"tight":{"maxTables":7,"bypass":false,"fillRatio":0.06,"kept":[{"fqn":"home_game","why":"anchor"},{"fqn":"player","why":"anchor"},{"fqn":"all_star","why":"anchor"},{"fqn":"team","why":"anchor"},{"fqn":"college","why":"anchor"},{"fqn":"player_award","why":"anchor"},{"fqn":"manager_half","why":"join path"}],"dropped":[{"fqn":"appearances","why":"join path, cut by score (budget 7)"},{"fqn":"batting_postseason","why":"join path, cut by score (budget 7)"},{"fqn":"manager","why":"join path, cut by score (budget 7)"},{"fqn":"fielding","why":"join path, cut by score (budget 7)"},{"fqn":"fielding_postseason","why":"join path, cut by score (budget 7)"},{"fqn":"batting","why":"join path, cut by score (budget 7)"},{"fqn":"fielding_outfield","why":"budget full"},{"fqn":"hall_of_fame","why":"budget full"},{"fqn":"manager_award","why":"budget full"},{"fqn":"manager_award_vote","why":"budget full"},{"fqn":"park","why":"budget full"},{"fqn":"pitching","why":"budget full"},{"fqn":"pitching_postseason","why":"budget full"},{"fqn":"player_award_vote","why":"budget full"},{"fqn":"player_college","why":"budget full"},{"fqn":"postseason","why":"evidence below fill_ratio"},{"fqn":"salary","why":"budget full"},{"fqn":"team_franchise","why":"budget full"},{"fqn":"team_half","why":"evidence below fill_ratio"}],"candidates":13,"anchors":["home_game","player","all_star","team","college","player_award"],"paths":[["home_game","team","all_star","player","player_award"],["home_game","team","appearances","player","player_award"],["home_game","team","batting","player","player_award"],["home_game","team","batting_postseason","player","player_award"],["home_game","team","fielding","player","player_award"],["home_game","team","fielding_postseason","player","player_award"],["home_game","team","manager","player","player_award"],["home_game","team","manager_half","player","player_award"]]},"columns":{"default":[{"fqn":"home_game","anchor":true,"total":9,"columns":[{"name":"year","type":"INTEGER","reason":null,"score":1.79},{"name":"league_id","type":"TEXT","reason":null,"score":2.2757},{"name":"team_id","type":"TEXT","reason":"join key","score":2.6363},{"name":"park_id","type":"TEXT","reason":null,"score":4.0826},{"name":"span_first","type":"TEXT","reason":null,"score":3.214},{"name":"span_last","type":"TEXT","reason":null,"score":3.9493},{"name":"games","type":"INTEGER","reason":"token 'games'; lemma 'game'","score":21.4776},{"name":"openings","type":"INTEGER","reason":null,"score":2.7074},{"name":"attendance","type":"INTEGER","reason":null,"score":2.0057}]},{"fqn":"player","anchor":true,"total":24,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":27.1933},{"name":"birth_year","type":"NUMERIC","reason":null,"score":0.7826},{"name":"birth_month","type":"NUMERIC","reason":null,"score":0.7884},{"name":"birth_day","type":"NUMERIC","reason":null,"score":0.7884},{"name":"birth_country","type":"TEXT","reason":null,"score":0.9254},{"name":"birth_state","type":"TEXT","reason":null,"score":0.9254},{"name":"birth_city","type":"TEXT","reason":null,"score":0.9254},{"name":"death_year","type":"NUMERIC","reason":null,"score":0.7826},{"name":"death_month","type":"NUMERIC","reason":null,"score":0.7884},{"name":"death_day","type":"NUMERIC","reason":null,"score":0.7884},{"name":"death_country","type":"TEXT","reason":null,"score":0.9254},{"name":"death_state","type":"TEXT","reason":null,"score":0.9254},{"name":"death_city","type":"TEXT","reason":null,"score":0.9254},{"name":"name_first","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":12.5119},{"name":"name_last","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":13.2472},{"name":"name_given","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":14.2746},{"name":"weight","type":"NUMERIC","reason":null,"score":0.637},{"name":"height","type":"NUMERIC","reason":null,"score":0.637},{"name":"bats","type":"TEXT","reason":null,"score":0.7665},{"name":"throws","type":"TEXT","reason":null,"score":0.7665},{"name":"debut","type":"TEXT","reason":null,"score":0.637},{"name":"final_game","type":"TEXT","reason":"lemma 'game'","score":9.3955},{"name":"retro_id","type":"TEXT","reason":null,"score":1.1014},{"name":"bbref_id","type":"TEXT","reason":null,"score":1.1189}]},{"fqn":"all_star","anchor":true,"total":8,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":5.0553},{"name":"year","type":"INTEGER","reason":null,"score":0.704},{"name":"game_num","type":"INTEGER","reason":"lemma 'game'","score":10.9654},{"name":"game_id","type":"TEXT","reason":"lemma 'game'","score":8.2279},{"name":"team_id","type":"TEXT","reason":"join key","score":1.5503},{"name":"league_id","type":"TEXT","reason":null,"score":1.1898},{"name":"gp","type":"NUMERIC","reason":null,"score":0.7605},{"name":"starting_pos","type":"NUMERIC","reason":null,"score":0.8409}]},{"fqn":"team","anchor":true,"total":48,"columns":[{"name":"year","type":"INTEGER","reason":null,"score":0.4749},{"name":"league_id","type":"TEXT","reason":null,"score":0.9606},{"name":"team_id","type":"TEXT","reason":"join key","score":6.4479},{"name":"franchise_id","type":"TEXT","reason":null,"score":2.4607},{"name":"div_id","type":"TEXT","reason":null,"score":1.276},{"name":"rank","type":"INTEGER","reason":null,"score":0.4272},{"name":"ghome","type":"NUMERIC","reason":null,"score":0.4462},{"name":"div_win","type":"TEXT","reason":null,"score":0.5212},{"name":"wc_win","type":"TEXT","reason":null,"score":0.5178},{"name":"lg_win","type":"TEXT","reason":null,"score":0.5178},{"name":"ws_win","type":"TEXT","reason":null,"score":0.5178},{"name":"ab","type":"INTEGER","reason":null,"score":0.4208},{"name":"double","type":"INTEGER","reason":null,"score":0.4208},{"name":"triple","type":"INTEGER","reason":null,"score":0.4208},{"name":"hr","type":"INTEGER","reason":null,"score":0.412},{"name":"bb","type":"INTEGER","reason":null,"score":0.412},{"name":"so","type":"NUMERIC","reason":null,"score":0.412},{"name":"sb","type":"NUMERIC","reason":null,"score":0.4186},{"name":"cs","type":"NUMERIC","reason":null,"score":0.4186},{"name":"ra","type":"INTEGER","reason":null,"score":0.4462},{"name":"er","type":"INTEGER","reason":null,"score":0.4145},{"name":"era","type":"NUMERIC","reason":null,"score":0.4145},{"name":"cg","type":"INTEGER","reason":null,"score":0.4145},{"name":"sho","type":"INTEGER","reason":null,"score":0.4145},{"name":"sv","type":"INTEGER","reason":null,"score":0.4145},{"name":"ipouts","type":"INTEGER","reason":null,"score":0.4814},{"name":"ha","type":"INTEGER","reason":null,"score":0.4462},{"name":"hra","type":"INTEGER","reason":null,"score":0.4462},{"name":"bba","type":"INTEGER","reason":null,"score":0.4462},{"name":"soa","type":"INTEGER","reason":null,"score":0.4462},{"name":"dp","type":"NUMERIC","reason":null,"score":0.4255},{"name":"fp","type":"NUMERIC","reason":null,"score":0.4462},{"name":"name","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":11.505},{"name":"park","type":"TEXT","reason":null,"score":1.1007},{"name":"attendance","type":"NUMERIC","reason":null,"score":0.6906},{"name":"bpf","type":"INTEGER","reason":null,"score":0.4462},{"name":"ppf","type":"INTEGER","reason":null,"score":0.4462},{"name":"team_id_br","type":"TEXT","reason":null,"score":1.0883},{"name":"team_id_lahman45","type":"TEXT","reason":null,"score":1.0883},{"name":"team_id_retro","type":"TEXT","reason":null,"score":1.1053}]},{"fqn":"college","anchor":true,"total":5,"columns":[{"name":"college_id","type":"TEXT","reason":null,"score":2.7717},{"name":"name_full","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":15.0264},{"name":"city","type":"TEXT","reason":null,"score":1.3604},{"name":"state","type":"TEXT","reason":null,"score":1.3604},{"name":"country","type":"TEXT","reason":null,"score":1.3604}]},{"fqn":"player_award","anchor":true,"total":6,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":5.0433},{"name":"award_id","type":"TEXT","reason":null,"score":2.5025},{"name":"year","type":"INTEGER","reason":null,"score":0.6921},{"name":"league_id","type":"TEXT","reason":null,"score":1.1778},{"name":"tie","type":"TEXT","reason":null,"score":0.6709},{"name":"notes","type":"TEXT","reason":null,"score":0.818}]},{"fqn":"park","anchor":false,"total":6,"columns":[{"name":"park_id","type":"TEXT","reason":null,"score":3.8356},{"name":"park_name","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":13.2721},{"name":"park_alias","type":"TEXT","reason":null,"score":3.031},{"name":"city","type":"TEXT","reason":null,"score":1.6094},{"name":"state","type":"TEXT","reason":null,"score":1.6094},{"name":"country","type":"TEXT","reason":null,"score":1.6094}]},{"fqn":"player_college","anchor":false,"total":3,"columns":[{"name":"player_id","type":"TEXT","reason":"fuzzy 'players'~'player'; lemma 'player'","score":5.4559},{"name":"college_id","type":"TEXT","reason":null,"score":2.6854},{"name":"year","type":"INTEGER","reason":null,"score":1.1047}]},{"fqn":"player_award_vote","anchor":false,"total":7,"columns":[{"name":"award_id","type":"TEXT","reason":null,"score":2.4951},{"name":"year","type":"INTEGER","reason":null,"score":0.6834},{"name":"league_id","type":"TEXT","reason":null,"score":1.1691},{"name":"player_id","type":"TEXT","reason":"fuzzy 'players'~'player'; lemma 'player'","score":5.0346},{"name":"points_won","type":"NUMERIC","reason":null,"score":0.9295},{"name":"points_max","type":"INTEGER","reason":null,"score":0.9295},{"name":"votes_first","type":"NUMERIC","reason":null,"score":1.8691}]},{"fqn":"team_franchise","anchor":false,"total":4,"columns":[{"name":"franchise_id","type":"TEXT","reason":null,"score":2.762},{"name":"franchise_name","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":12.6998},{"name":"active","type":"TEXT","reason":null,"score":0.9871},{"name":"na_assoc","type":"TEXT","reason":null,"score":1.1878}]},{"fqn":"manager_award","anchor":false,"total":6,"columns":[{"name":"player_id","type":"TEXT","reason":"fuzzy 'players'~'player'; lemma 'player'","score":4.8799},{"name":"award_id","type":"TEXT","reason":null,"score":2.3639},{"name":"year","type":"INTEGER","reason":null,"score":0.5287},{"name":"league_id","type":"TEXT","reason":null,"score":1.0144},{"name":"tie","type":"TEXT","reason":null,"score":0.5075},{"name":"notes","type":"NUMERIC","reason":null,"score":0.6546}]},{"fqn":"manager_award_vote","anchor":false,"total":7,"columns":[{"name":"award_id","type":"TEXT","reason":null,"score":2.3636},{"name":"year","type":"INTEGER","reason":null,"score":0.5284},{"name":"league_id","type":"TEXT","reason":null,"score":1.0141},{"name":"player_id","type":"TEXT","reason":"fuzzy 'players'~'player'; lemma 'player'","score":4.8796},{"name":"points_won","type":"INTEGER","reason":null,"score":0.7745},{"name":"points_max","type":"INTEGER","reason":null,"score":0.7745},{"name":"votes_first","type":"INTEGER","reason":null,"score":1.7141}]},{"fqn":"fielding_outfield","anchor":false,"total":6,"columns":[{"name":"player_id","type":"TEXT","reason":"fuzzy 'players'~'player'; lemma 'player'","score":4.821},{"name":"year","type":"INTEGER","reason":null,"score":0.4697},{"name":"stint","type":"INTEGER","reason":null,"score":0.4115},{"name":"glf","type":"NUMERIC","reason":null,"score":0.4391},{"name":"gcf","type":"NUMERIC","reason":null,"score":0.4391},{"name":"grf","type":"NUMERIC","reason":null,"score":0.4391}]},{"fqn":"manager_half","anchor":false,"total":10,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":4.7864},{"name":"year","type":"INTEGER","reason":null,"score":0.4351},{"name":"team_id","type":"TEXT","reason":"join key","score":1.2814},{"name":"league_id","type":"TEXT","reason":null,"score":0.9208},{"name":"inseason","type":"INTEGER","reason":null,"score":0.3924},{"name":"half","type":"INTEGER","reason":null,"score":0.3944},{"name":"g","type":"INTEGER","reason":null,"score":0.2855},{"name":"w","type":"INTEGER","reason":null,"score":0.2855},{"name":"l","type":"INTEGER","reason":null,"score":0.2855},{"name":"rank","type":"INTEGER","reason":null,"score":0.3875}]},{"fqn":"appearances","anchor":false,"total":21,"columns":[{"name":"year","type":"INTEGER","reason":null,"score":0.3775},{"name":"team_id","type":"TEXT","reason":"join key","score":1.2238},{"name":"league_id","type":"TEXT","reason":null,"score":0.8632},{"name":"player_id","type":"TEXT","reason":"join key","score":4.7288},{"name":"g_all","type":"NUMERIC","reason":null,"score":0.4272},{"name":"gs","type":"NUMERIC","reason":null,"score":0.3102},{"name":"g_batting","type":"INTEGER","reason":null,"score":0.3338},{"name":"g_defense","type":"NUMERIC","reason":null,"score":0.3126},{"name":"g_p","type":"INTEGER","reason":null,"score":0.2279},{"name":"g_c","type":"INTEGER","reason":null,"score":0.2279},{"name":"g_1b","type":"INTEGER","reason":null,"score":0.3126},{"name":"g_2b","type":"INTEGER","reason":null,"score":0.3126},{"name":"g_3b","type":"INTEGER","reason":null,"score":0.3126},{"name":"g_ss","type":"INTEGER","reason":null,"score":0.3126},{"name":"g_lf","type":"INTEGER","reason":null,"score":0.3126},{"name":"g_cf","type":"INTEGER","reason":null,"score":0.3126},{"name":"g_rf","type":"INTEGER","reason":null,"score":0.3126},{"name":"g_of","type":"INTEGER","reason":null,"score":0.3463},{"name":"g_dh","type":"NUMERIC","reason":null,"score":0.3126},{"name":"g_ph","type":"NUMERIC","reason":null,"score":0.3126},{"name":"g_pr","type":"NUMERIC","reason":null,"score":0.3126}]},{"fqn":"batting_postseason","anchor":false,"total":22,"columns":[{"name":"year","type":"INTEGER","reason":null,"score":0.3712},{"name":"round","type":"TEXT","reason":null,"score":0.296},{"name":"player_id","type":"TEXT","reason":"join key","score":4.7224},{"name":"team_id","type":"TEXT","reason":"join key","score":1.2174},{"name":"league_id","type":"TEXT","reason":null,"score":0.8569},{"name":"g","type":"INTEGER","reason":null,"score":0.2216},{"name":"ab","type":"INTEGER","reason":null,"score":0.3171},{"name":"r","type":"INTEGER","reason":null,"score":0.2216},{"name":"h","type":"INTEGER","reason":null,"score":0.2216},{"name":"double","type":"INTEGER","reason":null,"score":0.3171},{"name":"triple","type":"INTEGER","reason":null,"score":0.3171},{"name":"hr","type":"INTEGER","reason":null,"score":0.3082},{"name":"rbi","type":"INTEGER","reason":null,"score":0.3044},{"name":"sb","type":"INTEGER","reason":null,"score":0.3148},{"name":"cs","type":"NUMERIC","reason":null,"score":0.3148},{"name":"bb","type":"INTEGER","reason":null,"score":0.3082},{"name":"so","type":"INTEGER","reason":null,"score":0.3082},{"name":"ibb","type":"NUMERIC","reason":null,"score":0.2997},{"name":"hbp","type":"NUMERIC","reason":null,"score":0.3082},{"name":"sh","type":"NUMERIC","reason":null,"score":0.2997},{"name":"sf","type":"NUMERIC","reason":null,"score":0.3082},{"name":"g_idp","type":"NUMERIC","reason":null,"score":0.2997}]},{"fqn":"manager","anchor":false,"total":10,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":4.7905},{"name":"year","type":"INTEGER","reason":null,"score":0.4392},{"name":"team_id","type":"TEXT","reason":"join key","score":1.2854},{"name":"league_id","type":"TEXT","reason":null,"score":0.9249},{"name":"inseason","type":"INTEGER","reason":null,"score":0.3965},{"name":"g","type":"INTEGER","reason":null,"score":0.2896},{"name":"w","type":"INTEGER","reason":null,"score":0.2896},{"name":"l","type":"INTEGER","reason":null,"score":0.2896},{"name":"rank","type":"NUMERIC","reason":null,"score":0.3915},{"name":"plyr_mgr","type":"TEXT","reason":null,"score":0.6454}]},{"fqn":"fielding","anchor":false,"total":18,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":4.742},{"name":"year","type":"INTEGER","reason":null,"score":0.3907},{"name":"stint","type":"INTEGER","reason":null,"score":0.3325},{"name":"team_id","type":"TEXT","reason":"join key","score":1.237},{"name":"league_id","type":"TEXT","reason":null,"score":0.8764},{"name":"pos","type":"TEXT","reason":null,"score":0.3619},{"name":"g","type":"INTEGER","reason":null,"score":0.2411},{"name":"gs","type":"NUMERIC","reason":null,"score":0.3234},{"name":"inn_outs","type":"NUMERIC","reason":null,"score":0.4509},{"name":"po","type":"NUMERIC","reason":null,"score":0.331},{"name":"a","type":"NUMERIC","reason":null,"score":0.2411},{"name":"e","type":"NUMERIC","reason":null,"score":0.2411},{"name":"dp","type":"NUMERIC","reason":null,"score":0.3414},{"name":"pb","type":"NUMERIC","reason":null,"score":0.331},{"name":"wp","type":"NUMERIC","reason":null,"score":0.3199},{"name":"sb","type":"NUMERIC","reason":null,"score":0.3344},{"name":"cs","type":"NUMERIC","reason":null,"score":0.3344},{"name":"zr","type":"NUMERIC","reason":null,"score":0.3308}]},{"fqn":"fielding_postseason","anchor":false,"total":17,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":4.7435},{"name":"year","type":"INTEGER","reason":null,"score":0.3922},{"name":"team_id","type":"TEXT","reason":"join key","score":1.2385},{"name":"league_id","type":"TEXT","reason":null,"score":0.878},{"name":"round","type":"TEXT","reason":null,"score":0.3171},{"name":"pos","type":"TEXT","reason":null,"score":0.3634},{"name":"g","type":"INTEGER","reason":null,"score":0.2427},{"name":"gs","type":"NUMERIC","reason":null,"score":0.3249},{"name":"inn_outs","type":"NUMERIC","reason":null,"score":0.4525},{"name":"po","type":"INTEGER","reason":null,"score":0.3326},{"name":"a","type":"INTEGER","reason":null,"score":0.2427},{"name":"e","type":"INTEGER","reason":null,"score":0.2427},{"name":"dp","type":"INTEGER","reason":null,"score":0.3429},{"name":"tp","type":"INTEGER","reason":null,"score":0.3328},{"name":"pb","type":"NUMERIC","reason":null,"score":0.3326},{"name":"sb","type":"NUMERIC","reason":null,"score":0.3359},{"name":"cs","type":"NUMERIC","reason":null,"score":0.3359}]},{"fqn":"batting","anchor":false,"total":22,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":4.7248},{"name":"year","type":"INTEGER","reason":null,"score":0.3735},{"name":"stint","type":"INTEGER","reason":null,"score":0.3153},{"name":"team_id","type":"TEXT","reason":"join key","score":1.2198},{"name":"league_id","type":"TEXT","reason":null,"score":0.8593},{"name":"g","type":"INTEGER","reason":null,"score":0.224},{"name":"ab","type":"NUMERIC","reason":null,"score":0.3195},{"name":"r","type":"NUMERIC","reason":null,"score":0.224},{"name":"h","type":"NUMERIC","reason":null,"score":0.224},{"name":"double","type":"NUMERIC","reason":null,"score":0.3195},{"name":"triple","type":"NUMERIC","reason":null,"score":0.3195},{"name":"hr","type":"NUMERIC","reason":null,"score":0.3106},{"name":"rbi","type":"NUMERIC","reason":null,"score":0.3068},{"name":"sb","type":"NUMERIC","reason":null,"score":0.3172},{"name":"cs","type":"NUMERIC","reason":null,"score":0.3172},{"name":"bb","type":"NUMERIC","reason":null,"score":0.3106},{"name":"so","type":"NUMERIC","reason":null,"score":0.3106},{"name":"ibb","type":"NUMERIC","reason":null,"score":0.302},{"name":"hbp","type":"NUMERIC","reason":null,"score":0.3106},{"name":"sh","type":"NUMERIC","reason":null,"score":0.302},{"name":"sf","type":"NUMERIC","reason":null,"score":0.3106},{"name":"g_idp","type":"NUMERIC","reason":null,"score":0.302}]}],"tight":[{"fqn":"home_game","anchor":true,"total":9,"columns":[{"name":"year","type":"INTEGER","reason":null,"score":1.79},{"name":"league_id","type":"TEXT","reason":null,"score":2.2757},{"name":"team_id","type":"TEXT","reason":"join key","score":2.6363},{"name":"park_id","type":"TEXT","reason":null,"score":4.0826},{"name":"span_first","type":"TEXT","reason":null,"score":3.214},{"name":"span_last","type":"TEXT","reason":null,"score":3.9493},{"name":"games","type":"INTEGER","reason":"token 'games'; lemma 'game'","score":21.4776},{"name":"openings","type":"INTEGER","reason":null,"score":2.7074},{"name":"attendance","type":"INTEGER","reason":null,"score":2.0057}]},{"fqn":"player","anchor":true,"total":24,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":27.1933},{"name":"birth_year","type":"NUMERIC","reason":null,"score":0.7826},{"name":"birth_month","type":"NUMERIC","reason":null,"score":0.7884},{"name":"birth_day","type":"NUMERIC","reason":null,"score":0.7884},{"name":"birth_country","type":"TEXT","reason":null,"score":0.9254},{"name":"birth_state","type":"TEXT","reason":null,"score":0.9254},{"name":"birth_city","type":"TEXT","reason":null,"score":0.9254},{"name":"death_year","type":"NUMERIC","reason":null,"score":0.7826},{"name":"death_month","type":"NUMERIC","reason":null,"score":0.7884},{"name":"death_day","type":"NUMERIC","reason":null,"score":0.7884},{"name":"death_country","type":"TEXT","reason":null,"score":0.9254},{"name":"death_state","type":"TEXT","reason":null,"score":0.9254},{"name":"death_city","type":"TEXT","reason":null,"score":0.9254},{"name":"name_first","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":12.5119},{"name":"name_last","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":13.2472},{"name":"name_given","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":14.2746},{"name":"weight","type":"NUMERIC","reason":null,"score":0.637},{"name":"height","type":"NUMERIC","reason":null,"score":0.637},{"name":"bats","type":"TEXT","reason":null,"score":0.7665},{"name":"throws","type":"TEXT","reason":null,"score":0.7665},{"name":"debut","type":"TEXT","reason":null,"score":0.637},{"name":"final_game","type":"TEXT","reason":"lemma 'game'","score":9.3955},{"name":"retro_id","type":"TEXT","reason":null,"score":1.1014},{"name":"bbref_id","type":"TEXT","reason":null,"score":1.1189}]},{"fqn":"all_star","anchor":true,"total":8,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":5.0553},{"name":"year","type":"INTEGER","reason":null,"score":0.704},{"name":"game_num","type":"INTEGER","reason":"lemma 'game'","score":10.9654},{"name":"game_id","type":"TEXT","reason":"lemma 'game'","score":8.2279},{"name":"team_id","type":"TEXT","reason":"join key","score":1.5503},{"name":"league_id","type":"TEXT","reason":null,"score":1.1898},{"name":"gp","type":"NUMERIC","reason":null,"score":0.7605},{"name":"starting_pos","type":"NUMERIC","reason":null,"score":0.8409}]},{"fqn":"team","anchor":true,"total":48,"columns":[{"name":"year","type":"INTEGER","reason":null,"score":0.4749},{"name":"league_id","type":"TEXT","reason":null,"score":0.9606},{"name":"team_id","type":"TEXT","reason":"join key","score":6.4479},{"name":"franchise_id","type":"TEXT","reason":null,"score":2.4607},{"name":"div_id","type":"TEXT","reason":null,"score":1.276},{"name":"rank","type":"INTEGER","reason":null,"score":0.4272},{"name":"ghome","type":"NUMERIC","reason":null,"score":0.4462},{"name":"div_win","type":"TEXT","reason":null,"score":0.5212},{"name":"wc_win","type":"TEXT","reason":null,"score":0.5178},{"name":"lg_win","type":"TEXT","reason":null,"score":0.5178},{"name":"ws_win","type":"TEXT","reason":null,"score":0.5178},{"name":"ab","type":"INTEGER","reason":null,"score":0.4208},{"name":"double","type":"INTEGER","reason":null,"score":0.4208},{"name":"triple","type":"INTEGER","reason":null,"score":0.4208},{"name":"hr","type":"INTEGER","reason":null,"score":0.412},{"name":"bb","type":"INTEGER","reason":null,"score":0.412},{"name":"so","type":"NUMERIC","reason":null,"score":0.412},{"name":"sb","type":"NUMERIC","reason":null,"score":0.4186},{"name":"cs","type":"NUMERIC","reason":null,"score":0.4186},{"name":"ra","type":"INTEGER","reason":null,"score":0.4462},{"name":"er","type":"INTEGER","reason":null,"score":0.4145},{"name":"era","type":"NUMERIC","reason":null,"score":0.4145},{"name":"cg","type":"INTEGER","reason":null,"score":0.4145},{"name":"sho","type":"INTEGER","reason":null,"score":0.4145},{"name":"sv","type":"INTEGER","reason":null,"score":0.4145},{"name":"ipouts","type":"INTEGER","reason":null,"score":0.4814},{"name":"ha","type":"INTEGER","reason":null,"score":0.4462},{"name":"hra","type":"INTEGER","reason":null,"score":0.4462},{"name":"bba","type":"INTEGER","reason":null,"score":0.4462},{"name":"soa","type":"INTEGER","reason":null,"score":0.4462},{"name":"dp","type":"NUMERIC","reason":null,"score":0.4255},{"name":"fp","type":"NUMERIC","reason":null,"score":0.4462},{"name":"name","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":11.505},{"name":"park","type":"TEXT","reason":null,"score":1.1007},{"name":"attendance","type":"NUMERIC","reason":null,"score":0.6906},{"name":"bpf","type":"INTEGER","reason":null,"score":0.4462},{"name":"ppf","type":"INTEGER","reason":null,"score":0.4462},{"name":"team_id_br","type":"TEXT","reason":null,"score":1.0883},{"name":"team_id_lahman45","type":"TEXT","reason":null,"score":1.0883},{"name":"team_id_retro","type":"TEXT","reason":null,"score":1.1053}]},{"fqn":"college","anchor":true,"total":5,"columns":[{"name":"college_id","type":"TEXT","reason":null,"score":2.7717},{"name":"name_full","type":"TEXT","reason":"fuzzy 'names'~'name'; lemma 'name'","score":15.0264},{"name":"city","type":"TEXT","reason":null,"score":1.3604},{"name":"state","type":"TEXT","reason":null,"score":1.3604},{"name":"country","type":"TEXT","reason":null,"score":1.3604}]},{"fqn":"player_award","anchor":true,"total":6,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":5.0433},{"name":"award_id","type":"TEXT","reason":null,"score":2.5025},{"name":"year","type":"INTEGER","reason":null,"score":0.6921},{"name":"league_id","type":"TEXT","reason":null,"score":1.1778},{"name":"tie","type":"TEXT","reason":null,"score":0.6709},{"name":"notes","type":"TEXT","reason":null,"score":0.818}]},{"fqn":"manager_half","anchor":false,"total":10,"columns":[{"name":"player_id","type":"TEXT","reason":"join key","score":4.7864},{"name":"year","type":"INTEGER","reason":null,"score":0.4351},{"name":"team_id","type":"TEXT","reason":"join key","score":1.2814},{"name":"league_id","type":"TEXT","reason":null,"score":0.9208},{"name":"inseason","type":"INTEGER","reason":null,"score":0.3924},{"name":"half","type":"INTEGER","reason":null,"score":0.3944},{"name":"g","type":"INTEGER","reason":null,"score":0.2855},{"name":"w","type":"INTEGER","reason":null,"score":0.2855},{"name":"l","type":"INTEGER","reason":null,"score":0.2855},{"name":"rank","type":"INTEGER","reason":null,"score":0.3875}]}]},"ddl":{"default":"-- Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.\n-- Linked tables: 20 (anchors: home_game, player, all_star, team, college, player_award)\n\nCREATE TABLE home_game (\n  year INTEGER,\n  league_id TEXT,\n  team_id TEXT,\n  park_id TEXT,\n  span_first TEXT,\n  span_last TEXT,\n  games INTEGER,\n  openings INTEGER,\n  attendance INTEGER\n);  -- from spider2:Baseball\n\nCREATE TABLE player (\n  player_id TEXT,\n  birth_year NUMERIC,\n  birth_month NUMERIC,\n  birth_day NUMERIC,\n  birth_country TEXT,\n  birth_state TEXT,\n  birth_city TEXT,\n  death_year NUMERIC,\n  death_month NUMERIC,\n  death_day NUMERIC,\n  death_country TEXT,\n  death_state TEXT,\n  death_city TEXT,\n  name_first TEXT,\n  name_last TEXT,\n  name_given TEXT,\n  weight NUMERIC,\n  height NUMERIC,\n  bats TEXT,\n  throws TEXT,\n  debut TEXT,\n  final_game TEXT,\n  retro_id TEXT,\n  bbref_id TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE all_star (\n  player_id TEXT,\n  year INTEGER,\n  game_num INTEGER,\n  game_id TEXT,\n  team_id TEXT,\n  league_id TEXT,\n  gp NUMERIC,\n  starting_pos NUMERIC\n);  -- from spider2:Baseball\n\nCREATE TABLE team (\n  year INTEGER,\n  league_id TEXT,\n  team_id TEXT,\n  franchise_id TEXT,\n  div_id TEXT,\n  rank INTEGER,\n  ghome NUMERIC,\n  div_win TEXT,\n  wc_win TEXT,\n  lg_win TEXT,\n  ws_win TEXT,\n  ab INTEGER,\n  double INTEGER,\n  triple INTEGER,\n  hr INTEGER,\n  bb INTEGER,\n  so NUMERIC,\n  sb NUMERIC,\n  cs NUMERIC,\n  ra INTEGER,\n  er INTEGER,\n  era NUMERIC,\n  cg INTEGER,\n  sho INTEGER,\n  sv INTEGER,\n  ipouts INTEGER,\n  ha INTEGER,\n  hra INTEGER,\n  bba INTEGER,\n  soa INTEGER,\n  dp NUMERIC,\n  fp NUMERIC,\n  name TEXT,\n  park TEXT,\n  attendance NUMERIC,\n  bpf INTEGER,\n  ppf INTEGER,\n  team_id_br TEXT,\n  team_id_lahman45 TEXT,\n  team_id_retro TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE college (\n  college_id TEXT,\n  name_full TEXT,\n  city TEXT,\n  state TEXT,\n  country TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE player_award (\n  player_id TEXT,\n  award_id TEXT,\n  year INTEGER,\n  league_id TEXT,\n  tie TEXT,\n  notes TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE park (\n  park_id TEXT,\n  park_name TEXT,\n  park_alias TEXT,\n  city TEXT,\n  state TEXT,\n  country TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE player_college (\n  player_id TEXT,\n  college_id TEXT,\n  year INTEGER\n);  -- from spider2:Baseball\n\nCREATE TABLE player_award_vote (\n  award_id TEXT,\n  year INTEGER,\n  league_id TEXT,\n  player_id TEXT,\n  points_won NUMERIC,\n  points_max INTEGER,\n  votes_first NUMERIC\n);  -- from spider2:Baseball\n\nCREATE TABLE team_franchise (\n  franchise_id TEXT,\n  franchise_name TEXT,\n  active TEXT,\n  na_assoc TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE manager_award (\n  player_id TEXT,\n  award_id TEXT,\n  year INTEGER,\n  league_id TEXT,\n  tie TEXT,\n  notes NUMERIC\n);  -- from spider2:Baseball\n\nCREATE TABLE manager_award_vote (\n  award_id TEXT,\n  year INTEGER,\n  league_id TEXT,\n  player_id TEXT,\n  points_won INTEGER,\n  points_max INTEGER,\n  votes_first INTEGER\n);  -- from spider2:Baseball\n\nCREATE TABLE fielding_outfield (\n  player_id TEXT,\n  year INTEGER,\n  stint INTEGER,\n  glf NUMERIC,\n  gcf NUMERIC,\n  grf NUMERIC\n);  -- from spider2:Baseball\n\nCREATE TABLE manager_half (\n  player_id TEXT,\n  year INTEGER,\n  team_id TEXT,\n  league_id TEXT,\n  inseason INTEGER,\n  half INTEGER,\n  g INTEGER,\n  w INTEGER,\n  l INTEGER,\n  rank INTEGER\n);  -- from spider2:Baseball\n\nCREATE TABLE appearances (\n  year INTEGER,\n  team_id TEXT,\n  league_id TEXT,\n  player_id TEXT,\n  g_all NUMERIC,\n  gs NUMERIC,\n  g_batting INTEGER,\n  g_defense NUMERIC,\n  g_p INTEGER,\n  g_c INTEGER,\n  g_1b INTEGER,\n  g_2b INTEGER,\n  g_3b INTEGER,\n  g_ss INTEGER,\n  g_lf INTEGER,\n  g_cf INTEGER,\n  g_rf INTEGER,\n  g_of INTEGER,\n  g_dh NUMERIC,\n  g_ph NUMERIC,\n  g_pr NUMERIC\n);  -- from spider2:Baseball\n\nCREATE TABLE batting_postseason (\n  year INTEGER,\n  round TEXT,\n  player_id TEXT,\n  team_id TEXT,\n  league_id TEXT,\n  g INTEGER,\n  ab INTEGER,\n  r INTEGER,\n  h INTEGER,\n  double INTEGER,\n  triple INTEGER,\n  hr INTEGER,\n  rbi INTEGER,\n  sb INTEGER,\n  cs NUMERIC,\n  bb INTEGER,\n  so INTEGER,\n  ibb NUMERIC,\n  hbp NUMERIC,\n  sh NUMERIC,\n  sf NUMERIC,\n  g_idp NUMERIC\n);  -- from spider2:Baseball\n\nCREATE TABLE manager (\n  player_id TEXT,\n  year INTEGER,\n  team_id TEXT,\n  league_id TEXT,\n  inseason INTEGER,\n  g INTEGER,\n  w INTEGER,\n  l INTEGER,\n  rank NUMERIC,\n  plyr_mgr TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE fielding (\n  player_id TEXT,\n  year INTEGER,\n  stint INTEGER,\n  team_id TEXT,\n  league_id TEXT,\n  pos TEXT,\n  g INTEGER,\n  gs NUMERIC,\n  inn_outs NUMERIC,\n  po NUMERIC,\n  a NUMERIC,\n  e NUMERIC,\n  dp NUMERIC,\n  pb NUMERIC,\n  wp NUMERIC,\n  sb NUMERIC,\n  cs NUMERIC,\n  zr NUMERIC\n);  -- from spider2:Baseball\n\nCREATE TABLE fielding_postseason (\n  player_id TEXT,\n  year INTEGER,\n  team_id TEXT,\n  league_id TEXT,\n  round TEXT,\n  pos TEXT,\n  g INTEGER,\n  gs NUMERIC,\n  inn_outs NUMERIC,\n  po INTEGER,\n  a INTEGER,\n  e INTEGER,\n  dp INTEGER,\n  tp INTEGER,\n  pb NUMERIC,\n  sb NUMERIC,\n  cs NUMERIC\n);  -- from spider2:Baseball\n\nCREATE TABLE batting (\n  player_id TEXT,\n  year INTEGER,\n  stint INTEGER,\n  team_id TEXT,\n  league_id TEXT,\n  g INTEGER,\n  ab NUMERIC,\n  r NUMERIC,\n  h NUMERIC,\n  double NUMERIC,\n  triple NUMERIC,\n  hr NUMERIC,\n  rbi NUMERIC,\n  sb NUMERIC,\n  cs NUMERIC,\n  bb NUMERIC,\n  so NUMERIC,\n  ibb NUMERIC,\n  hbp NUMERIC,\n  sh NUMERIC,\n  sf NUMERIC,\n  g_idp NUMERIC\n);  -- from spider2:Baseball\n\n-- === Join paths (most reliable last) ===\n-- path [1.32]: home_game -> team -> appearances -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: appearances.team_id = team.team_id\n--   inferred: appearances.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> batting -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: batting.team_id = team.team_id\n--   inferred: batting.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> batting_postseason -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: batting_postseason.team_id = team.team_id\n--   inferred: batting_postseason.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> fielding -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: fielding.team_id = team.team_id\n--   inferred: fielding.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> fielding_postseason -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: fielding_postseason.team_id = team.team_id\n--   inferred: fielding_postseason.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> manager -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: manager.team_id = team.team_id\n--   inferred: manager.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> manager_half -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: manager_half.team_id = team.team_id\n--   inferred: manager_half.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.53]: home_game -> team -> all_star -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: all_star.team_id = team.team_id\n--   inferred: all_star.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n\n-- === Sample Values ===\n-- Sample values for home_game:\n--   league_id: 'AL'\n--   team_id: 'KCA', 'BOS', 'CHA', 'DET'\n--   park_id: 'KAN06', 'BOS07', 'CHI10', 'CHI09', 'DET04'\n--   span_first: '1997-04-07', '2002-04-01', '1963-04-16', '1902-04-23', '1934-04-24'\n--   span_last: '1997-09-21', '2002-09-29', '1963-09-29', '1902-09-25', '1934-09-30'\n-- Sample values for player:\n--   player_id: 'leicejo01', 'wilkian01', 'bootyjo01', 'powelal01', 'uppje01'\n--   birth_country: 'USA'\n--   birth_state: 'CA', 'OK', 'MS', 'OH'\n--   birth_city: 'Mariposa', 'Tulsa', 'Starkville', 'San Francisco', 'Sandusky'\n--   death_country: 'USA'\n--   death_state: 'OH'\n--   death_city: 'Sandusky'\n--   name_first: 'Jon', 'Andy', 'Josh', 'Alonzo', 'Jerry'\n--   name_last: 'Leicester', 'Wilkins', 'Booty', 'Powell', 'Upp'\n--   name_given: 'Jonathan David', 'Andrew Robert', 'Joshua Gibson', 'Alonzo Sidney', 'George Henry'\n--   bats: 'R', 'L'\n--   throws: 'R', 'L'\n--   debut: '2004-06-09', '2014-08-31', '1996-09-24', '1987-04-06', '1909-09-02'\n--   final_game: '2007-09-28', '2014-09-28', '1998-04-11', '1991-10-06', '1909-09-27'\n--   retro_id: 'leicj001', 'wilka002', 'bootj001', 'powea001', 'upp-j101'\n--   bbref_id: 'leicejo01', 'wilkian01', 'bootyjo01', 'powelal01', 'uppje01'\n-- Sample values for all_star:\n--   player_id: 'quantpa01', 'hackst01', 'phillbr01', 'vaughar01', 'biggicr01'\n--   game_id: 'ALS200107100', 'NLS201107120', 'NLS194007090', 'NLS199807070'\n--   team_id: 'TOR', 'CHN', 'CIN', 'PIT', 'HOU'\n--   league_id: 'AL', 'NL'\n-- Sample values for team:\n--   league_id: 'NL', 'AL'\n--   team_id: 'SLN', 'BOS', 'BSN', 'NYA'\n--   franchise_id: 'STL', 'BOS', 'ATL', 'NYY'\n--   div_id: 'E', 'C'\n--   div_win: 'N', 'Y'\n--   wc_win: 'Y', 'N'\n--   lg_win: 'N', 'Y'\n--   ws_win: 'N'\n--   name: 'St. Louis Cardinals', 'Boston Red Sox', 'Boston Braves', 'New York Yankees'\n--   park: 'Busch Stadium II', 'Fenway Park II', 'Braves Field', 'Yankee Stadium II'\n--   team_id_br: 'STL', 'BOS', 'BSN', 'NYY'\n--   team_id_lahman45: 'SLN', 'BOS', 'BSN', 'NYA'\n--   team_id_retro: 'SLN', 'BOS', 'BSN', 'NYA'\n-- Sample values for college:\n--   college_id: 'whittierca', 'moharri', 'caantel', 'wheatonma', 'oksemin'\n--   name_full: 'Whittier College', 'Harris-Stowe State College', 'Antelope Valley College', 'Wheaton College', 'Seminole State College'\n--   city: 'Whittier', 'St. Louis', 'Lancaster', 'Wheaton', 'Seminole'\n--   state: 'CA', 'MO', 'MA', 'OK'\n--   country: 'USA'\n-- Sample values for player_award:\n--   player_id: 'mantlmi01', 'terrybi01', 'maranra01', 'bartedi01', 'ensbemo01'\n--   award_id: 'TSN All-Star', 'Baseball Magazine All-Star', 'Silver Slugger'\n--   league_id: 'AL', 'NL', 'ML'\n--   notes: 'OF', '1B', 'SS', '3B'\n-- Sample values for park:\n--   park_id: 'WAT01', 'WAS02', 'ARL01', 'BAL07', 'SEA03'\n--   park_name: 'Troy Ball Club Grounds', 'National Grounds', 'Arlington Stadium', 'Oriole Park III', 'Safeco Field'\n--   city: 'Watervliet', 'Washington', 'Arlington', 'Baltimore', 'Seattle'\n--   state: 'NY', 'DC', 'TX', 'MD', 'WA'\n--   country: 'US'\n-- Sample values for player_college:\n--   player_id: 'hazledo01', 'eshelva01', 'espinda01', 'smithto02', 'maholpa01'\n--   college_id: 'tuftsma', 'txblinn', 'longbeach', 'fordham', 'missst'\n-- Sample values for player_award_vote:\n--   award_id: 'MVP'\n--   league_id: 'NL', 'AL'\n--   player_id: 'konstji01', 'hansero02', 'mayswi01', 'bickfve01', 'putzjj01'\n-- Sample values for team_franchise:\n--   franchise_id: 'TOL', 'CLS', 'CBL', 'BLC', 'KCR'\n--   franchise_name: 'Toledo Blue Stockings', 'Columbus Solons', 'Cleveland Blues', 'Baltimore Canaries', 'Kansas City Royals'\n--   active: 'N', 'Y'\n-- Sample values for manager_award:\n--   player_id: 'dyered01', 'blackbu02', 'williji03', 'herzowh01', 'bakerdu01'\n--   award_id: 'TSN Manager of the Year', 'BBWAA Manager of the year'\n--   league_id: 'ML', 'NL', 'AL'\n-- Sample values for manager_award_vote:\n--   award_id: 'Mgr of the year'\n--   league_id: 'NL'\n--   player_id: 'coxbo01', 'lasorto01', 'bochybr01', 'craigro01'\n-- Sample values for fielding_outfield:\n--   player_id: 'rosemch01', 'isbelfr01', 'oullijo01', 'fletcge01', 'ewingbo01'\n-- Sample values for manager_half:\n--   player_id: 'powerpa99', 'chapmja01', 'herzowh01', 'fregoji01', 'mcnamjo99'\n--   team_id: 'NY1', 'LS3', 'SLN', 'CAL', 'CIN'\n--   league_id: 'NL', 'AL'\n-- Sample values for appearances:\n--   team_id: 'NYA', 'BRO', 'MON', 'DET', 'SEA'\n--   league_id: 'AL', 'NL'\n--   player_id: 'newkifl01', 'browned02', 'kirbycl01', 'olivejo01', 'newfima01'\n-- Sample values for batting_postseason:\n--   round: 'WS', 'ALDS1'\n--   player_id: 'papeljo01', 'rossda01', 'hardyjj01', 'smithoz01', 'podrejo01'\n--   team_id: 'BOS', 'BAL', 'SLN', 'LAN'\n--   league_id: 'AL', 'NL'\n-- Sample values for manager:\n--   player_id: 'hutchfr01', 'harribu01', 'boudrlo01', 'dressch01', 'larusto01'\n--   team_id: 'DET', 'PHI', 'BOS', 'CIN', 'SLN'\n--   league_id: 'AL', 'NL'\n--   plyr_mgr: 'N'\n-- Sample values for fielding:\n--   player_id: 'beckzi01', 'nageocl01', 'smithdw01', 'russeri01', 'bladera01'\n--   team_id: 'NYA', 'SEA', 'CHN', 'SLN'\n--   league_id: 'AL', 'NL'\n--   pos: '1B', 'P', 'RF', 'OF'\n-- Sample values for fielding_postseason:\n--   player_id: 'lidgebr01', 'mierked01', 'clemero02', 'sotoge01', 'rodrifr03'\n--   team_id: 'HOU', 'DET', 'NYA', 'OAK', 'ANA'\n--   league_id: 'NL', 'AL'\n--   round: 'WS', 'ALCS', 'ALWC'\n--   pos: 'P', 'LF', 'C'\n-- Sample values for batting:\n--   player_id: 'bocekmi01', 'sanfoja02', 'boardch01', 'bigbila01', 'varvaan01'\n--   team_id: 'CHA', 'SFN', 'PHA', 'BAL', 'ATL'\n--   league_id: 'AL', 'NL'\n","tight":"-- Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.\n-- Linked tables: 7 (anchors: home_game, player, all_star, team, college, player_award)\n\nCREATE TABLE home_game (\n  year INTEGER,\n  league_id TEXT,\n  team_id TEXT,\n  park_id TEXT,\n  span_first TEXT,\n  span_last TEXT,\n  games INTEGER,\n  openings INTEGER,\n  attendance INTEGER\n);  -- from spider2:Baseball\n\nCREATE TABLE player (\n  player_id TEXT,\n  birth_year NUMERIC,\n  birth_month NUMERIC,\n  birth_day NUMERIC,\n  birth_country TEXT,\n  birth_state TEXT,\n  birth_city TEXT,\n  death_year NUMERIC,\n  death_month NUMERIC,\n  death_day NUMERIC,\n  death_country TEXT,\n  death_state TEXT,\n  death_city TEXT,\n  name_first TEXT,\n  name_last TEXT,\n  name_given TEXT,\n  weight NUMERIC,\n  height NUMERIC,\n  bats TEXT,\n  throws TEXT,\n  debut TEXT,\n  final_game TEXT,\n  retro_id TEXT,\n  bbref_id TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE all_star (\n  player_id TEXT,\n  year INTEGER,\n  game_num INTEGER,\n  game_id TEXT,\n  team_id TEXT,\n  league_id TEXT,\n  gp NUMERIC,\n  starting_pos NUMERIC\n);  -- from spider2:Baseball\n\nCREATE TABLE team (\n  year INTEGER,\n  league_id TEXT,\n  team_id TEXT,\n  franchise_id TEXT,\n  div_id TEXT,\n  rank INTEGER,\n  ghome NUMERIC,\n  div_win TEXT,\n  wc_win TEXT,\n  lg_win TEXT,\n  ws_win TEXT,\n  ab INTEGER,\n  double INTEGER,\n  triple INTEGER,\n  hr INTEGER,\n  bb INTEGER,\n  so NUMERIC,\n  sb NUMERIC,\n  cs NUMERIC,\n  ra INTEGER,\n  er INTEGER,\n  era NUMERIC,\n  cg INTEGER,\n  sho INTEGER,\n  sv INTEGER,\n  ipouts INTEGER,\n  ha INTEGER,\n  hra INTEGER,\n  bba INTEGER,\n  soa INTEGER,\n  dp NUMERIC,\n  fp NUMERIC,\n  name TEXT,\n  park TEXT,\n  attendance NUMERIC,\n  bpf INTEGER,\n  ppf INTEGER,\n  team_id_br TEXT,\n  team_id_lahman45 TEXT,\n  team_id_retro TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE college (\n  college_id TEXT,\n  name_full TEXT,\n  city TEXT,\n  state TEXT,\n  country TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE player_award (\n  player_id TEXT,\n  award_id TEXT,\n  year INTEGER,\n  league_id TEXT,\n  tie TEXT,\n  notes TEXT\n);  -- from spider2:Baseball\n\nCREATE TABLE manager_half (\n  player_id TEXT,\n  year INTEGER,\n  team_id TEXT,\n  league_id TEXT,\n  inseason INTEGER,\n  half INTEGER,\n  g INTEGER,\n  w INTEGER,\n  l INTEGER,\n  rank INTEGER\n);  -- from spider2:Baseball\n\n-- === Join paths (most reliable last) ===\n-- path [1.32]: home_game -> team -> appearances -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: appearances.team_id = team.team_id\n--   inferred: appearances.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> batting -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: batting.team_id = team.team_id\n--   inferred: batting.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> batting_postseason -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: batting_postseason.team_id = team.team_id\n--   inferred: batting_postseason.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> fielding -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: fielding.team_id = team.team_id\n--   inferred: fielding.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> fielding_postseason -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: fielding_postseason.team_id = team.team_id\n--   inferred: fielding_postseason.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> manager -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: manager.team_id = team.team_id\n--   inferred: manager.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.32]: home_game -> team -> manager_half -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: manager_half.team_id = team.team_id\n--   inferred: manager_half.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n-- path [1.53]: home_game -> team -> all_star -> player -> player_award\n--   inferred: home_game.team_id = team.team_id\n--   inferred: all_star.team_id = team.team_id\n--   inferred: all_star.player_id = player.player_id\n--   inferred: player_award.player_id = player.player_id\n\n-- === Sample Values ===\n-- Sample values for home_game:\n--   league_id: 'AL'\n--   team_id: 'KCA', 'BOS', 'CHA', 'DET'\n--   park_id: 'KAN06', 'BOS07', 'CHI10', 'CHI09', 'DET04'\n--   span_first: '1997-04-07', '2002-04-01', '1963-04-16', '1902-04-23', '1934-04-24'\n--   span_last: '1997-09-21', '2002-09-29', '1963-09-29', '1902-09-25', '1934-09-30'\n-- Sample values for player:\n--   player_id: 'leicejo01', 'wilkian01', 'bootyjo01', 'powelal01', 'uppje01'\n--   birth_country: 'USA'\n--   birth_state: 'CA', 'OK', 'MS', 'OH'\n--   birth_city: 'Mariposa', 'Tulsa', 'Starkville', 'San Francisco', 'Sandusky'\n--   death_country: 'USA'\n--   death_state: 'OH'\n--   death_city: 'Sandusky'\n--   name_first: 'Jon', 'Andy', 'Josh', 'Alonzo', 'Jerry'\n--   name_last: 'Leicester', 'Wilkins', 'Booty', 'Powell', 'Upp'\n--   name_given: 'Jonathan David', 'Andrew Robert', 'Joshua Gibson', 'Alonzo Sidney', 'George Henry'\n--   bats: 'R', 'L'\n--   throws: 'R', 'L'\n--   debut: '2004-06-09', '2014-08-31', '1996-09-24', '1987-04-06', '1909-09-02'\n--   final_game: '2007-09-28', '2014-09-28', '1998-04-11', '1991-10-06', '1909-09-27'\n--   retro_id: 'leicj001', 'wilka002', 'bootj001', 'powea001', 'upp-j101'\n--   bbref_id: 'leicejo01', 'wilkian01', 'bootyjo01', 'powelal01', 'uppje01'\n-- Sample values for all_star:\n--   player_id: 'quantpa01', 'hackst01', 'phillbr01', 'vaughar01', 'biggicr01'\n--   game_id: 'ALS200107100', 'NLS201107120', 'NLS194007090', 'NLS199807070'\n--   team_id: 'TOR', 'CHN', 'CIN', 'PIT', 'HOU'\n--   league_id: 'AL', 'NL'\n-- Sample values for team:\n--   league_id: 'NL', 'AL'\n--   team_id: 'SLN', 'BOS', 'BSN', 'NYA'\n--   franchise_id: 'STL', 'BOS', 'ATL', 'NYY'\n--   div_id: 'E', 'C'\n--   div_win: 'N', 'Y'\n--   wc_win: 'Y', 'N'\n--   lg_win: 'N', 'Y'\n--   ws_win: 'N'\n--   name: 'St. Louis Cardinals', 'Boston Red Sox', 'Boston Braves', 'New York Yankees'\n--   park: 'Busch Stadium II', 'Fenway Park II', 'Braves Field', 'Yankee Stadium II'\n--   team_id_br: 'STL', 'BOS', 'BSN', 'NYY'\n--   team_id_lahman45: 'SLN', 'BOS', 'BSN', 'NYA'\n--   team_id_retro: 'SLN', 'BOS', 'BSN', 'NYA'\n-- Sample values for college:\n--   college_id: 'whittierca', 'moharri', 'caantel', 'wheatonma', 'oksemin'\n--   name_full: 'Whittier College', 'Harris-Stowe State College', 'Antelope Valley College', 'Wheaton College', 'Seminole State College'\n--   city: 'Whittier', 'St. Louis', 'Lancaster', 'Wheaton', 'Seminole'\n--   state: 'CA', 'MO', 'MA', 'OK'\n--   country: 'USA'\n-- Sample values for player_award:\n--   player_id: 'mantlmi01', 'terrybi01', 'maranra01', 'bartedi01', 'ensbemo01'\n--   award_id: 'TSN All-Star', 'Baseball Magazine All-Star', 'Silver Slugger'\n--   league_id: 'AL', 'NL', 'ML'\n--   notes: 'OF', '1B', 'SS', '3B'\n-- Sample values for manager_half:\n--   player_id: 'powerpa99', 'chapmja01', 'herzowh01', 'fregoji01', 'mcnamjo99'\n--   team_id: 'NY1', 'LS3', 'SLN', 'CAL', 'CIN'\n--   league_id: 'NL', 'AL'\n"},"stats":{"seeds":35,"candidate_paths":75,"union_tables":17,"ranked_tables":26,"ms":15.2,"llm":"no"},"graphStats":{"nodes":{"table":26,"column":352,"token":157},"edges":{"contains":352,"relation":40,"mention":576,"fk_col":41}},"notes":{"stats_columns":"batting stores games, runs, hits and home runs as g, r, h and hr"}};
+(() => {
+"use strict";
+const SVGNS = "http://www.w3.org/2000/svg";
+const $ = (id) => document.getElementById(id);
+const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const params = new URLSearchParams(location.search);
+const still = params.has("still");
+if (params.get("theme")) document.documentElement.dataset.theme = params.get("theme");
+
+// ------------------------------------------------------------------ derived data
+const T = Object.fromEntries(DATA.tables.map((t) => [t.fqn, t]));
+const R = Object.fromEntries(DATA.ranking.rows.map((r) => [r.fqn, r]));
+const anchors = new Set(DATA.anchors.anchors);
+const gold = new Set(DATA.gold);
+const union = new Set(DATA.paths.union);
+const pathTables = new Set(DATA.paths.pruned.flatMap((p) => p.tables));
+const bridges = new Set([...pathTables].filter((t) => !anchors.has(t)));
+const seedMass = {};
+for (const s of DATA.seeds) seedMass[s.table] = (seedMass[s.table] || 0) + s.weight;
+const maxSeed = Math.max(...Object.values(seedMass));
+const seedsByTable = {};
+for (const s of DATA.seeds) (seedsByTable[s.table] ||= []).push(s);
+const pct = (x) => (100 * x).toFixed(0) + "%";
+const f2 = (x) => Number(x).toFixed(2);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const nodeRadius = (t) => 11 + Math.sqrt(t.ncols) * 2.3;
+const fusedRows = DATA.ranking.rows;
+const nTables = DATA.tables.length;
+const keptDefault = Object.fromEntries(DATA.budget.kept.map((k) => [k.fqn, k.why]));
+const keptTight = Object.fromEntries(DATA.tight.kept.map((k) => [k.fqn, k.why]));
+
+$("meta").textContent = `Spider 2.0-Lite ${DATA.task} · SQLite ${DATA.db} · ${nTables} tables · no LLM, deterministic graph search`;
+$("question").innerHTML = `<q>${esc(DATA.question)}</q>`;
+
+// ------------------------------------------------------------------ SVG building
+function el(tag, attrs = {}, parent) {
+  const node = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (parent) parent.appendChild(node);
+  return node;
+}
+const edgeEls = DATA.edges.map((e) => {
+  const a = T[e.a], b = T[e.b];
+  const line = el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: "edge" }, $("edgesLayer"));
+  line.dataset.tip = `${e.kinds.join(", ")} relation · join cost ${e.weight}\n${e.on.join("\n")}`;
+  return { e, line };
+});
+
+const nodeEls = {};
+for (const t of DATA.tables) {
+  const r = nodeRadius(t);
+  const g = el("g", { class: "node", transform: `translate(${t.x},${t.y})`, tabindex: 0, role: "img", "aria-label": `table ${t.fqn}` }, $("nodesLayer"));
+  el("circle", { r: r + 7, class: "ring" }, g);
+  el("circle", { r: r + 5, class: "bridge" }, g);
+  el("circle", { r, class: "base" }, g);
+  const heat = el("circle", { r, class: "heat", opacity: 0 }, g);
+  const label = el("text", { y: r + 17, class: "label" }, g); label.textContent = t.fqn;
+  const sub = el("text", { y: r + 32, class: "sub" }, g);
+  const badge = el("g", { class: "badge", transform: `translate(${r * 0.75},${-r * 0.75})` }, g);
+  el("circle", { r: 11 }, badge);
+  const badgeText = el("text", {}, badge);
+  const star = el("path", { class: "star", d: starPath(0, 0, 9, 4), transform: `translate(${-r * 0.8},${-r * 0.8})` }, g);
+  const xmark = el("path", { class: "xmark", d: `M${-r * 0.5},${-r * 0.5}L${r * 0.5},${r * 0.5}M${r * 0.5},${-r * 0.5}L${-r * 0.5},${r * 0.5}` }, g);
+  nodeEls[t.fqn] = { g, heat, sub, badge, badgeText, star, xmark, ring: g.querySelector(".ring"), bridge: g.querySelector(".bridge"), r };
+}
+function starPath(cx, cy, outer, inner) {
+  let d = "";
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 ? inner : outer, ang = Math.PI / 5 * i - Math.PI / 2;
+    d += (i ? "L" : "M") + (cx + rad * Math.cos(ang)).toFixed(1) + "," + (cy + rad * Math.sin(ang)).toFixed(1);
+  }
+  return d + "Z";
+}
+
+// Question chips: flow layout in the top band.
+const chipEls = {};
+(function layoutChips() {
+  const layer = $("chipsLayer");
+  const label = el("text", { x: 16, y: 22, class: "band-label" }, layer);
+  label.textContent = "question words (stopwords dropped)";
+  const widths = DATA.chips.map((c) => c.word.length * 8.6 + 26);
+  const gap = 10, maxW = 968;
+  const rows = [[]]; let w = 0;
+  DATA.chips.forEach((c, i) => {
+    if (w + widths[i] > maxW && rows.at(-1).length) { rows.push([]); w = 0; }
+    rows.at(-1).push(i); w += widths[i] + gap;
+  });
+  rows.forEach((row, ri) => {
+    const total = row.reduce((s, i) => s + widths[i] + gap, -gap);
+    let x = (1000 - total) / 2;
+    for (const i of row) {
+      const c = DATA.chips[i];
+      const g = el("g", { class: "chip" + (c.seeded ? "" : " unmatched"), transform: `translate(${x},${36 + ri * 40})`, opacity: 0 }, layer);
+      el("rect", { width: widths[i], height: 30, rx: 15 }, g);
+      const tx = el("text", { x: widths[i] / 2, y: 15 }, g); tx.textContent = c.word;
+      const out = DATA.links.filter((l) => l.word === c.word);
+      g.dataset.tip = c.seeded
+        ? `"${c.word}" seeds ${out.length} table(s):\n` + out.slice(0, 8).map((l) => `${l.table}  +${f2(l.weight)}`).join("\n") + (out.length > 8 ? `\n… and ${out.length - 8} more` : "")
+        : `"${c.word}" matches no table, column, value or glossary term`;
+      chipEls[c.word] = { g, cx: x + widths[i] / 2, by: 36 + ri * 40 + 30 };
+      x += widths[i] + gap;
+    }
+  });
+})();
+
+// Chip -> table links.
+const linkEls = DATA.links.map((l) => {
+  const chip = chipEls[l.word], t = T[l.table];
+  const r = nodeRadius(t);
+  const midY = (chip.by + t.y) / 2;
+  const path = el("path", { class: "link", d: `M${chip.cx},${chip.by} C${chip.cx},${midY} ${t.x},${midY} ${t.x},${t.y - r}`, "stroke-width": (1 + l.weight * 1.3).toFixed(2), opacity: 0 }, $("linksLayer"));
+  path.dataset.tip = `"${l.word}" → ${l.table} (+${f2(l.weight)})\n` + l.items.slice(0, 5).join("\n");
+  return { l, path };
+});
+
+// ------------------------------------------------------------------ tooltip
+const tip = $("tip");
+function nodeTip(fqn) {
+  const t = T[fqn], r = R[fqn];
+  const lines = [`${fqn} · ${t.ncols} columns`];
+  if (stage >= 1 && seedsByTable[fqn]) lines.push("seeds: " + seedsByTable[fqn].map((s) => `${s.column || "(name)"} +${f2(s.weight)}`).join(", "));
+  if (stage >= 2 && r) lines.push(`PPR evidence ${f2(r.pprRel)} · top columns: ${r.topColumns.map((c) => c[0]).join(", ") || "-"}`);
+  if (stage >= 3 && r) lines.push(`rank: PPR #${r.pprRank ?? "-"}, BM25F #${r.bm25Rank ?? "-"} → fused #${r.fusedRank}`);
+  if (stage >= 4) lines.push(anchors.has(fqn) ? "anchor" : `evidence ${f2(r ? r.evidence : 0)}`);
+  if (stage === 6 || stage === 8 && ctx === "default") lines.push(keptDefault[fqn] ? `kept: ${keptDefault[fqn]}` : "dropped");
+  if (stage === 7 || stage === 8 && ctx === "tight") lines.push(keptTight[fqn] ? `kept: ${keptTight[fqn]}` : "dropped");
+  if (gold.has(fqn) && stage >= 6) lines.push("★ read by the gold SQL");
+  return lines.join("\n");
+}
+function showTip(evt, text) {
+  tip.textContent = text; tip.style.opacity = 1;
+  const x = Math.min(evt.clientX + 14, window.innerWidth - 350);
+  tip.style.left = x + "px"; tip.style.top = (evt.clientY + 14) + "px";
+}
+$("svg").addEventListener("pointermove", (evt) => {
+  const node = evt.target.closest(".node");
+  const target = node ? null : evt.target.closest("[data-tip]");
+  if (node) showTip(evt, nodeTip(node.getAttribute("aria-label").slice(6)));
+  else if (target) showTip(evt, target.dataset.tip);
+  else tip.style.opacity = 0;
+});
+$("svg").addEventListener("pointerleave", () => (tip.style.opacity = 0));
+for (const [fqn, n] of Object.entries(nodeEls)) {
+  n.g.addEventListener("focus", () => { const b = n.g.getBoundingClientRect(); showTip({ clientX: b.right, clientY: b.top }, nodeTip(fqn)); });
+  n.g.addEventListener("blur", () => (tip.style.opacity = 0));
+}
+
+// ------------------------------------------------------------------ stage machinery
+let stage = 0, ctx = "tight", playing = false, timers = [], playTimer = null;
+const instant = () => reduced || still;
+function later(ms, fn) { if (instant()) fn(); else timers.push(setTimeout(fn, ms)); }
+function clearTimers() { timers.forEach(clearTimeout); timers = []; }
+
+function resetScene() {
+  for (const [fqn, n] of Object.entries(nodeEls)) {
+    n.g.setAttribute("class", "node");
+    n.heat.setAttribute("opacity", 0);
+    n.ring.classList.remove("on");
+    n.bridge.style.opacity = 0;
+    n.badge.style.opacity = 0;
+    n.star.style.opacity = 0;
+    n.xmark.style.opacity = 0;
+    n.sub.textContent = "";
+  }
+  edgeEls.forEach(({ line }) => line.classList.remove("dim"));
+  $("pathsLayer").replaceChildren();
+  linkEls.forEach(({ path }) => path.setAttribute("opacity", 0));
+  // The question words stay on screen as context after the activation stage.
+  Object.values(chipEls).forEach((c) => c.g.setAttribute("opacity", stage === 0 ? 0.35 : stage === 1 ? 0 : 0.6));
+  $("overlay").textContent = "";
+}
+function setHeat(map, scale = 1) {
+  for (const [fqn, n] of Object.entries(nodeEls)) n.heat.setAttribute("opacity", ((map[fqn] || 0) * 0.92 * scale).toFixed(3));
+}
+function drawStroke(path, delay) {
+  const len = path.getTotalLength();
+  path.style.transition = "none";
+  path.style.strokeDasharray = `${len} ${len}`;
+  path.style.strokeDashoffset = instant() ? 0 : len;
+  path.getBoundingClientRect();
+  path.style.transition = "";
+  later(delay, () => (path.style.strokeDashoffset = 0));
+}
+function showGold() { for (const fqn of gold) if (nodeEls[fqn]) nodeEls[fqn].star.style.opacity = 1; }
+function legend(items) {
+  $("legend").innerHTML = items.map(([style, text]) => `<span><i class="sw" style="${style}"></i>${text}</span>`).join("");
+}
+const LEG = {
+  heat: ["background:var(--heat)", "activation / score (darker = higher)"],
+  anchor: ["border-color:var(--accent)", "anchor table"],
+  bridge: ["border:2px dashed var(--path)", "bridge table pulled in by a path"],
+  path: ["background:var(--path)", "kept: on a join path"],
+  fill: ["background:var(--fill)", "kept: budget fill"],
+  kanchor: ["background:var(--accent)", "kept: anchor"],
+  gold: ["background:var(--gold);border-radius:2px", "★ table the gold SQL reads"],
+  faded: ["background:var(--node);opacity:.4", "not kept"],
+  edge: ["background:var(--line);border-radius:2px;height:3px", "inferred join (naming convention)"],
+};
+
+// Each stage: [short name, title, panel html builder, scene animator].
+const STAGES = [
+  ["Schema", "The schema graph", panelSchema, sceneSchema],
+  ["Seeds", "1 · Lexical activation", panelSeeds, sceneSeeds],
+  ["PageRank", "2 · Personalized PageRank", panelPPR, scenePPR],
+  ["Ranking", "3 · Rank fusion: PPR + BM25F", panelRanking, sceneRanking],
+  ["Anchors", "4 · Anchor tables", panelAnchors, sceneAnchors],
+  ["Paths", "5 · Join paths between anchors", panelPaths, scenePaths],
+  ["Budget", "6 · Budget: what the default keeps", panelBudget, sceneBudget],
+  ["Tight", "7 · The tight context (7 tables)", panelTight, sceneTight],
+  ["DDL", "8 · Columns and the final DDL", panelDDL, sceneDDL],
+];
+const DWELL = [6000, 9000, 9000, 9000, 7000, 10000, 8000, 9000, 12000];
+
+function go(s, { fromPlay = false } = {}) {
+  stage = Math.max(0, Math.min(STAGES.length - 1, s));
+  clearTimers();
+  document.body.classList.add("instant");
+  resetScene();
+  $("svg").getBoundingClientRect();
+  if (!instant()) document.body.classList.remove("instant");
+  const [, title, panel, scene] = STAGES[stage];
+  $("panel").innerHTML = `<div class="kicker">Stage ${stage} of ${STAGES.length - 1}</div><h2>${title}</h2>` + panel();
+  scene();
+  wirePanel();
+  [...$("stages").children].forEach((b, i) => {
+    b.toggleAttribute("aria-current", false);
+    if (i === stage) b.setAttribute("aria-current", "step");
+    b.querySelector(".prog").style.width = i < stage ? "100%" : "0";
+  });
+  history.replaceState(null, "", `?stage=${stage}` + (still ? "&still" : ""));
+  if (playing) schedulePlay(); else if (!fromPlay) stopPlay();
+}
+function schedulePlay() {
+  clearTimeout(playTimer);
+  const bar = $("stages").children[stage].querySelector(".prog");
+  bar.style.transition = "none"; bar.style.width = "0"; bar.getBoundingClientRect();
+  bar.style.transition = `width ${DWELL[stage]}ms linear`; bar.style.width = "100%";
+  playTimer = setTimeout(() => {
+    if (stage < STAGES.length - 1) go(stage + 1, { fromPlay: true }); else stopPlay();
+  }, DWELL[stage]);
+}
+function startPlay() { playing = true; $("play").innerHTML = "&#10074;&#10074;"; $("play").setAttribute("aria-label", "Pause"); if (stage === STAGES.length - 1) go(0, { fromPlay: true }); else schedulePlay(); }
+function stopPlay() {
+  playing = false; clearTimeout(playTimer);
+  $("play").innerHTML = "&#9654;"; $("play").setAttribute("aria-label", "Play");
+  const bar = $("stages").children[stage]?.querySelector(".prog");
+  if (bar) { bar.style.transition = "none"; bar.style.width = "0"; }
+}
+
+STAGES.forEach(([name], i) => {
+  const b = document.createElement("button");
+  b.innerHTML = `<span class="n">${i}</span>${name}<span class="prog"></span>`;
+  b.setAttribute("aria-label", `Stage ${i}: ${STAGES[i][1]}`);
+  b.addEventListener("click", () => go(i));
+  $("stages").appendChild(b);
+});
+$("prev").addEventListener("click", () => go(stage - 1));
+$("next").addEventListener("click", () => go(stage + 1));
+$("play").addEventListener("click", () => (playing ? stopPlay() : startPlay()));
+document.addEventListener("keydown", (evt) => {
+  if (evt.target.closest?.("button") && (evt.key === " " || evt.key === "Enter")) return;
+  if (evt.key === "ArrowRight") { go(stage + 1); evt.preventDefault(); }
+  else if (evt.key === "ArrowLeft") { go(stage - 1); evt.preventDefault(); }
+  else if (evt.key === " ") { playing ? stopPlay() : startPlay(); evt.preventDefault(); }
+  else if (/^[0-8]$/.test(evt.key)) go(Number(evt.key));
+});
+function wirePanel() {
+  for (const b of $("panel").querySelectorAll("[data-ctx]")) {
+    b.addEventListener("click", () => { ctx = b.dataset.ctx; go(stage); });
+  }
+  requestAnimationFrame(() => {
+    for (const i of $("panel").querySelectorAll(".bar i[data-w]")) {
+      if (instant()) i.style.transition = "none";
+      i.style.width = i.dataset.w;
+    }
+  });
+}
+
+// ------------------------------------------------------------------ stage 0: schema
+function panelSchema() {
+  const gs = DATA.graphStats;
+  return `<p>Every table is a node; two tables that can be joined share one <b>relation</b> edge.
+  This SQLite database declares no foreign keys, so all ${DATA.edges.length} edges are
+  <b>inferred</b> from naming conventions (<code>batting.player_id = player.player_id</code>)
+  and carry the highest join cost, 2.5.</p>
+  <div class="stats">
+    <div><span class="big">${nTables}</span><small>tables</small></div>
+    <div><span class="big">${gs.nodes.column || 0}</span><small>column nodes</small></div>
+    <div><span class="big">${gs.nodes.token || 0}</span><small>token nodes</small></div>
+  </div>
+  <p>Behind the picture the graph is larger: each column is a node hanging off its table, and each
+  word of the schema vocabulary is a <code>w:</code> token node linked to the objects it names
+  (${gs.edges.mention || 0} mention edges). That is the graph the question's activation flows over.</p>
+  <p class="hint">Node size grows with column count. Hover a node or an edge for details.</p>`;
+}
+function sceneSchema() { legend([LEG.edge]); $("overlay").textContent = `${nTables} tables · ${DATA.edges.length} relation edges`; }
+
+// ------------------------------------------------------------------ stage 1: seeds
+function panelSeeds() {
+  const seeded = DATA.chips.filter((c) => c.seeded).map((c) => c.word);
+  const missed = DATA.chips.filter((c) => !c.seeded).map((c) => c.word);
+  const top = DATA.seeds.slice(0, 7);
+  const goldNote = [...gold].map((g) => {
+    const s = seedsByTable[g] || [];
+    return `<b>${g}</b>: ${s.length ? s.map((x) => `${x.column || "(name)"} via “${x.words.join(", ")}”`).join("; ") : "no seed"}`;
+  }).join("<br>");
+  return `<p>No NER and no LLM: each question word is aligned to schema objects through their names,
+  lemmas, abbreviations, fuzzy spellings, n-grams and sample values. Single-word hits are scaled by
+  how rare the word is in the schema (IDF).</p>
+  <div class="stats">
+    <div><span class="big">${DATA.nSeeds}</span><small>seed nodes</small></div>
+    <div><span class="big">${seeded.length}/${DATA.chips.length}</span><small>words that match</small></div>
+    <div><span class="big">${Object.keys(seedMass).length}</span><small>tables touched</small></div>
+  </div>
+  <table class="mini"><tr><th>seed</th><th class="num">weight</th><th>why</th></tr>
+  ${top.map((s) => `<tr><td class="mono">${s.table}${s.column ? "." + s.column : ""}</td><td class="num">${f2(s.weight)}</td><td>${esc(s.reasons.slice(0, 2).join(", "))}</td></tr>`).join("")}
+  </table>
+  <div class="callout">Unmatched: ${missed.map((w) => `<i>${w}</i>`).join(", ")}. The statistics live in
+  short column names (${esc(DATA.notes.stats_columns)}), so <i>runs</i> and <i>hits</i> find nothing,
+  while <i>home</i> + <i>games</i> light up <code>home_game</code>.</div>
+  ${gold.size ? `<p class="hint">Gold SQL tables — ${goldNote}</p>` : ""}`;
+}
+function sceneSeeds() {
+  legend([LEG.heat, ["background:var(--chip);border-color:var(--accent)", "word that seeds the schema"], ["border:2px dashed var(--line)", "word with no match"]]);
+  const words = DATA.chips.map((c) => c.word);
+  words.forEach((w, i) => later(120 * i, () => chipEls[w].g.setAttribute("opacity", 1)));
+  const start = 120 * words.length + 200;
+  const seededWords = words.filter((w) => DATA.chips.find((c) => c.word === w).seeded);
+  const mass = {};
+  seededWords.forEach((w, i) => {
+    later(start + i * 900, () => {
+      for (const { l, path } of linkEls) {
+        if (l.word !== w) continue;
+        path.setAttribute("opacity", Math.min(0.85, 0.25 + l.weight / 3));
+        drawStroke(path, 0);
+        mass[l.table] = (mass[l.table] || 0) + l.weight;
+      }
+      const best = Math.max(...Object.values(mass));
+      later(instant() ? 0 : 450, () => setHeat(Object.fromEntries(Object.entries(seedMass).map(([t]) => [t, (mass[t] || 0) / Math.max(best, maxSeed * 0.6)]))));
+    });
+  });
+  later(start + seededWords.length * 900 + 300, () => setHeat(Object.fromEntries(Object.entries(seedMass).map(([t, m]) => [t, m / maxSeed]))));
+}
+
+// ------------------------------------------------------------------ stage 2: PPR
+function panelPPR() {
+  const top = [...fusedRows].sort((a, b) => b.pprWalk - a.pprWalk).slice(0, 6);
+  const bestWalk = top[0].pprWalk;
+  return `<p>The seeds become the teleport distribution of a random walk (HippoRAG). At each step the walker
+  either follows an edge (probability ${DATA.options.ppr_alpha}) or jumps back to a seed. Mass flows from seeded
+  columns to their tables, across joins, and through shared vocabulary, so a table <i>near</i> many seeds
+  heats up even if the question never names it.</p>
+  <p class="big" id="pprStep">step 0</p>
+  <table class="mini"><tr><th>table</th><th class="num">walk score (rel.)</th><th>hottest columns</th></tr>
+  ${top.map((r) => `<tr><td class="mono">${r.fqn}</td><td class="num">${f2(r.pprWalk / bestWalk)}</td><td class="mono">${r.topColumns.slice(0, 3).map((c) => c[0]).join(", ")}</td></tr>`).join("")}
+  </table>
+  <p class="hint">Table score = own node + best column + ½ second + ¼ third + 0.02 × the rest ("top3").
+  After the walk converges, tables with direct seeds get a bonus (PPR dilutes direct evidence); the last frame shows that.</p>`;
+}
+function scenePPR() {
+  legend([LEG.heat]);
+  const frames = DATA.ppr;
+  const bonus = Object.fromEntries(fusedRows.map((r) => [r.fqn, r.pprRel]));
+  const all = [...frames.map((f) => [f.step === "converged" ? "converged" : `step ${f.step}`, f.heat]), ["converged + direct bonus", bonus]];
+  all.forEach(([label, heat], i) => later(i * 750, () => {
+    setHeat(heat);
+    const node = $("pprStep"); if (node) node.textContent = label;
+    $("overlay").textContent = `PPR, ${label} (each frame scaled to its hottest table)`;
+  }));
+}
+
+// ------------------------------------------------------------------ stage 3: ranking
+function panelRanking() {
+  const rows = fusedRows.slice(0, 12);
+  const k = DATA.ranking.rrfK;
+  return `<p>Two rankers vote. <b>PPR</b> ranks by graph evidence; <b>BM25F</b> ranks one text document per table
+  (name, columns, descriptions). Reciprocal-rank fusion adds <code>1/(${k}+rank)</code> from each, so a table
+  near the top of both wins.</p>
+  <div class="bars">
+    <span class="hdr">table</span><span class="hdr">PPR (rel.)</span><span class="hdr">BM25F (rel.)</span><span class="hdr" style="text-align:right">fused</span>
+    ${rows.map((r) => `<span class="rowname">${r.fusedRank}. ${r.fqn}</span>
+      <span class="bar ppr" title="PPR rank ${r.pprRank}"><i data-w="${pct(r.pprRel)}"></i><b>#${r.pprRank ?? "-"}</b></span>
+      <span class="bar bm25" title="BM25F rank ${r.bm25Rank} (score ${r.bm25})"><i data-w="${pct(r.bm25Rel)}"></i><b>#${r.bm25Rank ?? "-"}</b></span>
+      <span class="fused" title="1/(${k}+${r.pprRank}) + 1/(${k}+${r.bm25Rank})">${(r.fused * 1000).toFixed(1)}</span>`).join("")}
+  </div>
+  <p class="hint" style="margin-top:8px">Fused score × 1000. ${R.batting ? `<code>batting</code> (gold) is fused #${R.batting.fusedRank} of ${fusedRows.length}: PPR #${R.batting.pprRank}, BM25F #${R.batting.bm25Rank}.` : ""}</p>`;
+}
+function sceneRanking() {
+  legend([LEG.heat, ["background:var(--ink)", "fused rank"]]);
+  setHeat(Object.fromEntries(fusedRows.map((r) => [r.fqn, r.evidence])));
+  fusedRows.slice(0, 12).forEach((r, i) => later(200 + i * 160, () => {
+    const n = nodeEls[r.fqn]; n.badgeText.textContent = r.fusedRank; n.badge.style.opacity = 1;
+  }));
+  $("overlay").textContent = "colour = evidence (best of PPR and BM25F, relative); badge = fused rank";
+}
+
+// ------------------------------------------------------------------ stage 4: anchors
+function panelAnchors() {
+  const a = DATA.anchors;
+  const qualified = a.rows.filter((r) => r.qualified).length;
+  const rows = a.rows.slice(0, 12);
+  return `<p>Anchors are the tables the answer is built around: the top <b>${a.k}</b> of the fused ranking,
+  but only if their <i>evidence</i> (score relative to the best table, under either ranker) is at least
+  <b>${a.minRatio}</b>. The fused score is rank-based and flat, so the gate reads evidence instead.</p>
+  <div class="stats"><div><span class="big">${qualified}</span><small>pass the ${a.minRatio} gate</small></div>
+  <div><span class="big">${a.anchors.length}</span><small>anchors</small></div>
+  <div><span class="big">${DATA.options.adaptive_widened ? "yes" : "no"}</span><small>large-schema widening (&gt;${DATA.options.large_threshold})</small></div></div>
+  <div class="bars" style="grid-template-columns: 10.5em 1fr 3.4em">
+  ${rows.map((r) => `<span class="rowname ${r.anchor ? "anchor" : ""}">${r.anchor ? "◎ " : ""}${r.fqn}</span>
+    <span class="bar ev"><i data-w="${pct(r.evidence)}"></i><span class="gate" style="left:${pct(a.minRatio)}"></span></span>
+    <span class="fused">${f2(r.evidence)}</span>`).join("")}
+  </div>`;
+}
+function sceneAnchors() {
+  legend([LEG.anchor, LEG.heat]);
+  setHeat(Object.fromEntries(fusedRows.map((r) => [r.fqn, r.evidence * 0.55])));
+  for (const r of DATA.anchors.rows) if (!r.qualified) nodeEls[r.fqn].g.classList.add("faded");
+  DATA.anchors.anchors.forEach((fqn, i) => later(250 + i * 380, () => {
+    const n = nodeEls[fqn]; n.ring.classList.add("on"); n.badgeText.textContent = R[fqn].fusedRank; n.badge.style.opacity = 1;
+  }));
+  $("overlay").textContent = "faded = below the anchor evidence gate";
+}
+
+// ------------------------------------------------------------------ stage 5: paths
+function panelPaths() {
+  const p = DATA.paths;
+  const offPath = DATA.anchors.anchors.filter((a) => !pathTables.has(a));
+  const pattern = pathPattern(p.pruned);
+  return `<p>To make the sub-schema <b>join-complete</b>, the linker connects every pair of anchors with all
+  of their cheapest join paths (Yen's k-shortest simple paths, SchemaGraphSQL). Tables in the middle of a
+  path are <b>bridges</b>: nothing in the question names them, but the SQL needs them to join.</p>
+  <div class="stats"><div><span class="big">${p.candidates}</span><small>candidate paths (${p.hops[0]}–${p.hops.at(-1)} hops)</small></div>
+  <div><span class="big">${p.union.length}</span><small>tables on them</small></div>
+  <div><span class="big">${p.pruned.length}</span><small>kept after pruning</small></div></div>
+  <p>PathRAG flow pruning scores each path by the evidence flowing from anchor to anchor and keeps the top
+  ${p.pruneTopK}. ${pattern ? `Here they all run <code>${pattern.before.join(" → ")} → <i>X</i> → ${pattern.after.join(" → ")}</code>, with a different table <i>X</i> in the middle:` : "The kept paths:"}</p>
+  <table class="mini"><tr><th>${pattern ? "X" : "path"}</th><th class="num">reliability</th></tr>
+  ${p.pruned.map((x) => {
+    const middle = pattern ? [x.tables[pattern.at]] : x.tables;
+    const label = middle.map((t) => `${t}${anchors.has(t) ? " (anchor)" : bridges.has(t) ? " (bridge)" : ""}${gold.has(t) ? " ★" : ""}`).join(" → ");
+    return `<tr><td class="mono">${label}</td><td class="num">${x.reliability.toFixed(3)}</td></tr>`;
+  }).join("")}
+  </table>
+  ${offPath.length ? `<p class="hint">Anchor${offPath.length > 1 ? "s" : ""} on no kept path: ${offPath.join(", ")} (still kept as anchor).</p>` : ""}`;
+}
+function pathPattern(paths) {
+  // The position where all paths differ, when they agree everywhere else (else null).
+  const n = paths[0]?.tables.length;
+  if (!n || paths.some((x) => x.tables.length !== n)) return null;
+  const varying = [...Array(n).keys()].filter((i) => new Set(paths.map((x) => x.tables[i])).size > 1);
+  if (varying.length !== 1) return null;
+  const at = varying[0];
+  return { at, before: paths[0].tables.slice(0, at), after: paths[0].tables.slice(at + 1) };
+}
+function scenePaths() {
+  legend([LEG.anchor, ["background:var(--path);border-radius:2px;height:5px", "pruned join path"], LEG.bridge]);
+  for (const t of DATA.tables) {
+    if (!union.has(t.fqn)) nodeEls[t.fqn].g.classList.add("faded");
+  }
+  edgeEls.forEach(({ e, line }) => { if (!(union.has(e.a) && union.has(e.b))) line.classList.add("dim"); });
+  for (const fqn of anchors) nodeEls[fqn].ring.classList.add("on");
+  const drawn = new Set();
+  DATA.paths.pruned.forEach((p, i) => later(400 + i * 650, () => {
+    for (const s of p.steps) {
+      const key = [s.from, s.to].sort().join("|");
+      if (drawn.has(key)) continue;
+      drawn.add(key);
+      const a = T[s.from], b = T[s.to];
+      const line = el("path", { class: "pathline", d: `M${a.x},${a.y}L${b.x},${b.y}` }, $("pathsLayer"));
+      line.dataset.tip = `${s.kind}: ${s.on}`;
+      drawStroke(line, 20);
+    }
+    for (const t of p.tables) if (bridges.has(t)) nodeEls[t].bridge.style.opacity = 1;
+    $("overlay").textContent = `path ${i + 1}/${DATA.paths.pruned.length}: ${p.tables.join(" → ")}`;
+  }));
+  later(400 + DATA.paths.pruned.length * 650 + 400, () => ($("overlay").textContent = "faded = on no candidate path"));
+}
+
+// ------------------------------------------------------------------ stages 6-7: budget cuts
+function keptClass(why) { return why === "anchor" ? "kept-anchor" : why === "join path" ? "kept-path" : "kept-fill"; }
+function sceneCut(kept, ringAnchors, marks = true) {
+  legend([LEG.kanchor, LEG.path, LEG.fill, LEG.faded, LEG.gold]);
+  showGold();
+  const order = [...DATA.tables].sort((a, b) => (R[a.fqn]?.fusedRank ?? 99) - (R[b.fqn]?.fusedRank ?? 99));
+  order.forEach((t, i) => later(100 + i * 70, () => {
+    const n = nodeEls[t.fqn];
+    if (kept[t.fqn]) { n.g.classList.add(keptClass(kept[t.fqn])); if (ringAnchors && anchors.has(t.fqn)) n.ring.classList.add("on"); }
+    else {
+      n.g.classList.add("faded"); if (marks) n.xmark.style.opacity = 1;
+      if (gold.has(t.fqn)) { n.g.classList.remove("faded"); n.g.classList.add("cut-gold"); }
+    }
+  }));
+  edgeEls.forEach(({ e, line }) => { if (!(kept[e.a] && kept[e.b])) line.classList.add("dim"); });
+}
+function reasonCounts(list) {
+  const c = {}; for (const k of list) c[k.why] = (c[k.why] || 0) + 1; return c;
+}
+function panelBudget() {
+  const b = DATA.budget, c = reasonCounts(b.kept);
+  return `<p>The table budget is <b>max_tables = ${b.maxTables}</b>. ${b.bypass
+    ? `The whole schema (${nTables} tables) fits, so <b>bypass_if_fits</b> keeps <b>everything</b>; anchors and paths above were still computed and shape the DDL.`
+    : `The schema has ${nTables} tables, more than ${b.maxTables}, so <b>no bypass</b> (and ${nTables} ≤ ${DATA.options.large_threshold}, so no large-schema widening).`}
+  Anchors and path tables come first; the next-ranked tables with evidence ≥ ${b.fillRatio} fill the rest;
+  then everything is cut to the best ${b.maxTables} by fused score.</p>
+  <div class="stats"><div><span class="big">${c["anchor"] || 0}</span><small><span class="tag anchor">anchor</span></small></div>
+  <div><span class="big">${c["join path"] || 0}</span><small><span class="tag path">join path</span></small></div>
+  <div><span class="big">${c["fill"] || 0}</span><small><span class="tag fill">fill</span></small></div></div>
+  <table class="mini"><tr><th>dropped (${b.dropped.length})</th><th>why</th></tr>
+  ${b.dropped.map((d) => `<tr><td class="mono">${d.fqn}</td><td>${d.why}</td></tr>`).join("")}</table>
+  ${[...gold].every((g) => keptDefault[g]) && gold.size ? `<div class="callout">Both gold tables (${[...gold].join(", ")}) are in the default context; <code>batting</code> only as a join-path bridge.</div>` : ""}`;
+}
+function sceneBudget() { sceneCut(keptDefault, true); $("overlay").textContent = `default options: ${DATA.budget.kept.length} of ${nTables} tables kept`; }
+function panelTight() {
+  const t = DATA.tight;
+  const cutPath = t.dropped.filter((d) => d.why.startsWith("join path"));
+  const lostGold = [...gold].filter((g) => !keptTight[g]);
+  const keptBridges = t.kept.filter((k) => k.why === "join path");
+  return `<p>The agents' <b>tight</b> action asks for <b>max_tables = 7</b> with no adaptive widening (the
+  <b>wide</b> action asks for 20). Anchors and paths are found the same way, but the
+  ${t.candidates} candidate tables must now be cut to 7 <b>by fused score</b> — and bridges score low
+  because the question never names them.</p>
+  <table class="mini"><tr><th>kept (7)</th><th class="num">fused rank</th><th>why</th></tr>
+  ${t.kept.map((k) => `<tr><td class="mono">${k.fqn}</td><td class="num">${R[k.fqn]?.fusedRank ?? "-"}</td><td><span class="tag ${keptClass(k.why).slice(5)}">${k.why}</span></td></tr>`).join("")}</table>
+  <p style="margin-top:8px">Bridges cut: ${cutPath.map((d) => `<code>${d.fqn}</code> (#${R[d.fqn]?.fusedRank})`).join(", ")}. ${keptBridges.length ? `${keptBridges.map((k) => `<code>${k.fqn}</code>`).join(", ")} survive${keptBridges.length > 1 ? "" : "s"} as the best-scored bridge${keptBridges.length > 1 ? "s" : ""}.` : "No bridge survives."}</p>
+  ${lostGold.length ? `<div class="callout bad"><b>${lostGold.join(", ")}</b> is cut: the table holding ${esc(DATA.notes.stats_columns.replace(/^batting stores /, ""))}.
+  With the tight context the generator cannot see the statistics the question asks for; this question needs the wide context (or a better lexical match for <i>runs</i>/<i>hits</i>).</div>` : ""}`;
+}
+function sceneTight() { sceneCut(keptTight, true); $("overlay").textContent = `tight options: ${DATA.tight.kept.length} of ${nTables} tables kept`; }
+
+// ------------------------------------------------------------------ stage 8: columns and DDL
+function panelDDL() {
+  const cols = DATA.columns[ctx];
+  const ddl = DATA.ddl[ctx];
+  const tokens = Math.round(ddl.length / 4);
+  const capped = cols.filter((t) => t.anchor && t.columns.length < t.total);
+  return `<p>Every kept table keeps its primary and join keys and its seeded columns. Anchors keep every column, other tables
+  the columns PPR reached; all but the rank-1 table are capped at 40${capped.length ? ` (${capped.map((t) => `<code>${t.fqn}</code>: ${t.columns.length} of ${t.total}`).join(", ")})` : ""}.
+  The result is rendered as annotated DDL, join paths included.</p>
+  <div class="seg" role="group" aria-label="Context"><button data-ctx="tight" aria-pressed="${ctx === "tight"}">tight (${DATA.tight.kept.length})</button><button data-ctx="default" aria-pressed="${ctx === "default"}">default (${DATA.budget.kept.length})</button></div>
+  <table class="mini"><tr><th>table</th><th class="num">cols</th><th>notable columns</th></tr>
+  ${cols.map((t) => {
+    const notable = t.columns.filter((c) => c.reason).slice(0, 4).map((c) => `<code>${c.name}</code>&thinsp;<span class="tag ${/key/.test(c.reason) ? "path" : "seed"}" title="${esc(c.reason)}">${/key/.test(c.reason) ? "key" : "seed"}</span>`).join(" ");
+    return `<tr><td class="mono">${t.anchor ? "◎ " : ""}${t.fqn}${gold.has(t.fqn) ? " ★" : ""}</td><td class="num">${t.columns.length}/${t.total}</td><td>${notable || '<span class="hint">all / PPR-reached</span>'}</td></tr>`;
+  }).join("")}</table>
+  <p class="hint" style="margin:8px 0 0">${ddl.split("\n").length} lines, ~${tokens.toLocaleString()} tokens</p>
+  <pre class="ddl" tabindex="0" aria-label="Rendered DDL">${esc(ddl)}</pre>`;
+}
+function sceneDDL() {
+  const kept = ctx === "tight" ? keptTight : keptDefault;
+  sceneCut(kept, false, false);
+  for (const t of DATA.columns[ctx]) nodeEls[t.fqn].sub.textContent = `${t.columns.length}/${t.total} cols`;
+  $("overlay").textContent = `${ctx} context: kept columns per table`;
+}
+
+const initial = Number(params.get("stage"));
+if (params.get("ctx")) ctx = params.get("ctx");
+go(Number.isFinite(initial) ? initial : 0);
+if (params.has("play")) startPlay();
+})();
+</script>
+</body>
+</html>

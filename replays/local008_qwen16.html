@@ -1,0 +1,1488 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src &#x27;none&#x27;; style-src &#x27;unsafe-inline&#x27;; script-src &#x27;sha256-nLuNjY3CChPi+FyjUSv+AziMJ/jYiWsqhUWi1KrvxlU=&#x27;"><meta name="viewport" content="width=device-width, initial-scale=1"><title>local008</title><style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --fg: #1b1f24; --muted: #5b6470; --line: #c3c9d1; --panel: #f3f4f6;
+  --accent: #b35900; --good: #1a7f37; --bad: #cf222e; --bar: #7d8590; --code: #f6f8fa;
+  --select: #8250df; --backup: #1a7f37;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115; --fg: #e6e8eb; --muted: #9aa4b1; --line: #3b424c; --panel: #1b1f26;
+    --accent: #ffb454; --good: #56d364; --bad: #ff7b72; --bar: #8b949e; --code: #161b22;
+    --select: #c297ff; --backup: #56d364;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto; max-width: 96rem; padding: 16px; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; overflow-wrap: anywhere;
+}
+a { color: inherit; }
+h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+h2 { font-size: 1.1rem; margin: 1.5rem 0 .5rem; }
+h3 { font-size: 1rem; margin: 0 0 .5rem; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: .15rem 1rem; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.scroll { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; }
+th, td { text-align: left; padding: .2rem .75rem .2rem 0; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.legend { margin: .5rem 0 1rem; }
+.swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%;
+  border: 1px solid var(--fg); vertical-align: -1px; margin-right: .4rem; }
+.key { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; color: var(--muted); margin: .5rem 0; }
+.key svg { vertical-align: -3px; margin-right: .3rem; }
+.key .node { stroke: var(--fg); }
+.key .chosen-ring { stroke: var(--accent); fill: none; stroke-width: 2; }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+.muted { color: var(--muted); }
+pre { background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: .6rem;
+  overflow-x: auto; font: 12.5px/1.45 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: normal; white-space: pre-wrap; }
+ul { margin: .25rem 0; padding-left: 1.25rem; }
+details > summary { cursor: pointer; color: var(--muted); }
+
+/* the player: the tree on the left, the node panel on the right */
+.player { display: grid; grid-template-columns: minmax(0, 3fr) minmax(20rem, 2fr); gap: 1rem;
+  align-items: start; }
+@media (max-width: 60rem) { .player { grid-template-columns: minmax(0, 1fr); } }
+.controls { display: none; flex-wrap: wrap; align-items: center; gap: .4rem; margin: 0 0 .5rem; }
+.js .controls { display: flex; }
+.controls button, .controls select { font: inherit; padding: .2rem .6rem; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+.controls input[type=range] { flex: 1 1 12rem; }
+.counter { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 5rem; }
+.caption { display: none; min-height: 3em; margin: 0 0 .5rem; padding: .4rem .6rem;
+  border-left: 4px solid var(--select); background: var(--panel); border-radius: 0 6px 6px 0; }
+.js .caption { display: block; }
+.kind-tell .caption { border-left-color: var(--backup); }
+.stage { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.stage svg { display: block; margin: 0 auto; max-width: 100%; height: auto;
+  font: 11px ui-monospace, "SFMono-Regular", Consolas, monospace; }
+.stage text { fill: var(--fg); }
+.stage .label { fill: var(--muted); text-anchor: middle; }
+.stage .score { text-anchor: middle; dominant-baseline: central; font-size: 9px;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 2.5px; }
+.stage .ex { dominant-baseline: central; font-size: 12px; font-weight: 700; }
+.stage .ex.good { fill: var(--good); }
+.stage .ex.bad { fill: var(--bad); }
+.stage .edge { stroke: var(--line); fill: none; stroke-width: 1.5; }
+.stage .root rect { fill: var(--panel); stroke: var(--muted); stroke-width: 1.5; }
+.stage .root text { text-anchor: middle; dominant-baseline: central; fill: var(--muted); }
+.stage .node { fill: var(--c); stroke: var(--fg); stroke-width: 1; }
+.stage .node.hollow { fill: none; stroke: var(--c); stroke-width: 3; }
+.stage .node.dashed { fill: none; stroke: var(--c); stroke-width: 2.5; stroke-dasharray: 4 3; }
+.stage .chosen-ring { stroke: var(--accent); fill: none; stroke-width: 2.5; }
+.stage a:focus-visible .node, .stage a:hover .node { stroke-width: 3; }
+.panel { border: 1px solid var(--line); border-radius: 6px; padding: .75rem;
+  max-height: 88vh; overflow-y: auto; position: sticky; top: 8px; }
+.panel-empty { color: var(--muted); display: none; }
+.js .panel-empty { display: block; }
+.node-detail { border-top: 1px solid var(--line); padding: .75rem 0; }
+.node-detail:first-of-type { border-top: 0; }
+.node-detail:target { background: var(--panel); }
+.marks { color: var(--accent); font-weight: 600; }
+.prompt-text { margin: .25rem 0; }
+.pending-note { display: none; }
+.schema-context { margin-top: .75rem; }
+.spec { margin: .5rem 0 1rem; }
+
+/* the replay: classes the player script toggles */
+.js .panel .node-detail { display: none; border-top: 0; padding-top: 0; }
+.js .panel .node-detail.selected { display: block; }
+.js .panel-empty[hidden] { display: none; }
+.js .node-detail.pending .outcome { display: none; }
+.js .node-detail.pending .pending-note { display: block; }
+.js .node-g, .js .edge { transition: opacity .35s ease; }
+.js .node-g:not(.shown), .js .edge:not(.shown) { opacity: 0; pointer-events: none; }
+.js .node-g.pending .node { fill: var(--bg); stroke: var(--c); stroke-dasharray: 3 3;
+  stroke-width: 2.5; }
+.js .node-g.pending .score, .js .node-g.pending .ex { opacity: 0; }
+.js .player-main:not(.finished) .chosen-ring { opacity: 0; }
+.js .edge.on-path { stroke: var(--select); stroke-width: 3.5; }
+.js .kind-tell .edge.on-path { stroke: var(--backup); }
+.js .node-g.on-path .node, .js .root.on-path rect { stroke: var(--select); stroke-width: 3.5; }
+.js .kind-tell .node-g.on-path .node, .js .kind-tell .root.on-path rect { stroke: var(--backup); }
+.js .node-g.current .node { stroke: var(--accent); stroke-width: 4; }
+.js .node-g.current .halo { opacity: 1; animation: halo 1.2s ease-out infinite; }
+.halo { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0; }
+@keyframes halo { from { stroke-opacity: .9; } to { stroke-opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .js .node-g, .js .edge { transition: none; }
+  .js .node-g.current .halo { animation: none; }
+}
+</style></head><body id="top"><h1>local008</h1><dl class="facts"><dt>database</dt><dd>Baseball</dd><dt>strategy</dt><dd>abmcts</dd><dt>budget</dt><dd>16</dd><dt>nodes</dt><dd>16</dd><dt>EX of the pick</dt><dd>1</dd><dt>EX of the top score</dt><dd>1</dd><dt>any node correct</dt><dd>1</dd><dt>cost</dt><dd>$0.8902</dd><dt>seconds</dt><dd>814</dd><dt>chosen</dt><dd>n6 by selector</dd></dl><div class="legend"><div class="scroll"><table><thead><tr><th>model</th><th>family</th><th>nodes</th><th>best score</th><th>EX ✓</th></tr></thead><tbody><tr><td><span class="swatch" style="background:#7B5CD6"></span>openrouter:qwen/qwen3.8-max-0902</td><td>qwen</td><td>16</td><td>0.94</td><td>4</td></tr></tbody></table></div><div class="key"><span><svg width="20" height="20" aria-hidden="true"><circle cx="10.0" cy="10.0" r="6" class="node" fill="#0072B2"/></svg>ran (fill: model family)</span><span><svg width="20" height="20" aria-hidden="true"><circle cx="10.0" cy="10.0" r="6" class="node" fill="none" stroke-width="3"/></svg>exec error (hollow)</span><span><svg width="20" height="20" aria-hidden="true"><circle cx="10.0" cy="10.0" r="6" class="node" fill="none" stroke-dasharray="3 2"/></svg>⚠ generation failed</span><span><svg width="20" height="20" aria-hidden="true"><circle cx="10.0" cy="10.0" r="6" class="node" fill="#0072B2"/><circle cx="10.0" cy="10.0" r="9" class="chosen-ring"/></svg>★ chosen (ring)</span><span><svg width="20" height="20" aria-hidden="true"><line x1="2" y1="10.0" x2="18" y2="10.0" stroke-width="3.5" style="stroke:var(--select)"/></svg>selection path</span><span><svg width="20" height="20" aria-hidden="true"><line x1="2" y1="10.0" x2="18" y2="10.0" stroke-width="3.5" style="stroke:var(--backup)"/></svg>reward backup</span></div></div><div class="player"><div class="player-main" id="player"><div class="controls" role="toolbar" aria-label="replay"><button type="button" id="first" title="first step (Home)">|◀</button><button type="button" id="back" title="step back (←)">◀ step</button><button type="button" id="play" title="play or pause (Space)">▶ Play</button><button type="button" id="forward" title="step forward (→)">step ▶</button><button type="button" id="last" title="last step (End)">▶|</button><input type="range" id="step" min="0" max="0" value="0" aria-label="replay step"><span class="counter" id="counter"></span><label>speed <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div><p class="caption" id="caption" aria-live="polite"></p><div class="stage"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 354 274" width="566" height="438" role="img" aria-label="search tree"><path class="edge" id="e-0" d="M177.0 46.0 C177.0 67.0 41.0 67.0 41.0 88.0"/><path class="edge" id="e-1" d="M41.0 110.0 C41.0 131.0 41.0 131.0 41.0 152.0"/><path class="edge" id="e-2" d="M177.0 46.0 C177.0 67.0 75.0 67.0 75.0 88.0"/><path class="edge" id="e-3" d="M75.0 110.0 C75.0 131.0 75.0 131.0 75.0 152.0"/><path class="edge" id="e-4" d="M75.0 174.0 C75.0 195.0 75.0 195.0 75.0 216.0"/><path class="edge" id="e-5" d="M177.0 46.0 C177.0 67.0 126.0 67.0 126.0 88.0"/><path class="edge" id="e-6" d="M126.0 110.0 C126.0 131.0 109.0 131.0 109.0 152.0"/><path class="edge" id="e-7" d="M126.0 110.0 C126.0 131.0 143.0 131.0 143.0 152.0"/><path class="edge" id="e-8" d="M177.0 46.0 C177.0 67.0 194.0 67.0 194.0 88.0"/><path class="edge" id="e-9" d="M194.0 110.0 C194.0 131.0 177.0 131.0 177.0 152.0"/><path class="edge" id="e-10" d="M194.0 110.0 C194.0 131.0 211.0 131.0 211.0 152.0"/><path class="edge" id="e-11" d="M177.0 46.0 C177.0 67.0 262.0 67.0 262.0 88.0"/><path class="edge" id="e-12" d="M262.0 110.0 C262.0 131.0 245.0 131.0 245.0 152.0"/><path class="edge" id="e-13" d="M262.0 110.0 C262.0 131.0 279.0 131.0 279.0 152.0"/><path class="edge" id="e-14" d="M177.0 46.0 C177.0 67.0 313.0 67.0 313.0 88.0"/><path class="edge" id="e-15" d="M313.0 110.0 C313.0 131.0 313.0 131.0 313.0 152.0"/><g class="root" id="root-node"><rect x="139.0" y="24.0" width="76" height="22" rx="6"/><text x="177.0" y="35.0">question</text></g><a href="#node-0" class="node-g" id="g-0"><title data-pending="n0 · openrouter:qwen/qwen3.8-max-0902 · generating">n0 · openrouter:qwen/qwen3.8-max-0902 · score 0.49 · draft · wide · EX ✗</title><circle class="halo" cx="41.0" cy="99.0" r="16"/><circle cx="41.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="41.0" y="99.0">.49</text><text class="label" x="41.0" y="122.0">n0</text><text class="ex bad" x="54.0" y="88.0">✗</text></a><a href="#node-1" class="node-g" id="g-1"><title data-pending="n12 · openrouter:qwen/qwen3.8-max-0902 · generating">n12 · openrouter:qwen/qwen3.8-max-0902 · score 0.85 · refines n0 · wide · EX ✗</title><circle class="halo" cx="41.0" cy="163.0" r="16"/><circle cx="41.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="41.0" y="163.0">.85</text><text class="label" x="41.0" y="186.0">n12</text><text class="ex bad" x="54.0" y="152.0">✗</text></a><a href="#node-2" class="node-g" id="g-2"><title data-pending="n1 · openrouter:qwen/qwen3.8-max-0902 · generating">n1 · openrouter:qwen/qwen3.8-max-0902 · score 0.79 · draft · wide · EX ✗</title><circle class="halo" cx="75.0" cy="99.0" r="16"/><circle cx="75.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="75.0" y="99.0">.79</text><text class="label" x="75.0" y="122.0">n1</text><text class="ex bad" x="88.0" y="88.0">✗</text></a><a href="#node-3" class="node-g" id="g-3"><title data-pending="n8 · openrouter:qwen/qwen3.8-max-0902 · generating">n8 · openrouter:qwen/qwen3.8-max-0902 · score 0.79 · refines n1 · wide · EX ✗</title><circle class="halo" cx="75.0" cy="163.0" r="16"/><circle cx="75.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="75.0" y="163.0">.79</text><text class="label" x="75.0" y="186.0">n8</text><text class="ex bad" x="88.0" y="152.0">✗</text></a><a href="#node-4" class="node-g" id="g-4"><title data-pending="n14 · openrouter:qwen/qwen3.8-max-0902 · generating">n14 · openrouter:qwen/qwen3.8-max-0902 · score 0.92 · refines n8 · wide · EX ✓</title><circle class="halo" cx="75.0" cy="227.0" r="16"/><circle cx="75.0" cy="227.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="75.0" y="227.0">.92</text><text class="label" x="75.0" y="250.0">n14</text><text class="ex good" x="88.0" y="216.0">✓</text></a><a href="#node-5" class="node-g" id="g-5"><title data-pending="n2 · openrouter:qwen/qwen3.8-max-0902 · generating">n2 · openrouter:qwen/qwen3.8-max-0902 · score 0.73 · draft · tight · EX ✗</title><circle class="halo" cx="126.0" cy="99.0" r="16"/><circle cx="126.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="126.0" y="99.0">.73</text><text class="label" x="126.0" y="122.0">n2</text><text class="ex bad" x="139.0" y="88.0">✗</text></a><a href="#node-6" class="node-g" id="g-6"><title data-pending="n7 · openrouter:qwen/qwen3.8-max-0902 · generating">n7 · openrouter:qwen/qwen3.8-max-0902 · score 0.82 · refines n2 · tight · EX ✗</title><circle class="halo" cx="109.0" cy="163.0" r="16"/><circle cx="109.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="109.0" y="163.0">.82</text><text class="label" x="109.0" y="186.0">n7</text><text class="ex bad" x="122.0" y="152.0">✗</text></a><a href="#node-7" class="node-g" id="g-7"><title data-pending="n13 · openrouter:qwen/qwen3.8-max-0902 · generating">n13 · openrouter:qwen/qwen3.8-max-0902 · score 0.81 · refines n2 · wide · EX ✗</title><circle class="halo" cx="143.0" cy="163.0" r="16"/><circle cx="143.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="143.0" y="163.0">.81</text><text class="label" x="143.0" y="186.0">n13</text><text class="ex bad" x="156.0" y="152.0">✗</text></a><a href="#node-8" class="node-g" id="g-8"><title data-pending="n3 · openrouter:qwen/qwen3.8-max-0902 · generating">n3 · openrouter:qwen/qwen3.8-max-0902 · score 0.70 · draft · wide · EX ✗</title><circle class="halo" cx="194.0" cy="99.0" r="16"/><circle cx="194.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="194.0" y="99.0">.70</text><text class="label" x="194.0" y="122.0">n3</text><text class="ex bad" x="207.0" y="88.0">✗</text></a><a href="#node-9" class="node-g" id="g-9"><title data-pending="n4 · openrouter:qwen/qwen3.8-max-0902 · generating">n4 · openrouter:qwen/qwen3.8-max-0902 · score 0.90 · refines n3 · wide · EX ✗</title><circle class="halo" cx="177.0" cy="163.0" r="16"/><circle cx="177.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="177.0" y="163.0">.90</text><text class="label" x="177.0" y="186.0">n4</text><text class="ex bad" x="190.0" y="152.0">✗</text></a><a href="#node-10" class="node-g" id="g-10"><title data-pending="n6 · openrouter:qwen/qwen3.8-max-0902 · generating">n6 · openrouter:qwen/qwen3.8-max-0902 · score 0.94 · refines n3 · wide · ★ chosen (selector) · EX ✓</title><circle class="halo" cx="211.0" cy="163.0" r="16"/><circle cx="211.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><circle class="chosen-ring" cx="211.0" cy="163.0" r="15"/><text class="score" x="211.0" y="163.0">.94</text><text class="label" x="211.0" y="186.0">n6</text><text class="ex good" x="224.0" y="152.0">✓</text></a><a href="#node-11" class="node-g" id="g-11"><title data-pending="n5 · openrouter:qwen/qwen3.8-max-0902 · generating">n5 · openrouter:qwen/qwen3.8-max-0902 · score 0.64 · draft · wide · EX ✗</title><circle class="halo" cx="262.0" cy="99.0" r="16"/><circle cx="262.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="262.0" y="99.0">.64</text><text class="label" x="262.0" y="122.0">n5</text><text class="ex bad" x="275.0" y="88.0">✗</text></a><a href="#node-12" class="node-g" id="g-12"><title data-pending="n9 · openrouter:qwen/qwen3.8-max-0902 · generating">n9 · openrouter:qwen/qwen3.8-max-0902 · score 0.94 · refines n5 · tight · EX ✓</title><circle class="halo" cx="245.0" cy="163.0" r="16"/><circle cx="245.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="245.0" y="163.0">.94</text><text class="label" x="245.0" y="186.0">n9</text><text class="ex good" x="258.0" y="152.0">✓</text></a><a href="#node-13" class="node-g" id="g-13"><title data-pending="n11 · openrouter:qwen/qwen3.8-max-0902 · generating">n11 · openrouter:qwen/qwen3.8-max-0902 · score 0.93 · refines n5 · tight · EX ✓</title><circle class="halo" cx="279.0" cy="163.0" r="16"/><circle cx="279.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="279.0" y="163.0">.93</text><text class="label" x="279.0" y="186.0">n11</text><text class="ex good" x="292.0" y="152.0">✓</text></a><a href="#node-14" class="node-g" id="g-14"><title data-pending="n10 · openrouter:qwen/qwen3.8-max-0902 · generating">n10 · openrouter:qwen/qwen3.8-max-0902 · score 0.74 · draft · wide · EX ✗</title><circle class="halo" cx="313.0" cy="99.0" r="16"/><circle cx="313.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="313.0" y="99.0">.74</text><text class="label" x="313.0" y="122.0">n10</text><text class="ex bad" x="326.0" y="88.0">✗</text></a><a href="#node-15" class="node-g" id="g-15"><title data-pending="n15 · openrouter:qwen/qwen3.8-max-0902 · generating">n15 · openrouter:qwen/qwen3.8-max-0902 · score 0.81 · refines n10 · wide · EX ✗</title><circle class="halo" cx="313.0" cy="163.0" r="16"/><circle cx="313.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="313.0" y="163.0">.81</text><text class="label" x="313.0" y="186.0">n15</text><text class="ex bad" x="326.0" y="152.0">✗</text></a></svg></div></div><aside class="panel" aria-label="node details"><p class="panel-empty" id="panel-empty">Play the replay, or click a node, to see its SQL and generator prompt.</p><section class="node-detail" id="node-0"><h3><span class="swatch" style="background:#7B5CD6"></span>n0 · qwen3.8-max-0902<span class="outcome"> · 0.49 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 0.80, judge 0.14, x 0.40</dd><dt>rows</dt><dd>1</dd><dt>findings</dt><dd>ungrouped_column</dd><dt>time</dt><dd>41.1 s</dd></dl><pre><code>SELECT T1.name_given, MAX(T2.g), MAX(T2.r), MAX(T2.h), MAX(T2.hr) FROM player AS T1 INNER JOIN batting AS T2 ON T1.player_id = T2.player_id</code></pre><p><span class="muted">rationale:</span> The batting table holds per-season games played (g), runs (r), hits (h) and home runs (hr); joining it to player on player_id lets us report the player&#x27;s given name along with the maximum value of each of those four statistics.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.03</td></tr><tr><td>right_columns</td><td>0.03</td></tr><tr><td>right_filters</td><td>0.08</td></tr><tr><td>right_grain</td><td>0.04</td></tr><tr><td>right_order</td><td>0.56</td></tr><tr><td>plausible</td><td>0.08</td></tr><tr><td>missing home_game</td><td>0.20</td></tr><tr><td>missing all_star</td><td>0.10</td></tr><tr><td>missing team</td><td>0.14</td></tr><tr><td>missing college</td><td>0.11</td></tr><tr><td>missing player_award</td><td>0.09</td></tr><tr><td>missing park</td><td>0.17</td></tr><tr><td>missing player_college</td><td>0.14</td></tr><tr><td>missing player_award_vote</td><td>0.13</td></tr><tr><td>missing team_franchise</td><td>0.11</td></tr><tr><td>missing manager_award</td><td>0.18</td></tr><tr><td>missing manager_award_vote</td><td>0.08</td></tr><tr><td>missing fielding_outfield</td><td>0.09</td></tr><tr><td>missing manager_half</td><td>0.12</td></tr><tr><td>missing appearances</td><td>0.35</td></tr><tr><td>missing batting_postseason</td><td>0.16</td></tr><tr><td>missing manager</td><td>0.17</td></tr><tr><td>missing fielding</td><td>0.11</td></tr><tr><td>missing fielding_postseason</td><td>0.07</td></tr><tr><td>missing hall_of_fame</td><td>0.10</td></tr><tr><td>missing pitching</td><td>0.13</td></tr><tr><td>missing pitching_postseason</td><td>0.09</td></tr><tr><td>missing salary</td><td>0.07</td></tr></tbody></table></div><p class="muted">feedback</p><ul><li>`T1.name_given` is selected but neither aggregated nor in GROUP BY</li><li>reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.03)</li><li>reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.03)</li><li>reviewer doubts: Does the query apply every condition stated in the question, and no condition the question does not state? (p=0.08)</li><li>reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.04)</li><li>reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.08)</li></ul><p><span class="muted">advice:</span> - Add a player-level grouping or ranking step; do not select `name_given` alongside global `MAX()` values without grouping by player.
+- Ensure each returned statistic belongs to the same qualifying player/record, rather than taking independent maximums from different players.
+- Decide whether “highest value” means single-season max or career total, then aggregate batting rows per player consistently before choosing the top player(s).
+- Return one row per qualifying player (handling ties if needed) with their corresponding `g`, `r`, `h`, and `hr` values.</p></div></section><section class="node-detail" id="node-1"><h3><span class="swatch" style="background:#7B5CD6"></span>n12 · qwen3.8-max-0902<span class="outcome"> · 0.85 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n0</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.71, x 0.82</dd><dt>rows</dt><dd>3</dd><dt>time</dt><dd>123.1 s</dd></dl><pre><code>WITH career AS (SELECT player_id, SUM(g) AS g, SUM(r) AS r, SUM(h) AS h, SUM(hr) AS hr FROM batting GROUP BY player_id) SELECT p.name_given, c.g, c.r, c.h, c.hr FROM career AS c INNER JOIN player AS p ON p.player_id = c.player_id WHERE c.g = (SELECT MAX(g) FROM career) OR c.r = (SELECT MAX(r) FROM career) OR c.h = (SELECT MAX(h) FROM career) OR c.hr = (SELECT MAX(hr) FROM career) ORDER BY c.g DESC</code></pre><p><span class="muted">rationale:</span> Batting rows are first aggregated to one career line per player_id (games, runs, hits, home runs), then joined to player for the given name; the WHERE clause keeps only the player(s) holding the highest career value in any of the four stats, so each returned row is a qualifying player with their own corresponding g/r/h/hr values (Pete Rose – games &amp; hits, Rickey Henderson – runs, Barry Bonds – home runs).</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.49):
+SQL:
+SELECT T1.name_given, MAX(T2.g), MAX(T2.r), MAX(T2.h), MAX(T2.hr) FROM player AS T1 INNER JOIN batting AS T2 ON T1.player_id = T2.player_id
+Result: 1 rows, columns: name_given, MAX(T2.g), MAX(T2.r), MAX(T2.h), MAX(T2.hr) (showing 1)
+name_given | MAX(T2.g) | MAX(T2.r) | MAX(T2.h) | MAX(T2.hr)
+Donald William | 165 |  |  | 
+Judge, weakest first (1 = yes): answers_question 0.03, right_columns 0.03, right_grain 0.04, right_filters 0.08, plausible 0.08, right_order 0.56
+Its author&#x27;s reasoning: The batting table holds per-season games played (g), runs (r), hits (h) and home runs (hr); joining it to player on player_id lets us report the player&#x27;s given name along with the maximum value of each of those four statistics.
+
+Problems found:
+- `T1.name_given` is selected but neither aggregated nor in GROUP BY
+- reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.03)
+- reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.03)
+- reviewer doubts: Does the query apply every condition stated in the question, and no condition the question does not state? (p=0.08)
+- reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.04)
+- reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.08)
+
+Reviewer advice:
+- Add a player-level grouping or ranking step; do not select `name_given` alongside global `MAX()` values without grouping by player.
+- Ensure each returned statistic belongs to the same qualifying player/record, rather than taking independent maximums from different players.
+- Decide whether “highest value” means single-season max or career total, then aggregate batting rows per player consistently before choosing the top player(s).
+- Return one row per qualifying player (handling ties if needed) with their corresponding `g`, `r`, `h`, and `hr` values.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.71</td></tr><tr><td>right_columns</td><td>0.66</td></tr><tr><td>right_filters</td><td>0.69</td></tr><tr><td>right_grain</td><td>0.67</td></tr><tr><td>right_order</td><td>0.68</td></tr><tr><td>plausible</td><td>0.83</td></tr><tr><td>missing home_game</td><td>0.18</td></tr><tr><td>missing all_star</td><td>0.13</td></tr><tr><td>missing team</td><td>0.16</td></tr><tr><td>missing college</td><td>0.10</td></tr><tr><td>missing player_award</td><td>0.08</td></tr><tr><td>missing park</td><td>0.21</td></tr><tr><td>missing player_college</td><td>0.17</td></tr><tr><td>missing player_award_vote</td><td>0.10</td></tr><tr><td>missing team_franchise</td><td>0.16</td></tr><tr><td>missing manager_award</td><td>0.14</td></tr><tr><td>missing manager_award_vote</td><td>0.22</td></tr><tr><td>missing fielding_outfield</td><td>0.11</td></tr><tr><td>missing manager_half</td><td>0.18</td></tr><tr><td>missing appearances</td><td>0.24</td></tr><tr><td>missing batting_postseason</td><td>0.21</td></tr><tr><td>missing manager</td><td>0.15</td></tr><tr><td>missing fielding</td><td>0.11</td></tr><tr><td>missing fielding_postseason</td><td>0.13</td></tr><tr><td>missing hall_of_fame</td><td>0.10</td></tr><tr><td>missing pitching</td><td>0.16</td></tr><tr><td>missing pitching_postseason</td><td>0.11</td></tr><tr><td>missing salary</td><td>0.09</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-2"><h3><span class="swatch" style="background:#7B5CD6"></span>n1 · qwen3.8-max-0902<span class="outcome"> · 0.79 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.59, x 0.75</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>77.7 s</dd></dl><pre><code>SELECT DISTINCT p.name_given AS name_given, CAST(b.g AS INTEGER) AS score
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT p.name_given, CAST(b.r AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT p.name_given, CAST(b.h AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT p.name_given, CAST(b.hr AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)</code></pre><p><span class="muted">rationale:</span> The batting table holds season-level games (g), runs (r), hits (h) and home runs (hr); each branch finds the maximum of one stat (cast to integer so blank/empty cells are ignored) and joins to player on player_id to return the player&#x27;s given name with that top value, then all four branches are combined.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.51</td></tr><tr><td>right_columns</td><td>0.60</td></tr><tr><td>right_filters</td><td>0.67</td></tr><tr><td>right_grain</td><td>0.57</td></tr><tr><td>right_order</td><td>0.86</td></tr><tr><td>plausible</td><td>0.33</td></tr><tr><td>missing home_game</td><td>0.20</td></tr><tr><td>missing all_star</td><td>0.13</td></tr><tr><td>missing team</td><td>0.23</td></tr><tr><td>missing college</td><td>0.22</td></tr><tr><td>missing player_award</td><td>0.08</td></tr><tr><td>missing park</td><td>0.28</td></tr><tr><td>missing player_college</td><td>0.32</td></tr><tr><td>missing player_award_vote</td><td>0.15</td></tr><tr><td>missing team_franchise</td><td>0.13</td></tr><tr><td>missing manager_award</td><td>0.28</td></tr><tr><td>missing manager_award_vote</td><td>0.23</td></tr><tr><td>missing fielding_outfield</td><td>0.14</td></tr><tr><td>missing manager_half</td><td>0.18</td></tr><tr><td>missing appearances</td><td>0.29</td></tr><tr><td>missing batting_postseason</td><td>0.18</td></tr><tr><td>missing manager</td><td>0.15</td></tr><tr><td>missing fielding</td><td>0.14</td></tr><tr><td>missing fielding_postseason</td><td>0.09</td></tr><tr><td>missing hall_of_fame</td><td>0.11</td></tr><tr><td>missing pitching</td><td>0.15</td></tr><tr><td>missing pitching_postseason</td><td>0.11</td></tr><tr><td>missing salary</td><td>0.11</td></tr></tbody></table></div><p class="muted">feedback</p><ul><li>reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.33)</li></ul><p><span class="muted">advice:</span> - Add an explicit statistic label or sort key for each branch, so each returned score can be matched to games, runs, hits, or home runs.
+- Decide whether the question wants single-season maxima or career totals; if career totals, aggregate by player before finding the maximum.
+- Include `player_id` or a full player identifier/name in the logic/output to avoid conflating different players with the same `name_given`.
+- Use the original numeric columns in `MAX` and comparisons unless casting is needed to clean string-typed data.</p></div></section><section class="node-detail" id="node-3"><h3><span class="swatch" style="background:#7B5CD6"></span>n8 · qwen3.8-max-0902<span class="outcome"> · 0.79 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n1</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.59, x 0.75</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>208.2 s</dd></dl><pre><code>SELECT stat, name_given, score FROM (
+SELECT DISTINCT &#x27;games played&#x27; AS stat, p.name_given AS name_given, CAST(b.g AS INTEGER) AS score
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT &#x27;runs&#x27;, p.name_given, CAST(b.r AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT &#x27;hits&#x27;, p.name_given, CAST(b.h AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT &#x27;home runs&#x27;, p.name_given, CAST(b.hr AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)
+) t
+ORDER BY CASE stat WHEN &#x27;games played&#x27; THEN 1 WHEN &#x27;runs&#x27; THEN 2 WHEN &#x27;hits&#x27; THEN 3 ELSE 4 END</code></pre><p><span class="muted">rationale:</span> Season-level batting holds games (g), runs (r), hits (h) and home runs (hr); each branch selects rows equal to the maximum of one stat (CAST to INTEGER since r/h/hr contain empty-string text that would otherwise dominate MAX) joined to player on player_id for the given name, labelled by stat and ordered games→runs→hits→home runs via an outer wrapper (SQLite cannot use expressions in a compound-select ORDER BY).</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.79):
+SQL:
+SELECT DISTINCT p.name_given AS name_given, CAST(b.g AS INTEGER) AS score
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT p.name_given, CAST(b.r AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT p.name_given, CAST(b.h AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT p.name_given, CAST(b.hr AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)
+Result: 4 rows, columns: name_given, score (showing 4)
+name_given | score
+Maurice Morning | 165
+William Robert | 192
+Ichiro | 262
+Barry Lamar | 73
+Judge, weakest first (1 = yes): plausible 0.33, answers_question 0.51, right_grain 0.57, right_columns 0.60, right_filters 0.67, right_order 0.86
+Its author&#x27;s reasoning: The batting table holds season-level games (g), runs (r), hits (h) and home runs (hr); each branch finds the maximum of one stat (cast to integer so blank/empty cells are ignored) and joins to player on player_id to return the player&#x27;s given name with that top value, then all four branches are combined.
+
+Problems found:
+- reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.33)
+
+Reviewer advice:
+- Add an explicit statistic label or sort key for each branch, so each returned score can be matched to games, runs, hits, or home runs.
+- Decide whether the question wants single-season maxima or career totals; if career totals, aggregate by player before finding the maximum.
+- Include `player_id` or a full player identifier/name in the logic/output to avoid conflating different players with the same `name_given`.
+- Use the original numeric columns in `MAX` and comparisons unless casting is needed to clean string-typed data.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.51</td></tr><tr><td>right_columns</td><td>0.62</td></tr><tr><td>right_filters</td><td>0.63</td></tr><tr><td>right_grain</td><td>0.53</td></tr><tr><td>right_order</td><td>0.82</td></tr><tr><td>plausible</td><td>0.43</td></tr><tr><td>missing home_game</td><td>0.25</td></tr><tr><td>missing all_star</td><td>0.16</td></tr><tr><td>missing team</td><td>0.21</td></tr><tr><td>missing college</td><td>0.16</td></tr><tr><td>missing player_award</td><td>0.12</td></tr><tr><td>missing park</td><td>0.34</td></tr><tr><td>missing player_college</td><td>0.14</td></tr><tr><td>missing player_award_vote</td><td>0.13</td></tr><tr><td>missing team_franchise</td><td>0.17</td></tr><tr><td>missing manager_award</td><td>0.19</td></tr><tr><td>missing manager_award_vote</td><td>0.19</td></tr><tr><td>missing fielding_outfield</td><td>0.16</td></tr><tr><td>missing manager_half</td><td>0.19</td></tr><tr><td>missing appearances</td><td>0.31</td></tr><tr><td>missing batting_postseason</td><td>0.21</td></tr><tr><td>missing manager</td><td>0.12</td></tr><tr><td>missing fielding</td><td>0.11</td></tr><tr><td>missing fielding_postseason</td><td>0.15</td></tr><tr><td>missing hall_of_fame</td><td>0.10</td></tr><tr><td>missing pitching</td><td>0.21</td></tr><tr><td>missing pitching_postseason</td><td>0.12</td></tr><tr><td>missing salary</td><td>0.16</td></tr></tbody></table></div><p class="muted">feedback</p><ul><li>reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.43)</li></ul><p><span class="muted">advice:</span> - Aggregate batting stats before finding the maximum; the current query compares individual stint rows and can miss combined season/career totals.
+- Choose one grain and apply it consistently: group by `player_id, year` for single-season records, or by `player_id` for career records, then take the max of the summed values.
+- Use the intended source for “games played”; if total games are required, consider `appearances.g_all` rather than only `batting.g`.
+- Keep ties when selecting the maximum for each metric and deduplicate by player/score rather than relying on row-level results.</p></div></section><section class="node-detail" id="node-4"><h3><span class="swatch" style="background:#7B5CD6"></span>n14 · qwen3.8-max-0902<span class="outcome"> · 0.92 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n8</dd><dt>depth</dt><dd>2</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.85, x 0.91</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>325.8 s</dd></dl><pre><code>WITH career AS (
+  SELECT player_id,
+         SUM(CAST(g AS INTEGER)) AS g_total,
+         SUM(CAST(r AS INTEGER)) AS r_total,
+         SUM(CAST(h AS INTEGER)) AS h_total,
+         SUM(CAST(hr AS INTEGER)) AS hr_total
+  FROM batting
+  GROUP BY player_id
+)
+SELECT name_given, stat, score FROM (
+  SELECT DISTINCT p.name_given AS name_given, &#x27;games played&#x27; AS stat, c.g_total AS score
+  FROM career c JOIN player p ON p.player_id = c.player_id
+  WHERE c.g_total = (SELECT MAX(g_total) FROM career)
+  UNION ALL
+  SELECT DISTINCT p.name_given, &#x27;runs&#x27;, c.r_total
+  FROM career c JOIN player p ON p.player_id = c.player_id
+  WHERE c.r_total = (SELECT MAX(r_total) FROM career)
+  UNION ALL
+  SELECT DISTINCT p.name_given, &#x27;hits&#x27;, c.h_total
+  FROM career c JOIN player p ON p.player_id = c.player_id
+  WHERE c.h_total = (SELECT MAX(h_total) FROM career)
+  UNION ALL
+  SELECT DISTINCT p.name_given, &#x27;home runs&#x27;, c.hr_total
+  FROM career c JOIN player p ON p.player_id = c.player_id
+  WHERE c.hr_total = (SELECT MAX(hr_total) FROM career)
+) t
+ORDER BY CASE stat WHEN &#x27;games played&#x27; THEN 1 WHEN &#x27;runs&#x27; THEN 2 WHEN &#x27;hits&#x27; THEN 3 ELSE 4 END, score DESC</code></pre><p><span class="muted">rationale:</span> Batting rows are per player/year/stint, so they are first aggregated to one career row per player_id (SUM of g, r, h, hr, cast to INTEGER because the columns hold empty strings); each branch then keeps every player tied at the career maximum of one metric and joins player on player_id to report name_given alongside the value, ordered games played -&gt; runs -&gt; hits -&gt; home runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.79):
+SQL:
+SELECT stat, name_given, score FROM (
+SELECT DISTINCT &#x27;games played&#x27; AS stat, p.name_given AS name_given, CAST(b.g AS INTEGER) AS score
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT &#x27;runs&#x27;, p.name_given, CAST(b.r AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT &#x27;hits&#x27;, p.name_given, CAST(b.h AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting)
+UNION ALL
+SELECT DISTINCT &#x27;home runs&#x27;, p.name_given, CAST(b.hr AS INTEGER)
+FROM batting b
+JOIN player p ON p.player_id = b.player_id
+WHERE CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)
+) t
+ORDER BY CASE stat WHEN &#x27;games played&#x27; THEN 1 WHEN &#x27;runs&#x27; THEN 2 WHEN &#x27;hits&#x27; THEN 3 ELSE 4 END
+Result: 4 rows, columns: stat, name_given, score (showing 4)
+stat | name_given | score
+games played | Maurice Morning | 165
+runs | William Robert | 192
+hits | Ichiro | 262
+home runs | Barry Lamar | 73
+Judge, weakest first (1 = yes): plausible 0.43, answers_question 0.51, right_grain 0.53, right_columns 0.62, right_filters 0.63, right_order 0.82
+Its author&#x27;s reasoning: Season-level batting holds games (g), runs (r), hits (h) and home runs (hr); each branch selects rows equal to the maximum of one stat (CAST to INTEGER since r/h/hr contain empty-string text that would otherwise dominate MAX) joined to player on player_id for the given name, labelled by stat and ordered games→runs→hits→home runs via an outer wrapper (SQLite cannot use expressions in a compound-select ORDER BY).
+
+Problems found:
+- reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.43)
+
+Reviewer advice:
+- Aggregate batting stats before finding the maximum; the current query compares individual stint rows and can miss combined season/career totals.
+- Choose one grain and apply it consistently: group by `player_id, year` for single-season records, or by `player_id` for career records, then take the max of the summed values.
+- Use the intended source for “games played”; if total games are required, consider `appearances.g_all` rather than only `batting.g`.
+- Keep ties when selecting the maximum for each metric and deduplicate by player/score rather than relying on row-level results.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.90</td></tr><tr><td>right_columns</td><td>0.88</td></tr><tr><td>right_filters</td><td>0.82</td></tr><tr><td>right_grain</td><td>0.82</td></tr><tr><td>right_order</td><td>0.80</td></tr><tr><td>plausible</td><td>0.85</td></tr><tr><td>missing home_game</td><td>0.21</td></tr><tr><td>missing all_star</td><td>0.12</td></tr><tr><td>missing team</td><td>0.21</td></tr><tr><td>missing college</td><td>0.23</td></tr><tr><td>missing player_award</td><td>0.17</td></tr><tr><td>missing park</td><td>0.31</td></tr><tr><td>missing player_college</td><td>0.32</td></tr><tr><td>missing player_award_vote</td><td>0.24</td></tr><tr><td>missing team_franchise</td><td>0.18</td></tr><tr><td>missing manager_award</td><td>0.19</td></tr><tr><td>missing manager_award_vote</td><td>0.27</td></tr><tr><td>missing fielding_outfield</td><td>0.11</td></tr><tr><td>missing manager_half</td><td>0.14</td></tr><tr><td>missing appearances</td><td>0.17</td></tr><tr><td>missing batting_postseason</td><td>0.19</td></tr><tr><td>missing manager</td><td>0.15</td></tr><tr><td>missing fielding</td><td>0.12</td></tr><tr><td>missing fielding_postseason</td><td>0.17</td></tr><tr><td>missing hall_of_fame</td><td>0.11</td></tr><tr><td>missing pitching</td><td>0.19</td></tr><tr><td>missing pitching_postseason</td><td>0.13</td></tr><tr><td>missing salary</td><td>0.14</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-5"><h3><span class="swatch" style="background:#7B5CD6"></span>n2 · qwen3.8-max-0902<span class="outcome"> · 0.73 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.47, x 0.68</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>99.3 s</dd></dl><pre><code>SELECT p.name_given, b.g, b.r, b.h, b.hr FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting) OR CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting) OR CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting) OR CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)</code></pre><p><span class="muted">rationale:</span> The batting table holds per-season games (g), runs (r), hits (h) and home runs (hr); joining it to player on player_id lets us report name_given. Rows are kept when any of the four stats equals the table-wide maximum (CAST is needed because some numeric cells are stored as empty strings), yielding the record holders with their batting lines.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.32</td></tr><tr><td>right_columns</td><td>0.42</td></tr><tr><td>right_filters</td><td>0.52</td></tr><tr><td>right_grain</td><td>0.36</td></tr><tr><td>right_order</td><td>0.82</td></tr><tr><td>plausible</td><td>0.37</td></tr><tr><td>missing home_game</td><td>0.20</td></tr><tr><td>missing all_star</td><td>0.09</td></tr><tr><td>missing team</td><td>0.14</td></tr><tr><td>missing college</td><td>0.15</td></tr><tr><td>missing player_award</td><td>0.08</td></tr><tr><td>missing park</td><td>0.22</td></tr><tr><td>missing player_college</td><td>0.12</td></tr><tr><td>missing player_award_vote</td><td>0.11</td></tr><tr><td>missing team_franchise</td><td>0.12</td></tr><tr><td>missing manager_award</td><td>0.13</td></tr><tr><td>missing manager_award_vote</td><td>0.14</td></tr><tr><td>missing fielding_outfield</td><td>0.09</td></tr><tr><td>missing manager_half</td><td>0.11</td></tr><tr><td>missing appearances</td><td>0.28</td></tr><tr><td>missing batting_postseason</td><td>0.15</td></tr><tr><td>missing manager</td><td>0.12</td></tr><tr><td>missing fielding</td><td>0.08</td></tr><tr><td>missing fielding_postseason</td><td>0.11</td></tr><tr><td>missing hall_of_fame</td><td>0.09</td></tr><tr><td>missing pitching</td><td>0.20</td></tr><tr><td>missing pitching_postseason</td><td>0.11</td></tr><tr><td>missing salary</td><td>0.12</td></tr></tbody></table></div><p class="muted">feedback</p><ul><li>reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.32)</li><li>reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.42)</li><li>reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.36)</li><li>reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.37)</li></ul><p><span class="muted">advice:</span> - Replace the single `WHERE ... OR ...` filter with four separate maximum checks, one for games, runs, hits, and home runs.
+- Return only the relevant maximum value for each statistic, or add a label column showing which statistic each row represents.
+- Avoid returning the other three batting columns when a row qualifies for only one category, since those values are not the requested corresponding scores.
+- If career totals are intended, aggregate batting stats by player before finding the maxima; if single-season highs are intended, keep one row per qualifying season/player and handle ties explicitly.</p></div></section><section class="node-detail" id="node-6"><h3><span class="swatch" style="background:#7B5CD6"></span>n7 · qwen3.8-max-0902<span class="outcome"> · 0.82 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n2</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.65, x 0.79</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>103.7 s</dd></dl><pre><code>SELECT &#x27;Games Played&#x27; AS statistic, p.name_given, CAST(b.g AS INTEGER) AS stat_value FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting)
+UNION ALL
+SELECT &#x27;Runs&#x27;, p.name_given, CAST(b.r AS INTEGER) FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting)
+UNION ALL
+SELECT &#x27;Hits&#x27;, p.name_given, CAST(b.h AS INTEGER) FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting)
+UNION ALL
+SELECT &#x27;Home Runs&#x27;, p.name_given, CAST(b.hr AS INTEGER) FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)</code></pre><p><span class="muted">rationale:</span> The batting table stores per-season games (g), runs (r), hits (h) and home runs (hr); joining it to player on player_id supplies name_given. Instead of one OR-filter that returns all four columns for every record holder, four separate maximum checks are UNION ALL&#x27;d so each row is one statistic, its record-holding player&#x27;s given name, and only the corresponding record value (labelled by the statistic column). CAST handles numeric cells stored as text/empty strings.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.73):
+SQL:
+SELECT p.name_given, b.g, b.r, b.h, b.hr FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting) OR CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting) OR CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting) OR CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)
+Result: 4 rows, columns: name_given, g, r, h, hr (showing 4)
+name_given | g | r | h | hr
+William Robert | 129 | 192 | 220 | 4
+Maurice Morning | 165 | 130 | 208 | 6
+Barry Lamar | 153 | 129 | 156 | 73
+Ichiro | 161 | 101 | 262 | 8
+Judge, weakest first (1 = yes): answers_question 0.32, right_grain 0.36, plausible 0.37, right_columns 0.42, right_filters 0.52, right_order 0.82
+Its author&#x27;s reasoning: The batting table holds per-season games (g), runs (r), hits (h) and home runs (hr); joining it to player on player_id lets us report name_given. Rows are kept when any of the four stats equals the table-wide maximum (CAST is needed because some numeric cells are stored as empty strings), yielding the record holders with their batting lines.
+
+Problems found:
+- reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.32)
+- reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.42)
+- reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.36)
+- reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.37)
+
+Reviewer advice:
+- Replace the single `WHERE ... OR ...` filter with four separate maximum checks, one for games, runs, hits, and home runs.
+- Return only the relevant maximum value for each statistic, or add a label column showing which statistic each row represents.
+- Avoid returning the other three batting columns when a row qualifies for only one category, since those values are not the requested corresponding scores.
+- If career totals are intended, aggregate batting stats by player before finding the maxima; if single-season highs are intended, keep one row per qualifying season/player and handle ties explicitly.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.57</td></tr><tr><td>right_columns</td><td>0.67</td></tr><tr><td>right_filters</td><td>0.73</td></tr><tr><td>right_grain</td><td>0.64</td></tr><tr><td>right_order</td><td>0.90</td></tr><tr><td>plausible</td><td>0.40</td></tr><tr><td>missing home_game</td><td>0.23</td></tr><tr><td>missing all_star</td><td>0.09</td></tr><tr><td>missing team</td><td>0.16</td></tr><tr><td>missing college</td><td>0.19</td></tr><tr><td>missing player_award</td><td>0.12</td></tr><tr><td>missing park</td><td>0.23</td></tr><tr><td>missing player_college</td><td>0.12</td></tr><tr><td>missing player_award_vote</td><td>0.19</td></tr><tr><td>missing team_franchise</td><td>0.16</td></tr><tr><td>missing manager_award</td><td>0.08</td></tr><tr><td>missing manager_award_vote</td><td>0.16</td></tr><tr><td>missing fielding_outfield</td><td>0.10</td></tr><tr><td>missing manager_half</td><td>0.19</td></tr><tr><td>missing appearances</td><td>0.29</td></tr><tr><td>missing batting_postseason</td><td>0.13</td></tr><tr><td>missing manager</td><td>0.13</td></tr><tr><td>missing fielding</td><td>0.12</td></tr><tr><td>missing fielding_postseason</td><td>0.11</td></tr><tr><td>missing hall_of_fame</td><td>0.09</td></tr><tr><td>missing pitching</td><td>0.14</td></tr><tr><td>missing pitching_postseason</td><td>0.10</td></tr><tr><td>missing salary</td><td>0.09</td></tr></tbody></table></div><p class="muted">feedback</p><ul><li>reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.40)</li></ul></div></section><section class="node-detail" id="node-7"><h3><span class="swatch" style="background:#7B5CD6"></span>n13 · qwen3.8-max-0902<span class="outcome"> · 0.81 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n2</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.63, x 0.78</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>217.2 s</dd></dl><pre><code>SELECT statistic, name_given, stat_value
+FROM (
+  WITH season_totals AS (
+    SELECT player_id,
+           year,
+           SUM(CAST(g AS INTEGER)) AS g,
+           SUM(CAST(r AS INTEGER)) AS r,
+           SUM(CAST(h AS INTEGER)) AS h,
+           SUM(CAST(hr AS INTEGER)) AS hr
+    FROM batting
+    GROUP BY player_id, year
+  )
+  SELECT &#x27;Games Played&#x27; AS statistic, p.name_given AS name_given, st.g AS stat_value
+  FROM season_totals st
+  INNER JOIN player p ON p.player_id = st.player_id
+  WHERE st.g = (SELECT MAX(g) FROM season_totals)
+  UNION ALL
+  SELECT &#x27;Runs&#x27;, p.name_given, st.r
+  FROM season_totals st
+  INNER JOIN player p ON p.player_id = st.player_id
+  WHERE st.r = (SELECT MAX(r) FROM season_totals)
+  UNION ALL
+  SELECT &#x27;Hits&#x27;, p.name_given, st.h
+  FROM season_totals st
+  INNER JOIN player p ON p.player_id = st.player_id
+  WHERE st.h = (SELECT MAX(h) FROM season_totals)
+  UNION ALL
+  SELECT &#x27;Home Runs&#x27;, p.name_given, st.hr
+  FROM season_totals st
+  INNER JOIN player p ON p.player_id = st.player_id
+  WHERE st.hr = (SELECT MAX(hr) FROM season_totals)
+)
+ORDER BY CASE statistic WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 ELSE 4 END</code></pre><p><span class="muted">rationale:</span> Batting is per player/season/stint, so rows are first rolled up to one row per player-season (CAST guards blank numeric cells); each requested stat then gets its own maximum check joined to player for name_given, yielding one labeled row per record holder (any ties included), ordered games, runs, hits, home runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.73):
+SQL:
+SELECT p.name_given, b.g, b.r, b.h, b.hr FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting) OR CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting) OR CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting) OR CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)
+Result: 4 rows, columns: name_given, g, r, h, hr (showing 4)
+name_given | g | r | h | hr
+William Robert | 129 | 192 | 220 | 4
+Maurice Morning | 165 | 130 | 208 | 6
+Barry Lamar | 153 | 129 | 156 | 73
+Ichiro | 161 | 101 | 262 | 8
+Judge, weakest first (1 = yes): answers_question 0.32, right_grain 0.36, plausible 0.37, right_columns 0.42, right_filters 0.52, right_order 0.82
+Its author&#x27;s reasoning: The batting table holds per-season games (g), runs (r), hits (h) and home runs (hr); joining it to player on player_id lets us report name_given. Rows are kept when any of the four stats equals the table-wide maximum (CAST is needed because some numeric cells are stored as empty strings), yielding the record holders with their batting lines.
+
+Problems found:
+- reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.32)
+- reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.42)
+- reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.36)
+- reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.37)
+
+Reviewer advice:
+- Replace the single `WHERE ... OR ...` filter with four separate maximum checks, one for games, runs, hits, and home runs.
+- Return only the relevant maximum value for each statistic, or add a label column showing which statistic each row represents.
+- Avoid returning the other three batting columns when a row qualifies for only one category, since those values are not the requested corresponding scores.
+- If career totals are intended, aggregate batting stats by player before finding the maxima; if single-season highs are intended, keep one row per qualifying season/player and handle ties explicitly.
+
+Other refinements of this attempt, already tried (do not repeat them):
+- score 0.82; 4 rows, columns: statistic, name_given, stat_value
+  SQL: SELECT &#x27;Games Played&#x27; AS statistic, p.name_given, CAST(b.g AS INTEGER) AS stat_value FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting) UNION ALL SELECT &#x27;Runs&#x27;, p.name_given, CAST(b.r AS INTEGER) FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting) UNION ALL SELECT &#x27;Hits&#x27;, p.name_given, CAST(b.h AS INTEGER) FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting) UNION ALL SELECT &#x27;Home Runs&#x27;, p.name_given, CAST(b.hr AS INTEGER) FROM batting AS b INNER JOIN player AS p ON b.player_id = p.player_id WHERE CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.51</td></tr><tr><td>right_columns</td><td>0.63</td></tr><tr><td>right_filters</td><td>0.58</td></tr><tr><td>right_grain</td><td>0.60</td></tr><tr><td>right_order</td><td>0.85</td></tr><tr><td>plausible</td><td>0.59</td></tr><tr><td>missing home_game</td><td>0.29</td></tr><tr><td>missing all_star</td><td>0.19</td></tr><tr><td>missing team</td><td>0.22</td></tr><tr><td>missing college</td><td>0.19</td></tr><tr><td>missing player_award</td><td>0.15</td></tr><tr><td>missing park</td><td>0.29</td></tr><tr><td>missing player_college</td><td>0.15</td></tr><tr><td>missing player_award_vote</td><td>0.13</td></tr><tr><td>missing team_franchise</td><td>0.16</td></tr><tr><td>missing manager_award</td><td>0.19</td></tr><tr><td>missing manager_award_vote</td><td>0.14</td></tr><tr><td>missing fielding_outfield</td><td>0.16</td></tr><tr><td>missing manager_half</td><td>0.14</td></tr><tr><td>missing appearances</td><td>0.44</td></tr><tr><td>missing batting_postseason</td><td>0.20</td></tr><tr><td>missing manager</td><td>0.19</td></tr><tr><td>missing fielding</td><td>0.18</td></tr><tr><td>missing fielding_postseason</td><td>0.21</td></tr><tr><td>missing hall_of_fame</td><td>0.13</td></tr><tr><td>missing pitching</td><td>0.19</td></tr><tr><td>missing pitching_postseason</td><td>0.12</td></tr><tr><td>missing salary</td><td>0.20</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-8"><h3><span class="swatch" style="background:#7B5CD6"></span>n3 · qwen3.8-max-0902<span class="outcome"> · 0.70 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.41, x 0.64</dd><dt>rows</dt><dd>1</dd><dt>time</dt><dd>20.8 s</dd></dl><pre><code>SELECT T2.name_given, T1.g + T1.r + T1.h + T1.hr AS score FROM batting AS T1 INNER JOIN player AS T2 ON T1.player_id = T2.player_id WHERE T1.g + T1.r + T1.h + T1.hr = (SELECT MAX(g + r + h + hr) FROM batting)</code></pre><p><span class="muted">rationale:</span> The batting table holds games (g), runs (r), hits (h) and home runs (hr) per player season; summing them gives the &quot;score&quot;, and joining to player on player_id supplies the given name for the season with the maximum score.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.29</td></tr><tr><td>right_columns</td><td>0.26</td></tr><tr><td>right_filters</td><td>0.20</td></tr><tr><td>right_grain</td><td>0.42</td></tr><tr><td>right_order</td><td>0.74</td></tr><tr><td>plausible</td><td>0.53</td></tr><tr><td>missing home_game</td><td>0.27</td></tr><tr><td>missing all_star</td><td>0.13</td></tr><tr><td>missing team</td><td>0.21</td></tr><tr><td>missing college</td><td>0.26</td></tr><tr><td>missing player_award</td><td>0.19</td></tr><tr><td>missing park</td><td>0.32</td></tr><tr><td>missing player_college</td><td>0.28</td></tr><tr><td>missing player_award_vote</td><td>0.22</td></tr><tr><td>missing team_franchise</td><td>0.17</td></tr><tr><td>missing manager_award</td><td>0.31</td></tr><tr><td>missing manager_award_vote</td><td>0.17</td></tr><tr><td>missing fielding_outfield</td><td>0.12</td></tr><tr><td>missing manager_half</td><td>0.29</td></tr><tr><td>missing appearances</td><td>0.33</td></tr><tr><td>missing batting_postseason</td><td>0.23</td></tr><tr><td>missing manager</td><td>0.30</td></tr><tr><td>missing fielding</td><td>0.17</td></tr><tr><td>missing fielding_postseason</td><td>0.23</td></tr><tr><td>missing hall_of_fame</td><td>0.15</td></tr><tr><td>missing pitching</td><td>0.19</td></tr><tr><td>missing pitching_postseason</td><td>0.19</td></tr><tr><td>missing salary</td><td>0.13</td></tr></tbody></table></div><p class="muted">feedback</p><ul><li>reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.29)</li><li>reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.26)</li><li>reviewer doubts: Does the query apply every condition stated in the question, and no condition the question does not state? (p=0.20)</li><li>reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.42)</li></ul><p><span class="muted">advice:</span> - Do not sum `g + r + h + hr` into one score unless a combined score is explicitly requested; return the four requested values instead.
+- Find the maximum for each statistic separately (`g`, `r`, `h`, `hr`) and include ties, rather than selecting only the row with the highest combined total.
+- Aggregate batting records per player first if the question asks for player-level achievements rather than a single season/stint row.
+- Show the corresponding value with each player’s `name_given`, e.g., separate columns or rows for games, runs, hits, and home runs.</p></div></section><section class="node-detail" id="node-9"><h3><span class="swatch" style="background:#7B5CD6"></span>n4 · qwen3.8-max-0902<span class="outcome"> · 0.90 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n3</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.81, x 0.88</dd><dt>rows</dt><dd>3</dd><dt>time</dt><dd>182.5 s</dd></dl><pre><code>WITH career AS (SELECT player_id, SUM(g) AS games_played, SUM(r) AS runs, SUM(h) AS hits, SUM(hr) AS home_runs FROM batting GROUP BY player_id) SELECT p.name_given, c.games_played, c.runs, c.hits, c.home_runs FROM career c INNER JOIN player p ON p.player_id = c.player_id WHERE c.games_played = (SELECT MAX(games_played) FROM career) OR c.runs = (SELECT MAX(runs) FROM career) OR c.hits = (SELECT MAX(hits) FROM career) OR c.home_runs = (SELECT MAX(home_runs) FROM career)</code></pre><p><span class="muted">rationale:</span> Batting rows are per player-season-stint, so they are first aggregated to career totals per player_id (games, runs, hits, home runs); joining to player supplies name_given. Each of the four statistics is maximised separately and combined with OR so every record holder (and any tie) appears once, with all four of their values shown rather than a single blended score.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.70):
+SQL:
+SELECT T2.name_given, T1.g + T1.r + T1.h + T1.hr AS score FROM batting AS T1 INNER JOIN player AS T2 ON T1.player_id = T2.player_id WHERE T1.g + T1.r + T1.h + T1.hr = (SELECT MAX(g + r + h + hr) FROM batting)
+Result: 1 rows, columns: name_given, score (showing 1)
+name_given | score
+Charles Herbert | 604
+Judge, weakest first (1 = yes): right_filters 0.20, right_columns 0.26, answers_question 0.29, right_grain 0.42, plausible 0.53, right_order 0.74
+Its author&#x27;s reasoning: The batting table holds games (g), runs (r), hits (h) and home runs (hr) per player season; summing them gives the &quot;score&quot;, and joining to player on player_id supplies the given name for the season with the maximum score.
+
+Problems found:
+- reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.29)
+- reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.26)
+- reviewer doubts: Does the query apply every condition stated in the question, and no condition the question does not state? (p=0.20)
+- reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.42)
+
+Reviewer advice:
+- Do not sum `g + r + h + hr` into one score unless a combined score is explicitly requested; return the four requested values instead.
+- Find the maximum for each statistic separately (`g`, `r`, `h`, `hr`) and include ties, rather than selecting only the row with the highest combined total.
+- Aggregate batting records per player first if the question asks for player-level achievements rather than a single season/stint row.
+- Show the corresponding value with each player’s `name_given`, e.g., separate columns or rows for games, runs, hits, and home runs.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.82</td></tr><tr><td>right_columns</td><td>0.78</td></tr><tr><td>right_filters</td><td>0.76</td></tr><tr><td>right_grain</td><td>0.77</td></tr><tr><td>right_order</td><td>0.87</td></tr><tr><td>plausible</td><td>0.84</td></tr><tr><td>missing home_game</td><td>0.18</td></tr><tr><td>missing all_star</td><td>0.17</td></tr><tr><td>missing team</td><td>0.13</td></tr><tr><td>missing college</td><td>0.13</td></tr><tr><td>missing player_award</td><td>0.10</td></tr><tr><td>missing park</td><td>0.19</td></tr><tr><td>missing player_college</td><td>0.11</td></tr><tr><td>missing player_award_vote</td><td>0.17</td></tr><tr><td>missing team_franchise</td><td>0.14</td></tr><tr><td>missing manager_award</td><td>0.17</td></tr><tr><td>missing manager_award_vote</td><td>0.13</td></tr><tr><td>missing fielding_outfield</td><td>0.11</td></tr><tr><td>missing manager_half</td><td>0.11</td></tr><tr><td>missing appearances</td><td>0.24</td></tr><tr><td>missing batting_postseason</td><td>0.20</td></tr><tr><td>missing manager</td><td>0.17</td></tr><tr><td>missing fielding</td><td>0.12</td></tr><tr><td>missing fielding_postseason</td><td>0.11</td></tr><tr><td>missing hall_of_fame</td><td>0.10</td></tr><tr><td>missing pitching</td><td>0.20</td></tr><tr><td>missing pitching_postseason</td><td>0.08</td></tr><tr><td>missing salary</td><td>0.11</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-10"><h3><span class="swatch" style="background:#7B5CD6"></span>n6 · qwen3.8-max-0902<span class="outcome"> · 0.94 <span class="marks">★ chosen (selector)  EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n3</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.88, x 0.93</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>89.5 s</dd></dl><pre><code>WITH s AS (
+  SELECT player_id, SUM(g) AS total_g, SUM(r) AS total_r, SUM(h) AS total_h, SUM(hr) AS total_hr
+  FROM batting
+  GROUP BY player_id
+)
+SELECT &#x27;games played&#x27; AS stat, p.name_given AS name_given, s.total_g AS score
+FROM s JOIN player p ON p.player_id = s.player_id
+WHERE s.total_g = (SELECT MAX(total_g) FROM s)
+UNION ALL
+SELECT &#x27;runs&#x27;, p.name_given, s.total_r
+FROM s JOIN player p ON p.player_id = s.player_id
+WHERE s.total_r = (SELECT MAX(total_r) FROM s)
+UNION ALL
+SELECT &#x27;hits&#x27;, p.name_given, s.total_h
+FROM s JOIN player p ON p.player_id = s.player_id
+WHERE s.total_h = (SELECT MAX(total_h) FROM s)
+UNION ALL
+SELECT &#x27;home runs&#x27;, p.name_given, s.total_hr
+FROM s JOIN player p ON p.player_id = s.player_id
+WHERE s.total_hr = (SELECT MAX(total_hr) FROM s)</code></pre><p><span class="muted">rationale:</span> Batting rows are per player-season-stint, so they are first aggregated to player level (SUM of g, r, h, hr); each category&#x27;s maximum is then found separately and joined to player for name_given, so every leader (and any tie) is returned with its own corresponding value rather than one combined score.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.70):
+SQL:
+SELECT T2.name_given, T1.g + T1.r + T1.h + T1.hr AS score FROM batting AS T1 INNER JOIN player AS T2 ON T1.player_id = T2.player_id WHERE T1.g + T1.r + T1.h + T1.hr = (SELECT MAX(g + r + h + hr) FROM batting)
+Result: 1 rows, columns: name_given, score (showing 1)
+name_given | score
+Charles Herbert | 604
+Judge, weakest first (1 = yes): right_filters 0.20, right_columns 0.26, answers_question 0.29, right_grain 0.42, plausible 0.53, right_order 0.74
+Its author&#x27;s reasoning: The batting table holds games (g), runs (r), hits (h) and home runs (hr) per player season; summing them gives the &quot;score&quot;, and joining to player on player_id supplies the given name for the season with the maximum score.
+
+Problems found:
+- reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.29)
+- reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.26)
+- reviewer doubts: Does the query apply every condition stated in the question, and no condition the question does not state? (p=0.20)
+- reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.42)
+
+Reviewer advice:
+- Do not sum `g + r + h + hr` into one score unless a combined score is explicitly requested; return the four requested values instead.
+- Find the maximum for each statistic separately (`g`, `r`, `h`, `hr`) and include ties, rather than selecting only the row with the highest combined total.
+- Aggregate batting records per player first if the question asks for player-level achievements rather than a single season/stint row.
+- Show the corresponding value with each player’s `name_given`, e.g., separate columns or rows for games, runs, hits, and home runs.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.91</td></tr><tr><td>right_columns</td><td>0.89</td></tr><tr><td>right_filters</td><td>0.83</td></tr><tr><td>right_grain</td><td>0.86</td></tr><tr><td>right_order</td><td>0.93</td></tr><tr><td>plausible</td><td>0.83</td></tr><tr><td>missing home_game</td><td>0.19</td></tr><tr><td>missing all_star</td><td>0.16</td></tr><tr><td>missing team</td><td>0.13</td></tr><tr><td>missing college</td><td>0.13</td></tr><tr><td>missing player_award</td><td>0.11</td></tr><tr><td>missing park</td><td>0.19</td></tr><tr><td>missing player_college</td><td>0.12</td></tr><tr><td>missing player_award_vote</td><td>0.17</td></tr><tr><td>missing team_franchise</td><td>0.09</td></tr><tr><td>missing manager_award</td><td>0.16</td></tr><tr><td>missing manager_award_vote</td><td>0.20</td></tr><tr><td>missing fielding_outfield</td><td>0.09</td></tr><tr><td>missing manager_half</td><td>0.12</td></tr><tr><td>missing appearances</td><td>0.26</td></tr><tr><td>missing batting_postseason</td><td>0.23</td></tr><tr><td>missing manager</td><td>0.11</td></tr><tr><td>missing fielding</td><td>0.12</td></tr><tr><td>missing fielding_postseason</td><td>0.10</td></tr><tr><td>missing hall_of_fame</td><td>0.11</td></tr><tr><td>missing pitching</td><td>0.15</td></tr><tr><td>missing pitching_postseason</td><td>0.10</td></tr><tr><td>missing salary</td><td>0.08</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-11"><h3><span class="swatch" style="background:#7B5CD6"></span>n5 · qwen3.8-max-0902<span class="outcome"> · 0.64 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.29, x 0.58</dd><dt>rows</dt><dd>15448</dd><dt>time</dt><dd>119.8 s</dd></dl><pre><code>SELECT &#x27;games played&#x27; AS stat, T2.name_given AS name_given, T1.g AS value
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.g = (SELECT MAX(g) FROM batting)
+UNION ALL
+SELECT &#x27;runs&#x27;, T2.name_given, T1.r
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.r = (SELECT MAX(r) FROM batting)
+UNION ALL
+SELECT &#x27;hits&#x27;, T2.name_given, T1.h
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.h = (SELECT MAX(h) FROM batting)
+UNION ALL
+SELECT &#x27;home runs&#x27;, T2.name_given, T1.hr
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.hr = (SELECT MAX(hr) FROM batting)</code></pre><p><span class="muted">rationale:</span> The batting table holds season-level games (g), runs (r), hits (h) and home runs (hr); joining it to player on player_id gives each record-holder&#x27;s name_given. For each of the four stats I select the rows equal to that column&#x27;s maximum (keeping ties) and label the category, so the result lists each player who holds the top mark together with the value.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.11</td></tr><tr><td>right_columns</td><td>0.09</td></tr><tr><td>right_filters</td><td>0.51</td></tr><tr><td>right_grain</td><td>0.09</td></tr><tr><td>right_order</td><td>0.84</td></tr><tr><td>plausible</td><td>0.11</td></tr><tr><td>missing home_game</td><td>0.24</td></tr><tr><td>missing all_star</td><td>0.08</td></tr><tr><td>missing team</td><td>0.17</td></tr><tr><td>missing college</td><td>0.11</td></tr><tr><td>missing player_award</td><td>0.11</td></tr><tr><td>missing park</td><td>0.19</td></tr><tr><td>missing player_college</td><td>0.13</td></tr><tr><td>missing player_award_vote</td><td>0.10</td></tr><tr><td>missing team_franchise</td><td>0.12</td></tr><tr><td>missing manager_award</td><td>0.17</td></tr><tr><td>missing manager_award_vote</td><td>0.09</td></tr><tr><td>missing fielding_outfield</td><td>0.08</td></tr><tr><td>missing manager_half</td><td>0.07</td></tr><tr><td>missing appearances</td><td>0.24</td></tr><tr><td>missing batting_postseason</td><td>0.13</td></tr><tr><td>missing manager</td><td>0.10</td></tr><tr><td>missing fielding</td><td>0.08</td></tr><tr><td>missing fielding_postseason</td><td>0.08</td></tr><tr><td>missing hall_of_fame</td><td>0.10</td></tr><tr><td>missing pitching</td><td>0.13</td></tr><tr><td>missing pitching_postseason</td><td>0.11</td></tr><tr><td>missing salary</td><td>0.08</td></tr></tbody></table></div><p class="muted">feedback</p><ul><li>reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.11)</li><li>reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.09)</li><li>reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.09)</li><li>reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.11)</li></ul><p><span class="muted">advice:</span> - Aggregate batting stats per player before choosing leaders (e.g., career `SUM` of games/runs/hits/home runs), unless a single-season leader is explicitly intended.
+- Use ranking or a per-statistic limit to return only the top player(s) for each stat, not all raw rows that match.
+- Exclude or convert `NULL`/empty/blank values in `g`, `r`, `h`, and `hr` before computing maxima or ranking.
+- Cast the stat columns to a numeric type so blank/empty values are not treated as valid maximums.
+- Keep the output to one row per statistic/leader with only the requested given name and corresponding numeric value.</p></div></section><section class="node-detail" id="node-12"><h3><span class="swatch" style="background:#7B5CD6"></span>n9 · qwen3.8-max-0902<span class="outcome"> · 0.94 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n5</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.88, x 0.93</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>270.2 s</dd></dl><pre><code>WITH career AS (SELECT player_id, SUM(CAST(g AS INTEGER)) AS g_tot, SUM(CAST(r AS INTEGER)) AS r_tot, SUM(CAST(h AS INTEGER)) AS h_tot, SUM(CAST(hr AS INTEGER)) AS hr_tot FROM batting GROUP BY player_id)
+SELECT p.name_given AS name_given, &#x27;games played&#x27; AS stat, c.g_tot AS value FROM career c JOIN player p ON p.player_id = c.player_id WHERE c.g_tot = (SELECT MAX(g_tot) FROM career)
+UNION ALL SELECT p.name_given, &#x27;runs&#x27;, c.r_tot FROM career c JOIN player p ON p.player_id = c.player_id WHERE c.r_tot = (SELECT MAX(r_tot) FROM career)
+UNION ALL SELECT p.name_given, &#x27;hits&#x27;, c.h_tot FROM career c JOIN player p ON p.player_id = c.player_id WHERE c.h_tot = (SELECT MAX(h_tot) FROM career)
+UNION ALL SELECT p.name_given, &#x27;home runs&#x27;, c.hr_tot FROM career c JOIN player p ON p.player_id = c.player_id WHERE c.hr_tot = (SELECT MAX(hr_tot) FROM career)</code></pre><p><span class="muted">rationale:</span> Batting is a player-season table whose r/h/hr columns also hold blank text values (which break MAX), so I first aggregate each player&#x27;s career totals with CAST(... AS INTEGER) (blanks become 0, NULLs ignored), then join to player for name_given and keep only the row(s) equal to each statistic&#x27;s maximum, labelling each of the four categories. The result is one row per statistic: Pete Rose (3,562 games; 4,256 hits), Rickey Henderson (2,295 runs) and Barry Bonds (762 home runs).</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.64):
+SQL:
+SELECT &#x27;games played&#x27; AS stat, T2.name_given AS name_given, T1.g AS value
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.g = (SELECT MAX(g) FROM batting)
+UNION ALL
+SELECT &#x27;runs&#x27;, T2.name_given, T1.r
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.r = (SELECT MAX(r) FROM batting)
+UNION ALL
+SELECT &#x27;hits&#x27;, T2.name_given, T1.h
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.h = (SELECT MAX(h) FROM batting)
+UNION ALL
+SELECT &#x27;home runs&#x27;, T2.name_given, T1.hr
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.hr = (SELECT MAX(hr) FROM batting)
+Result: 15,448 rows, columns: stat, name_given, value (showing 5)
+stat | name_given | value
+games played | Maurice Morning | 165
+runs | William Glenn | 
+runs | Victor | 
+runs | Doyle Lafayette | 
+runs | Lloyd Cecil | 
+Judge, weakest first (1 = yes): right_columns 0.09, right_grain 0.09, answers_question 0.11, plausible 0.11, right_filters 0.51, right_order 0.84
+Its author&#x27;s reasoning: The batting table holds season-level games (g), runs (r), hits (h) and home runs (hr); joining it to player on player_id gives each record-holder&#x27;s name_given. For each of the four stats I select the rows equal to that column&#x27;s maximum (keeping ties) and label the category, so the result lists each player who holds the top mark together with the value.
+
+Problems found:
+- reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.11)
+- reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.09)
+- reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.09)
+- reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.11)
+
+Reviewer advice:
+- Aggregate batting stats per player before choosing leaders (e.g., career `SUM` of games/runs/hits/home runs), unless a single-season leader is explicitly intended.
+- Use ranking or a per-statistic limit to return only the top player(s) for each stat, not all raw rows that match.
+- Exclude or convert `NULL`/empty/blank values in `g`, `r`, `h`, and `hr` before computing maxima or ranking.
+- Cast the stat columns to a numeric type so blank/empty values are not treated as valid maximums.
+- Keep the output to one row per statistic/leader with only the requested given name and corresponding numeric value.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.91</td></tr><tr><td>right_columns</td><td>0.90</td></tr><tr><td>right_filters</td><td>0.84</td></tr><tr><td>right_grain</td><td>0.83</td></tr><tr><td>right_order</td><td>0.92</td></tr><tr><td>plausible</td><td>0.88</td></tr><tr><td>missing home_game</td><td>0.22</td></tr><tr><td>missing all_star</td><td>0.16</td></tr><tr><td>missing team</td><td>0.14</td></tr><tr><td>missing college</td><td>0.17</td></tr><tr><td>missing player_award</td><td>0.10</td></tr><tr><td>missing park</td><td>0.19</td></tr><tr><td>missing player_college</td><td>0.20</td></tr><tr><td>missing player_award_vote</td><td>0.12</td></tr><tr><td>missing team_franchise</td><td>0.10</td></tr><tr><td>missing manager_award</td><td>0.17</td></tr><tr><td>missing manager_award_vote</td><td>0.19</td></tr><tr><td>missing fielding_outfield</td><td>0.12</td></tr><tr><td>missing manager_half</td><td>0.18</td></tr><tr><td>missing appearances</td><td>0.29</td></tr><tr><td>missing batting_postseason</td><td>0.21</td></tr><tr><td>missing manager</td><td>0.11</td></tr><tr><td>missing fielding</td><td>0.13</td></tr><tr><td>missing fielding_postseason</td><td>0.14</td></tr><tr><td>missing hall_of_fame</td><td>0.09</td></tr><tr><td>missing pitching</td><td>0.21</td></tr><tr><td>missing pitching_postseason</td><td>0.11</td></tr><tr><td>missing salary</td><td>0.11</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-13"><h3><span class="swatch" style="background:#7B5CD6"></span>n11 · qwen3.8-max-0902<span class="outcome"> · 0.93 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n5</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.87, x 0.92</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>262.2 s</dd></dl><pre><code>WITH career AS (
+  SELECT b.player_id,
+         SUM(CAST(b.g AS INTEGER)) AS g,
+         SUM(CAST(b.r AS INTEGER)) AS r,
+         SUM(CAST(b.h AS INTEGER)) AS h,
+         SUM(CAST(b.hr AS INTEGER)) AS hr
+  FROM batting AS b
+  GROUP BY b.player_id
+),
+leaders AS (
+  SELECT p.name_given AS name_given, c.g AS g, c.r AS r, c.h AS h, c.hr AS hr
+  FROM career AS c
+  INNER JOIN player AS p ON p.player_id = c.player_id
+)
+SELECT &#x27;games played&#x27; AS stat, name_given, g AS value
+FROM leaders
+WHERE g = (SELECT MAX(g) FROM leaders)
+UNION ALL
+SELECT &#x27;runs&#x27;, name_given, r
+FROM leaders
+WHERE r = (SELECT MAX(r) FROM leaders)
+UNION ALL
+SELECT &#x27;hits&#x27;, name_given, h
+FROM leaders
+WHERE h = (SELECT MAX(h) FROM leaders)
+UNION ALL
+SELECT &#x27;home runs&#x27;, name_given, hr
+FROM leaders
+WHERE hr = (SELECT MAX(hr) FROM leaders)</code></pre><p><span class="muted">rationale:</span> Batting is season/stint-level, so I first aggregate each player&#x27;s career totals for games (g), runs (r), hits (h) and home runs (hr), casting the columns to INTEGER because r/h/hr contain blank text values that would otherwise dominate MAX(); joining to player supplies name_given. Then, for each of the four statistics, I return only the row(s) equal to that statistic&#x27;s career maximum (ties kept), giving one row per statistic with the leader&#x27;s given name and value.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.64):
+SQL:
+SELECT &#x27;games played&#x27; AS stat, T2.name_given AS name_given, T1.g AS value
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.g = (SELECT MAX(g) FROM batting)
+UNION ALL
+SELECT &#x27;runs&#x27;, T2.name_given, T1.r
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.r = (SELECT MAX(r) FROM batting)
+UNION ALL
+SELECT &#x27;hits&#x27;, T2.name_given, T1.h
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.h = (SELECT MAX(h) FROM batting)
+UNION ALL
+SELECT &#x27;home runs&#x27;, T2.name_given, T1.hr
+FROM batting AS T1
+INNER JOIN player AS T2 ON T1.player_id = T2.player_id
+WHERE T1.hr = (SELECT MAX(hr) FROM batting)
+Result: 15,448 rows, columns: stat, name_given, value (showing 5)
+stat | name_given | value
+games played | Maurice Morning | 165
+runs | William Glenn | 
+runs | Victor | 
+runs | Doyle Lafayette | 
+runs | Lloyd Cecil | 
+Judge, weakest first (1 = yes): right_columns 0.09, right_grain 0.09, answers_question 0.11, plausible 0.11, right_filters 0.51, right_order 0.84
+Its author&#x27;s reasoning: The batting table holds season-level games (g), runs (r), hits (h) and home runs (hr); joining it to player on player_id gives each record-holder&#x27;s name_given. For each of the four stats I select the rows equal to that column&#x27;s maximum (keeping ties) and label the category, so the result lists each player who holds the top mark together with the value.
+
+Problems found:
+- reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.11)
+- reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.09)
+- reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.09)
+- reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.11)
+
+Reviewer advice:
+- Aggregate batting stats per player before choosing leaders (e.g., career `SUM` of games/runs/hits/home runs), unless a single-season leader is explicitly intended.
+- Use ranking or a per-statistic limit to return only the top player(s) for each stat, not all raw rows that match.
+- Exclude or convert `NULL`/empty/blank values in `g`, `r`, `h`, and `hr` before computing maxima or ranking.
+- Cast the stat columns to a numeric type so blank/empty values are not treated as valid maximums.
+- Keep the output to one row per statistic/leader with only the requested given name and corresponding numeric value.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.90</td></tr><tr><td>right_columns</td><td>0.89</td></tr><tr><td>right_filters</td><td>0.83</td></tr><tr><td>right_grain</td><td>0.85</td></tr><tr><td>right_order</td><td>0.92</td></tr><tr><td>plausible</td><td>0.83</td></tr><tr><td>missing home_game</td><td>0.24</td></tr><tr><td>missing all_star</td><td>0.12</td></tr><tr><td>missing team</td><td>0.30</td></tr><tr><td>missing college</td><td>0.17</td></tr><tr><td>missing player_award</td><td>0.15</td></tr><tr><td>missing park</td><td>0.32</td></tr><tr><td>missing player_college</td><td>0.19</td></tr><tr><td>missing player_award_vote</td><td>0.19</td></tr><tr><td>missing team_franchise</td><td>0.22</td></tr><tr><td>missing manager_award</td><td>0.27</td></tr><tr><td>missing manager_award_vote</td><td>0.27</td></tr><tr><td>missing fielding_outfield</td><td>0.12</td></tr><tr><td>missing manager_half</td><td>0.13</td></tr><tr><td>missing appearances</td><td>0.19</td></tr><tr><td>missing batting_postseason</td><td>0.14</td></tr><tr><td>missing manager</td><td>0.14</td></tr><tr><td>missing fielding</td><td>0.14</td></tr><tr><td>missing fielding_postseason</td><td>0.10</td></tr><tr><td>missing hall_of_fame</td><td>0.11</td></tr><tr><td>missing pitching</td><td>0.15</td></tr><tr><td>missing pitching_postseason</td><td>0.10</td></tr><tr><td>missing salary</td><td>0.13</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-14"><h3><span class="swatch" style="background:#7B5CD6"></span>n10 · qwen3.8-max-0902<span class="outcome"> · 0.74 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.50, x 0.70</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>101.3 s</dd></dl><pre><code>SELECT T2.name_given, T1.g, T1.r, T1.h, T1.hr FROM batting AS T1 INNER JOIN player AS T2 ON T1.player_id = T2.player_id WHERE CAST(T1.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting) OR CAST(T1.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting) OR CAST(T1.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting) OR CAST(T1.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)</code></pre><p><span class="muted">rationale:</span> Joins the batting season table to player to get each record-holder&#x27;s given name, and keeps only the rows that hold the maximum value in games played, runs, hits, or home runs (CAST is needed because some batting rows store r/h/hr as text).</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.34</td></tr><tr><td>right_columns</td><td>0.49</td></tr><tr><td>right_filters</td><td>0.56</td></tr><tr><td>right_grain</td><td>0.38</td></tr><tr><td>right_order</td><td>0.82</td></tr><tr><td>plausible</td><td>0.41</td></tr><tr><td>missing home_game</td><td>0.25</td></tr><tr><td>missing all_star</td><td>0.09</td></tr><tr><td>missing team</td><td>0.12</td></tr><tr><td>missing college</td><td>0.16</td></tr><tr><td>missing player_award</td><td>0.08</td></tr><tr><td>missing park</td><td>0.17</td></tr><tr><td>missing player_college</td><td>0.15</td></tr><tr><td>missing player_award_vote</td><td>0.18</td></tr><tr><td>missing team_franchise</td><td>0.12</td></tr><tr><td>missing manager_award</td><td>0.13</td></tr><tr><td>missing manager_award_vote</td><td>0.15</td></tr><tr><td>missing fielding_outfield</td><td>0.09</td></tr><tr><td>missing manager_half</td><td>0.12</td></tr><tr><td>missing appearances</td><td>0.29</td></tr><tr><td>missing batting_postseason</td><td>0.17</td></tr><tr><td>missing manager</td><td>0.09</td></tr><tr><td>missing fielding</td><td>0.09</td></tr><tr><td>missing fielding_postseason</td><td>0.10</td></tr><tr><td>missing hall_of_fame</td><td>0.10</td></tr><tr><td>missing pitching</td><td>0.14</td></tr><tr><td>missing pitching_postseason</td><td>0.12</td></tr><tr><td>missing salary</td><td>0.09</td></tr></tbody></table></div><p class="muted">feedback</p><ul><li>reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.34)</li><li>reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.49)</li><li>reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.38)</li><li>reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.41)</li></ul><p><span class="muted">advice:</span> - Split the four “highest value” conditions into separate checks or rankings per statistic instead of one `OR` filter.
+- Return only the relevant score for the statistic being reported, or add a metric label; avoid returning all four stat columns for every row.
+- If career totals are intended, aggregate `batting` by player before finding maxima; the current query treats each season/stint row as a separate result.
+- Join to `player` after identifying the max/ranked batting rows so ties are preserved without unrelated rows.</p></div></section><section class="node-detail" id="node-15"><h3><span class="swatch" style="background:#7B5CD6"></span>n15 · qwen3.8-max-0902<span class="outcome"> · 0.81 <span class="marks">EX ✗</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n10</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.64, x 0.78</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>90.4 s</dd></dl><pre><code>SELECT &#x27;games played&#x27; AS stat, p.name_given, CAST(b.g AS INTEGER) AS score
+FROM batting b INNER JOIN player p ON b.player_id = p.player_id
+WHERE CAST(b.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting)
+UNION ALL
+SELECT &#x27;runs&#x27; AS stat, p.name_given, CAST(b.r AS INTEGER) AS score
+FROM batting b INNER JOIN player p ON b.player_id = p.player_id
+WHERE CAST(b.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting)
+UNION ALL
+SELECT &#x27;hits&#x27; AS stat, p.name_given, CAST(b.h AS INTEGER) AS score
+FROM batting b INNER JOIN player p ON b.player_id = p.player_id
+WHERE CAST(b.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting)
+UNION ALL
+SELECT &#x27;home runs&#x27; AS stat, p.name_given, CAST(b.hr AS INTEGER) AS score
+FROM batting b INNER JOIN player p ON b.player_id = p.player_id
+WHERE CAST(b.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)</code></pre><p><span class="muted">rationale:</span> Each of the four statistics (games played, runs, hits, home runs) is handled by its own branch that finds the maximum value in batting and joins to player for the given name, so every returned row pairs one record-holder with only the score for that statistic; a stat label column identifies which measure the score belongs to. CAST is required because r, h and hr are stored as text in part of the batting table, and using per-statistic maxima (rather than one OR filter) preserves ties without pulling in unrelated rows.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.74):
+SQL:
+SELECT T2.name_given, T1.g, T1.r, T1.h, T1.hr FROM batting AS T1 INNER JOIN player AS T2 ON T1.player_id = T2.player_id WHERE CAST(T1.g AS INTEGER) = (SELECT MAX(CAST(g AS INTEGER)) FROM batting) OR CAST(T1.r AS INTEGER) = (SELECT MAX(CAST(r AS INTEGER)) FROM batting) OR CAST(T1.h AS INTEGER) = (SELECT MAX(CAST(h AS INTEGER)) FROM batting) OR CAST(T1.hr AS INTEGER) = (SELECT MAX(CAST(hr AS INTEGER)) FROM batting)
+Result: 4 rows, columns: name_given, g, r, h, hr (showing 4)
+name_given | g | r | h | hr
+William Robert | 129 | 192 | 220 | 4
+Maurice Morning | 165 | 130 | 208 | 6
+Barry Lamar | 153 | 129 | 156 | 73
+Ichiro | 161 | 101 | 262 | 8
+Judge, weakest first (1 = yes): answers_question 0.34, right_grain 0.38, plausible 0.41, right_columns 0.49, right_filters 0.56, right_order 0.82
+Its author&#x27;s reasoning: Joins the batting season table to player to get each record-holder&#x27;s given name, and keeps only the rows that hold the maximum value in games played, runs, hits, or home runs (CAST is needed because some batting rows store r/h/hr as text).
+
+Problems found:
+- reviewer doubts: Does this query, given the result shown, answer the question that was asked? (p=0.34)
+- reviewer doubts: Does the result return the values the question asks for, with none missing and no unrelated extra quantities? (p=0.49)
+- reviewer doubts: Is the result at the grain the question asks for (one row per requested entity or group, aggregated as asked)? (p=0.38)
+- reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.41)
+
+Reviewer advice:
+- Split the four “highest value” conditions into separate checks or rankings per statistic instead of one `OR` filter.
+- Return only the relevant score for the statistic being reported, or add a metric label; avoid returning all four stat columns for every row.
+- If career totals are intended, aggregate `batting` by player before finding maxima; the current query treats each season/stint row as a separate result.
+- Join to `player` after identifying the max/ranked batting rows so ties are preserved without unrelated rows.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.53</td></tr><tr><td>right_columns</td><td>0.66</td></tr><tr><td>right_filters</td><td>0.74</td></tr><tr><td>right_grain</td><td>0.64</td></tr><tr><td>right_order</td><td>0.89</td></tr><tr><td>plausible</td><td>0.36</td></tr><tr><td>missing home_game</td><td>0.23</td></tr><tr><td>missing all_star</td><td>0.09</td></tr><tr><td>missing team</td><td>0.16</td></tr><tr><td>missing college</td><td>0.11</td></tr><tr><td>missing player_award</td><td>0.12</td></tr><tr><td>missing park</td><td>0.30</td></tr><tr><td>missing player_college</td><td>0.11</td></tr><tr><td>missing player_award_vote</td><td>0.09</td></tr><tr><td>missing team_franchise</td><td>0.12</td></tr><tr><td>missing manager_award</td><td>0.12</td></tr><tr><td>missing manager_award_vote</td><td>0.18</td></tr><tr><td>missing fielding_outfield</td><td>0.08</td></tr><tr><td>missing manager_half</td><td>0.13</td></tr><tr><td>missing appearances</td><td>0.29</td></tr><tr><td>missing batting_postseason</td><td>0.16</td></tr><tr><td>missing manager</td><td>0.17</td></tr><tr><td>missing fielding</td><td>0.08</td></tr><tr><td>missing fielding_postseason</td><td>0.10</td></tr><tr><td>missing hall_of_fame</td><td>0.09</td></tr><tr><td>missing pitching</td><td>0.14</td></tr><tr><td>missing pitching_postseason</td><td>0.09</td></tr><tr><td>missing salary</td><td>0.09</td></tr></tbody></table></div><p class="muted">feedback</p><ul><li>reviewer doubts: Do the result values look plausible for this question (not empty, not all NULL, no absurd magnitudes)? (p=0.36)</li></ul></div></section><details class="schema-context" id="ctx-e82649f9c6b0"><summary>schema DDL e82649f9c6b0 (467 lines)</summary><pre>CREATE TABLE home_game (
+  year INTEGER,
+  league_id TEXT,
+  team_id TEXT,
+  park_id TEXT,
+  span_first TEXT,
+  span_last TEXT,
+  games INTEGER,
+  openings INTEGER,
+  attendance INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE player (
+  player_id TEXT,
+  birth_year NUMERIC,
+  birth_month NUMERIC,
+  birth_day NUMERIC,
+  birth_country TEXT,
+  birth_state TEXT,
+  birth_city TEXT,
+  death_year NUMERIC,
+  death_month NUMERIC,
+  death_day NUMERIC,
+  death_country TEXT,
+  death_state TEXT,
+  death_city TEXT,
+  name_first TEXT,
+  name_last TEXT,
+  name_given TEXT,
+  weight NUMERIC,
+  height NUMERIC,
+  bats TEXT,
+  throws TEXT,
+  debut TEXT,
+  final_game TEXT,
+  retro_id TEXT,
+  bbref_id TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE all_star (
+  player_id TEXT,
+  year INTEGER,
+  game_num INTEGER,
+  game_id TEXT,
+  team_id TEXT,
+  league_id TEXT,
+  gp NUMERIC,
+  starting_pos NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE team (
+  year INTEGER,
+  league_id TEXT,
+  team_id TEXT,
+  franchise_id TEXT,
+  div_id TEXT,
+  rank INTEGER,
+  ghome NUMERIC,
+  div_win TEXT,
+  wc_win TEXT,
+  lg_win TEXT,
+  ws_win TEXT,
+  ab INTEGER,
+  double INTEGER,
+  triple INTEGER,
+  hr INTEGER,
+  bb INTEGER,
+  so NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC,
+  ra INTEGER,
+  er INTEGER,
+  era NUMERIC,
+  cg INTEGER,
+  sho INTEGER,
+  sv INTEGER,
+  ipouts INTEGER,
+  ha INTEGER,
+  hra INTEGER,
+  bba INTEGER,
+  soa INTEGER,
+  dp NUMERIC,
+  fp NUMERIC,
+  name TEXT,
+  park TEXT,
+  attendance NUMERIC,
+  bpf INTEGER,
+  ppf INTEGER,
+  team_id_br TEXT,
+  team_id_lahman45 TEXT,
+  team_id_retro TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE college (
+  college_id TEXT,
+  name_full TEXT,
+  city TEXT,
+  state TEXT,
+  country TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE player_award (
+  player_id TEXT,
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  tie TEXT,
+  notes TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE park (
+  park_id TEXT,
+  park_name TEXT,
+  park_alias TEXT,
+  city TEXT,
+  state TEXT,
+  country TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE player_college (
+  player_id TEXT,
+  college_id TEXT,
+  year INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE player_award_vote (
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  player_id TEXT,
+  points_won NUMERIC,
+  points_max INTEGER,
+  votes_first NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE team_franchise (
+  franchise_id TEXT,
+  franchise_name TEXT,
+  active TEXT,
+  na_assoc TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE manager_award (
+  player_id TEXT,
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  tie TEXT,
+  notes NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE manager_award_vote (
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  player_id TEXT,
+  points_won INTEGER,
+  points_max INTEGER,
+  votes_first INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE fielding_outfield (
+  player_id TEXT,
+  year INTEGER,
+  stint INTEGER,
+  glf NUMERIC,
+  gcf NUMERIC,
+  grf NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE manager_half (
+  player_id TEXT,
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  inseason INTEGER,
+  half INTEGER,
+  g INTEGER,
+  w INTEGER,
+  l INTEGER,
+  rank INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE appearances (
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  player_id TEXT,
+  g_all NUMERIC,
+  gs NUMERIC,
+  g_batting INTEGER,
+  g_defense NUMERIC,
+  g_p INTEGER,
+  g_c INTEGER,
+  g_1b INTEGER,
+  g_2b INTEGER,
+  g_3b INTEGER,
+  g_ss INTEGER,
+  g_lf INTEGER,
+  g_cf INTEGER,
+  g_rf INTEGER,
+  g_of INTEGER,
+  g_dh NUMERIC,
+  g_ph NUMERIC,
+  g_pr NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE batting_postseason (
+  year INTEGER,
+  round TEXT,
+  player_id TEXT,
+  team_id TEXT,
+  league_id TEXT,
+  g INTEGER,
+  ab INTEGER,
+  r INTEGER,
+  h INTEGER,
+  double INTEGER,
+  triple INTEGER,
+  hr INTEGER,
+  rbi INTEGER,
+  sb INTEGER,
+  cs NUMERIC,
+  bb INTEGER,
+  so INTEGER,
+  ibb NUMERIC,
+  hbp NUMERIC,
+  sh NUMERIC,
+  sf NUMERIC,
+  g_idp NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE manager (
+  player_id TEXT,
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  inseason INTEGER,
+  g INTEGER,
+  w INTEGER,
+  l INTEGER,
+  rank NUMERIC,
+  plyr_mgr TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE fielding (
+  player_id TEXT,
+  year INTEGER,
+  stint INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  pos TEXT,
+  g INTEGER,
+  gs NUMERIC,
+  inn_outs NUMERIC,
+  po NUMERIC,
+  a NUMERIC,
+  e NUMERIC,
+  dp NUMERIC,
+  pb NUMERIC,
+  wp NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC,
+  zr NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE fielding_postseason (
+  player_id TEXT,
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  round TEXT,
+  pos TEXT,
+  g INTEGER,
+  gs NUMERIC,
+  inn_outs NUMERIC,
+  po INTEGER,
+  a INTEGER,
+  e INTEGER,
+  dp INTEGER,
+  tp INTEGER,
+  pb NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE batting (
+  player_id TEXT,
+  year INTEGER,
+  stint INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  g INTEGER,
+  ab NUMERIC,
+  r NUMERIC,
+  h NUMERIC,
+  double NUMERIC,
+  triple NUMERIC,
+  hr NUMERIC,
+  rbi NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC,
+  bb NUMERIC,
+  so NUMERIC,
+  ibb NUMERIC,
+  hbp NUMERIC,
+  sh NUMERIC,
+  sf NUMERIC,
+  g_idp NUMERIC
+);  -- from spider2:Baseball
+
+-- === Join paths (most reliable last) ===
+-- path [1.32]: home_game -&gt; team -&gt; appearances -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: appearances.team_id = team.team_id
+--   inferred: appearances.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; batting -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: batting.team_id = team.team_id
+--   inferred: batting.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; batting_postseason -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: batting_postseason.team_id = team.team_id
+--   inferred: batting_postseason.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; fielding -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: fielding.team_id = team.team_id
+--   inferred: fielding.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; fielding_postseason -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: fielding_postseason.team_id = team.team_id
+--   inferred: fielding_postseason.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; manager -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: manager.team_id = team.team_id
+--   inferred: manager.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; manager_half -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: manager_half.team_id = team.team_id
+--   inferred: manager_half.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.53]: home_game -&gt; team -&gt; all_star -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: all_star.team_id = team.team_id
+--   inferred: all_star.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+
+-- === Sample Values ===
+-- Sample values for home_game:
+--   league_id: &#x27;AL&#x27;
+--   team_id: &#x27;KCA&#x27;, &#x27;BOS&#x27;, &#x27;CHA&#x27;, &#x27;DET&#x27;
+--   park_id: &#x27;KAN06&#x27;, &#x27;BOS07&#x27;, &#x27;CHI10&#x27;, &#x27;CHI09&#x27;, &#x27;DET04&#x27;
+--   span_first: &#x27;1997-04-07&#x27;, &#x27;2002-04-01&#x27;, &#x27;1963-04-16&#x27;, &#x27;1902-04-23&#x27;, &#x27;1934-04-24&#x27;
+--   span_last: &#x27;1997-09-21&#x27;, &#x27;2002-09-29&#x27;, &#x27;1963-09-29&#x27;, &#x27;1902-09-25&#x27;, &#x27;1934-09-30&#x27;
+-- Sample values for player:
+--   player_id: &#x27;leicejo01&#x27;, &#x27;wilkian01&#x27;, &#x27;bootyjo01&#x27;, &#x27;powelal01&#x27;, &#x27;uppje01&#x27;
+--   birth_country: &#x27;USA&#x27;
+--   birth_state: &#x27;CA&#x27;, &#x27;OK&#x27;, &#x27;MS&#x27;, &#x27;OH&#x27;
+--   birth_city: &#x27;Mariposa&#x27;, &#x27;Tulsa&#x27;, &#x27;Starkville&#x27;, &#x27;San Francisco&#x27;, &#x27;Sandusky&#x27;
+--   death_country: &#x27;USA&#x27;
+--   death_state: &#x27;OH&#x27;
+--   death_city: &#x27;Sandusky&#x27;
+--   name_first: &#x27;Jon&#x27;, &#x27;Andy&#x27;, &#x27;Josh&#x27;, &#x27;Alonzo&#x27;, &#x27;Jerry&#x27;
+--   name_last: &#x27;Leicester&#x27;, &#x27;Wilkins&#x27;, &#x27;Booty&#x27;, &#x27;Powell&#x27;, &#x27;Upp&#x27;
+--   name_given: &#x27;Jonathan David&#x27;, &#x27;Andrew Robert&#x27;, &#x27;Joshua Gibson&#x27;, &#x27;Alonzo Sidney&#x27;, &#x27;George Henry&#x27;
+--   bats: &#x27;R&#x27;, &#x27;L&#x27;
+--   throws: &#x27;R&#x27;, &#x27;L&#x27;
+--   debut: &#x27;2004-06-09&#x27;, &#x27;2014-08-31&#x27;, &#x27;1996-09-24&#x27;, &#x27;1987-04-06&#x27;, &#x27;1909-09-02&#x27;
+--   final_game: &#x27;2007-09-28&#x27;, &#x27;2014-09-28&#x27;, &#x27;1998-04-11&#x27;, &#x27;1991-10-06&#x27;, &#x27;1909-09-27&#x27;
+--   retro_id: &#x27;leicj001&#x27;, &#x27;wilka002&#x27;, &#x27;bootj001&#x27;, &#x27;powea001&#x27;, &#x27;upp-j101&#x27;
+--   bbref_id: &#x27;leicejo01&#x27;, &#x27;wilkian01&#x27;, &#x27;bootyjo01&#x27;, &#x27;powelal01&#x27;, &#x27;uppje01&#x27;
+-- Sample values for all_star:
+--   player_id: &#x27;quantpa01&#x27;, &#x27;hackst01&#x27;, &#x27;phillbr01&#x27;, &#x27;vaughar01&#x27;, &#x27;biggicr01&#x27;
+--   game_id: &#x27;ALS200107100&#x27;, &#x27;NLS201107120&#x27;, &#x27;NLS194007090&#x27;, &#x27;NLS199807070&#x27;
+--   team_id: &#x27;TOR&#x27;, &#x27;CHN&#x27;, &#x27;CIN&#x27;, &#x27;PIT&#x27;, &#x27;HOU&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+-- Sample values for team:
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+--   team_id: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+--   franchise_id: &#x27;STL&#x27;, &#x27;BOS&#x27;, &#x27;ATL&#x27;, &#x27;NYY&#x27;
+--   div_id: &#x27;E&#x27;, &#x27;C&#x27;
+--   div_win: &#x27;N&#x27;, &#x27;Y&#x27;
+--   wc_win: &#x27;Y&#x27;, &#x27;N&#x27;
+--   lg_win: &#x27;N&#x27;, &#x27;Y&#x27;
+--   ws_win: &#x27;N&#x27;
+--   name: &#x27;St. Louis Cardinals&#x27;, &#x27;Boston Red Sox&#x27;, &#x27;Boston Braves&#x27;, &#x27;New York Yankees&#x27;
+--   park: &#x27;Busch Stadium II&#x27;, &#x27;Fenway Park II&#x27;, &#x27;Braves Field&#x27;, &#x27;Yankee Stadium II&#x27;
+--   team_id_br: &#x27;STL&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYY&#x27;
+--   team_id_lahman45: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+--   team_id_retro: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+-- Sample values for college:
+--   college_id: &#x27;whittierca&#x27;, &#x27;moharri&#x27;, &#x27;caantel&#x27;, &#x27;wheatonma&#x27;, &#x27;oksemin&#x27;
+--   name_full: &#x27;Whittier College&#x27;, &#x27;Harris-Stowe State College&#x27;, &#x27;Antelope Valley College&#x27;, &#x27;Wheaton College&#x27;, &#x27;Seminole State College&#x27;
+--   city: &#x27;Whittier&#x27;, &#x27;St. Louis&#x27;, &#x27;Lancaster&#x27;, &#x27;Wheaton&#x27;, &#x27;Seminole&#x27;
+--   state: &#x27;CA&#x27;, &#x27;MO&#x27;, &#x27;MA&#x27;, &#x27;OK&#x27;
+--   country: &#x27;USA&#x27;
+-- Sample values for player_award:
+--   player_id: &#x27;mantlmi01&#x27;, &#x27;terrybi01&#x27;, &#x27;maranra01&#x27;, &#x27;bartedi01&#x27;, &#x27;ensbemo01&#x27;
+--   award_id: &#x27;TSN All-Star&#x27;, &#x27;Baseball Magazine All-Star&#x27;, &#x27;Silver Slugger&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;, &#x27;ML&#x27;
+--   notes: &#x27;OF&#x27;, &#x27;1B&#x27;, &#x27;SS&#x27;, &#x27;3B&#x27;
+-- Sample values for park:
+--   park_id: &#x27;WAT01&#x27;, &#x27;WAS02&#x27;, &#x27;ARL01&#x27;, &#x27;BAL07&#x27;, &#x27;SEA03&#x27;
+--   park_name: &#x27;Troy Ball Club Grounds&#x27;, &#x27;National Grounds&#x27;, &#x27;Arlington Stadium&#x27;, &#x27;Oriole Park III&#x27;, &#x27;Safeco Field&#x27;
+--   city: &#x27;Watervliet&#x27;, &#x27;Washington&#x27;, &#x27;Arlington&#x27;, &#x27;Baltimore&#x27;, &#x27;Seattle&#x27;
+--   state: &#x27;NY&#x27;, &#x27;DC&#x27;, &#x27;TX&#x27;, &#x27;MD&#x27;, &#x27;WA&#x27;
+--   country: &#x27;US&#x27;
+-- Sample values for player_college:
+--   player_id: &#x27;hazledo01&#x27;, &#x27;eshelva01&#x27;, &#x27;espinda01&#x27;, &#x27;smithto02&#x27;, &#x27;maholpa01&#x27;
+--   college_id: &#x27;tuftsma&#x27;, &#x27;txblinn&#x27;, &#x27;longbeach&#x27;, &#x27;fordham&#x27;, &#x27;missst&#x27;
+-- Sample values for player_award_vote:
+--   award_id: &#x27;MVP&#x27;
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+--   player_id: &#x27;konstji01&#x27;, &#x27;hansero02&#x27;, &#x27;mayswi01&#x27;, &#x27;bickfve01&#x27;, &#x27;putzjj01&#x27;
+-- Sample values for team_franchise:
+--   franchise_id: &#x27;TOL&#x27;, &#x27;CLS&#x27;, &#x27;CBL&#x27;, &#x27;BLC&#x27;, &#x27;KCR&#x27;
+--   franchise_name: &#x27;Toledo Blue Stockings&#x27;, &#x27;Columbus Solons&#x27;, &#x27;Cleveland Blues&#x27;, &#x27;Baltimore Canaries&#x27;, &#x27;Kansas City Royals&#x27;
+--   active: &#x27;N&#x27;, &#x27;Y&#x27;
+-- Sample values for manager_award:
+--   player_id: &#x27;dyered01&#x27;, &#x27;blackbu02&#x27;, &#x27;williji03&#x27;, &#x27;herzowh01&#x27;, &#x27;bakerdu01&#x27;
+--   award_id: &#x27;TSN Manager of the Year&#x27;, &#x27;BBWAA Manager of the year&#x27;
+--   league_id: &#x27;ML&#x27;, &#x27;NL&#x27;, &#x27;AL&#x27;
+-- Sample values for manager_award_vote:
+--   award_id: &#x27;Mgr of the year&#x27;
+--   league_id: &#x27;NL&#x27;
+--   player_id: &#x27;coxbo01&#x27;, &#x27;lasorto01&#x27;, &#x27;bochybr01&#x27;, &#x27;craigro01&#x27;
+-- Sample values for fielding_outfield:
+--   player_id: &#x27;rosemch01&#x27;, &#x27;isbelfr01&#x27;, &#x27;oullijo01&#x27;, &#x27;fletcge01&#x27;, &#x27;ewingbo01&#x27;
+-- Sample values for manager_half:
+--   player_id: &#x27;powerpa99&#x27;, &#x27;chapmja01&#x27;, &#x27;herzowh01&#x27;, &#x27;fregoji01&#x27;, &#x27;mcnamjo99&#x27;
+--   team_id: &#x27;NY1&#x27;, &#x27;LS3&#x27;, &#x27;SLN&#x27;, &#x27;CAL&#x27;, &#x27;CIN&#x27;
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+-- Sample values for appearances:
+--   team_id: &#x27;NYA&#x27;, &#x27;BRO&#x27;, &#x27;MON&#x27;, &#x27;DET&#x27;, &#x27;SEA&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+--   player_id: &#x27;newkifl01&#x27;, &#x27;browned02&#x27;, &#x27;kirbycl01&#x27;, &#x27;olivejo01&#x27;, &#x27;newfima01&#x27;
+-- Sample values for batting_postseason:
+--   round: &#x27;WS&#x27;, &#x27;ALDS1&#x27;
+--   player_id: &#x27;papeljo01&#x27;, &#x27;rossda01&#x27;, &#x27;hardyjj01&#x27;, &#x27;smithoz01&#x27;, &#x27;podrejo01&#x27;
+--   team_id: &#x27;BOS&#x27;, &#x27;BAL&#x27;, &#x27;SLN&#x27;, &#x27;LAN&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+-- Sample values for manager:
+--   player_id: &#x27;hutchfr01&#x27;, &#x27;harribu01&#x27;, &#x27;boudrlo01&#x27;, &#x27;dressch01&#x27;, &#x27;larusto01&#x27;
+--   team_id: &#x27;DET&#x27;, &#x27;PHI&#x27;, &#x27;BOS&#x27;, &#x27;CIN&#x27;, &#x27;SLN&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+--   plyr_mgr: &#x27;N&#x27;
+-- Sample values for fielding:
+--   player_id: &#x27;beckzi01&#x27;, &#x27;nageocl01&#x27;, &#x27;smithdw01&#x27;, &#x27;russeri01&#x27;, &#x27;bladera01&#x27;
+--   team_id: &#x27;NYA&#x27;, &#x27;SEA&#x27;, &#x27;CHN&#x27;, &#x27;SLN&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+--   pos: &#x27;1B&#x27;, &#x27;P&#x27;, &#x27;RF&#x27;, &#x27;OF&#x27;
+-- Sample values for fielding_postseason:
+--   player_id: &#x27;lidgebr01&#x27;, &#x27;mierked01&#x27;, &#x27;clemero02&#x27;, &#x27;sotoge01&#x27;, &#x27;rodrifr03&#x27;
+--   team_id: &#x27;HOU&#x27;, &#x27;DET&#x27;, &#x27;NYA&#x27;, &#x27;OAK&#x27;, &#x27;ANA&#x27;
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+--   round: &#x27;WS&#x27;, &#x27;ALCS&#x27;, &#x27;ALWC&#x27;
+--   pos: &#x27;P&#x27;, &#x27;LF&#x27;, &#x27;C&#x27;
+-- Sample values for batting:
+--   player_id: &#x27;bocekmi01&#x27;, &#x27;sanfoja02&#x27;, &#x27;boardch01&#x27;, &#x27;bigbila01&#x27;, &#x27;varvaan01&#x27;
+--   team_id: &#x27;CHA&#x27;, &#x27;SFN&#x27;, &#x27;PHA&#x27;, &#x27;BAL&#x27;, &#x27;ATL&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;</pre></details><details class="schema-context" id="ctx-67d717bb495a"><summary>schema DDL 67d717bb495a (223 lines)</summary><pre>CREATE TABLE home_game (
+  year INTEGER,
+  league_id TEXT,
+  team_id TEXT,
+  park_id TEXT,
+  span_first TEXT,
+  span_last TEXT,
+  games INTEGER,
+  openings INTEGER,
+  attendance INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE player (
+  player_id TEXT,
+  birth_year NUMERIC,
+  birth_month NUMERIC,
+  birth_day NUMERIC,
+  birth_country TEXT,
+  birth_state TEXT,
+  birth_city TEXT,
+  death_year NUMERIC,
+  death_month NUMERIC,
+  death_day NUMERIC,
+  death_country TEXT,
+  death_state TEXT,
+  death_city TEXT,
+  name_first TEXT,
+  name_last TEXT,
+  name_given TEXT,
+  weight NUMERIC,
+  height NUMERIC,
+  bats TEXT,
+  throws TEXT,
+  debut TEXT,
+  final_game TEXT,
+  retro_id TEXT,
+  bbref_id TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE all_star (
+  player_id TEXT,
+  year INTEGER,
+  game_num INTEGER,
+  game_id TEXT,
+  team_id TEXT,
+  league_id TEXT,
+  gp NUMERIC,
+  starting_pos NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE team (
+  year INTEGER,
+  league_id TEXT,
+  team_id TEXT,
+  franchise_id TEXT,
+  div_id TEXT,
+  rank INTEGER,
+  ghome NUMERIC,
+  div_win TEXT,
+  wc_win TEXT,
+  lg_win TEXT,
+  ws_win TEXT,
+  ab INTEGER,
+  double INTEGER,
+  triple INTEGER,
+  hr INTEGER,
+  bb INTEGER,
+  so NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC,
+  ra INTEGER,
+  er INTEGER,
+  era NUMERIC,
+  cg INTEGER,
+  sho INTEGER,
+  sv INTEGER,
+  ipouts INTEGER,
+  ha INTEGER,
+  hra INTEGER,
+  bba INTEGER,
+  soa INTEGER,
+  dp NUMERIC,
+  fp NUMERIC,
+  name TEXT,
+  park TEXT,
+  attendance NUMERIC,
+  bpf INTEGER,
+  ppf INTEGER,
+  team_id_br TEXT,
+  team_id_lahman45 TEXT,
+  team_id_retro TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE college (
+  college_id TEXT,
+  name_full TEXT,
+  city TEXT,
+  state TEXT,
+  country TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE player_award (
+  player_id TEXT,
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  tie TEXT,
+  notes TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE manager_half (
+  player_id TEXT,
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  inseason INTEGER,
+  half INTEGER,
+  g INTEGER,
+  w INTEGER,
+  l INTEGER,
+  rank INTEGER
+);  -- from spider2:Baseball
+
+-- === Join paths (most reliable last) ===
+-- path [1.32]: home_game -&gt; team -&gt; appearances -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: appearances.team_id = team.team_id
+--   inferred: appearances.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; batting -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: batting.team_id = team.team_id
+--   inferred: batting.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; batting_postseason -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: batting_postseason.team_id = team.team_id
+--   inferred: batting_postseason.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; fielding -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: fielding.team_id = team.team_id
+--   inferred: fielding.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; fielding_postseason -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: fielding_postseason.team_id = team.team_id
+--   inferred: fielding_postseason.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; manager -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: manager.team_id = team.team_id
+--   inferred: manager.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; manager_half -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: manager_half.team_id = team.team_id
+--   inferred: manager_half.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.53]: home_game -&gt; team -&gt; all_star -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: all_star.team_id = team.team_id
+--   inferred: all_star.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+
+-- === Sample Values ===
+-- Sample values for home_game:
+--   league_id: &#x27;AL&#x27;
+--   team_id: &#x27;KCA&#x27;, &#x27;BOS&#x27;, &#x27;CHA&#x27;, &#x27;DET&#x27;
+--   park_id: &#x27;KAN06&#x27;, &#x27;BOS07&#x27;, &#x27;CHI10&#x27;, &#x27;CHI09&#x27;, &#x27;DET04&#x27;
+--   span_first: &#x27;1997-04-07&#x27;, &#x27;2002-04-01&#x27;, &#x27;1963-04-16&#x27;, &#x27;1902-04-23&#x27;, &#x27;1934-04-24&#x27;
+--   span_last: &#x27;1997-09-21&#x27;, &#x27;2002-09-29&#x27;, &#x27;1963-09-29&#x27;, &#x27;1902-09-25&#x27;, &#x27;1934-09-30&#x27;
+-- Sample values for player:
+--   player_id: &#x27;leicejo01&#x27;, &#x27;wilkian01&#x27;, &#x27;bootyjo01&#x27;, &#x27;powelal01&#x27;, &#x27;uppje01&#x27;
+--   birth_country: &#x27;USA&#x27;
+--   birth_state: &#x27;CA&#x27;, &#x27;OK&#x27;, &#x27;MS&#x27;, &#x27;OH&#x27;
+--   birth_city: &#x27;Mariposa&#x27;, &#x27;Tulsa&#x27;, &#x27;Starkville&#x27;, &#x27;San Francisco&#x27;, &#x27;Sandusky&#x27;
+--   death_country: &#x27;USA&#x27;
+--   death_state: &#x27;OH&#x27;
+--   death_city: &#x27;Sandusky&#x27;
+--   name_first: &#x27;Jon&#x27;, &#x27;Andy&#x27;, &#x27;Josh&#x27;, &#x27;Alonzo&#x27;, &#x27;Jerry&#x27;
+--   name_last: &#x27;Leicester&#x27;, &#x27;Wilkins&#x27;, &#x27;Booty&#x27;, &#x27;Powell&#x27;, &#x27;Upp&#x27;
+--   name_given: &#x27;Jonathan David&#x27;, &#x27;Andrew Robert&#x27;, &#x27;Joshua Gibson&#x27;, &#x27;Alonzo Sidney&#x27;, &#x27;George Henry&#x27;
+--   bats: &#x27;R&#x27;, &#x27;L&#x27;
+--   throws: &#x27;R&#x27;, &#x27;L&#x27;
+--   debut: &#x27;2004-06-09&#x27;, &#x27;2014-08-31&#x27;, &#x27;1996-09-24&#x27;, &#x27;1987-04-06&#x27;, &#x27;1909-09-02&#x27;
+--   final_game: &#x27;2007-09-28&#x27;, &#x27;2014-09-28&#x27;, &#x27;1998-04-11&#x27;, &#x27;1991-10-06&#x27;, &#x27;1909-09-27&#x27;
+--   retro_id: &#x27;leicj001&#x27;, &#x27;wilka002&#x27;, &#x27;bootj001&#x27;, &#x27;powea001&#x27;, &#x27;upp-j101&#x27;
+--   bbref_id: &#x27;leicejo01&#x27;, &#x27;wilkian01&#x27;, &#x27;bootyjo01&#x27;, &#x27;powelal01&#x27;, &#x27;uppje01&#x27;
+-- Sample values for all_star:
+--   player_id: &#x27;quantpa01&#x27;, &#x27;hackst01&#x27;, &#x27;phillbr01&#x27;, &#x27;vaughar01&#x27;, &#x27;biggicr01&#x27;
+--   game_id: &#x27;ALS200107100&#x27;, &#x27;NLS201107120&#x27;, &#x27;NLS194007090&#x27;, &#x27;NLS199807070&#x27;
+--   team_id: &#x27;TOR&#x27;, &#x27;CHN&#x27;, &#x27;CIN&#x27;, &#x27;PIT&#x27;, &#x27;HOU&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+-- Sample values for team:
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+--   team_id: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+--   franchise_id: &#x27;STL&#x27;, &#x27;BOS&#x27;, &#x27;ATL&#x27;, &#x27;NYY&#x27;
+--   div_id: &#x27;E&#x27;, &#x27;C&#x27;
+--   div_win: &#x27;N&#x27;, &#x27;Y&#x27;
+--   wc_win: &#x27;Y&#x27;, &#x27;N&#x27;
+--   lg_win: &#x27;N&#x27;, &#x27;Y&#x27;
+--   ws_win: &#x27;N&#x27;
+--   name: &#x27;St. Louis Cardinals&#x27;, &#x27;Boston Red Sox&#x27;, &#x27;Boston Braves&#x27;, &#x27;New York Yankees&#x27;
+--   park: &#x27;Busch Stadium II&#x27;, &#x27;Fenway Park II&#x27;, &#x27;Braves Field&#x27;, &#x27;Yankee Stadium II&#x27;
+--   team_id_br: &#x27;STL&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYY&#x27;
+--   team_id_lahman45: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+--   team_id_retro: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+-- Sample values for college:
+--   college_id: &#x27;whittierca&#x27;, &#x27;moharri&#x27;, &#x27;caantel&#x27;, &#x27;wheatonma&#x27;, &#x27;oksemin&#x27;
+--   name_full: &#x27;Whittier College&#x27;, &#x27;Harris-Stowe State College&#x27;, &#x27;Antelope Valley College&#x27;, &#x27;Wheaton College&#x27;, &#x27;Seminole State College&#x27;
+--   city: &#x27;Whittier&#x27;, &#x27;St. Louis&#x27;, &#x27;Lancaster&#x27;, &#x27;Wheaton&#x27;, &#x27;Seminole&#x27;
+--   state: &#x27;CA&#x27;, &#x27;MO&#x27;, &#x27;MA&#x27;, &#x27;OK&#x27;
+--   country: &#x27;USA&#x27;
+-- Sample values for player_award:
+--   player_id: &#x27;mantlmi01&#x27;, &#x27;terrybi01&#x27;, &#x27;maranra01&#x27;, &#x27;bartedi01&#x27;, &#x27;ensbemo01&#x27;
+--   award_id: &#x27;TSN All-Star&#x27;, &#x27;Baseball Magazine All-Star&#x27;, &#x27;Silver Slugger&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;, &#x27;ML&#x27;
+--   notes: &#x27;OF&#x27;, &#x27;1B&#x27;, &#x27;SS&#x27;, &#x27;3B&#x27;
+-- Sample values for manager_half:
+--   player_id: &#x27;powerpa99&#x27;, &#x27;chapmja01&#x27;, &#x27;herzowh01&#x27;, &#x27;fregoji01&#x27;, &#x27;mcnamjo99&#x27;
+--   team_id: &#x27;NY1&#x27;, &#x27;LS3&#x27;, &#x27;SLN&#x27;, &#x27;CAL&#x27;, &#x27;CIN&#x27;
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;</pre></details><details><summary>generator instructions (system prompt)</summary><pre>You write exactly one read-only SQL query in the sqlite dialect that answers the user&#x27;s question. Use only tables and columns that appear in the schema you are given or that you found with the tools. If the schema lacks a concept the question needs, call link_schema with that concept, or search_tables. Read a table&#x27;s columns and relations with get_table, the join keys between two tables with find_join_path, and business terms with list_glossary. Prefer the join columns listed in the schema. Check literal values with sample_values before filtering on them. You may probe with run_query (at most 3 times, small results only). Return the final query through the output tool: no markdown, no comments, no trailing semicolon. SQLite: use strftime()/date() for dates, || to concatenate, CAST(x AS REAL) before dividing integers; there is no ILIKE, no FULL JOIN before 3.39, no date_trunc.</pre></details></aside></div><script type="application/json" id="search-events">{"nodes": 16, "start": "Press ▶ Play (or Space) to replay the search: 16 nodes by 1 model. ← and → step through it; click a node for its prompt and SQL.", "events": [{"kind": "ask", "node": 0, "path": [], "caption": "0.0 s · GEN at the question: a new draft n0 with qwen3.8-max-0902 (wide context)"}, {"kind": "ask", "node": 2, "path": [], "caption": "0.0 s · GEN at the question: a new draft n1 with qwen3.8-max-0902 (wide context)"}, {"kind": "ask", "node": 5, "path": [], "caption": "0.0 s · GEN at the question: a new draft n2 with qwen3.8-max-0902 (tight context)"}, {"kind": "ask", "node": 8, "path": [], "caption": "0.0 s · GEN at the question: a new draft n3 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 8, "path": [], "caption": "20.9 s · n3 (qwen3.8-max-0902) scored 0.70 · EX ✗; the reward backs up question"}, {"kind": "ask", "node": 9, "path": [8], "caption": "31.0 s · Select question → n3 (CONT), then GEN under n3: n4 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 0, "path": [], "caption": "41.1 s · n0 (qwen3.8-max-0902) scored 0.49 · EX ✗; the reward backs up question"}, {"kind": "ask", "node": 11, "path": [], "caption": "46.2 s · GEN at the question: a new draft n5 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 2, "path": [], "caption": "77.7 s · n1 (qwen3.8-max-0902) scored 0.79 · EX ✗; the reward backs up question"}, {"kind": "ask", "node": 10, "path": [8], "caption": "82.7 s · Select question → n3 (CONT), then GEN under n3: n6 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 5, "path": [], "caption": "99.3 s · n2 (qwen3.8-max-0902) scored 0.73 · EX ✗; the reward backs up question"}, {"kind": "ask", "node": 6, "path": [5], "caption": "104.4 s · Select question → n2 (CONT), then GEN under n2: n7 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 11, "path": [], "caption": "166.1 s · n5 (qwen3.8-max-0902) scored 0.64 · EX ✗; the reward backs up question"}, {"kind": "ask", "node": 3, "path": [2], "caption": "171.2 s · Select question → n1 (CONT), then GEN under n1: n8 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 10, "path": [8], "caption": "172.2 s · n6 (qwen3.8-max-0902) scored 0.94 · EX ✓ (matches gold); the reward backs up n3 → question"}, {"kind": "ask", "node": 12, "path": [11], "caption": "176.9 s · Select question → n5 (CONT), then GEN under n5: n9 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 6, "path": [5], "caption": "208.2 s · n7 (qwen3.8-max-0902) scored 0.82 · EX ✗; the reward backs up n2 → question"}, {"kind": "ask", "node": 14, "path": [], "caption": "212.9 s · GEN at the question: a new draft n10 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 9, "path": [8], "caption": "213.5 s · n4 (qwen3.8-max-0902) scored 0.90 · EX ✗; the reward backs up n3 → question"}, {"kind": "ask", "node": 13, "path": [11], "caption": "218.5 s · Select question → n5 (CONT), then GEN under n5: n11 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 14, "path": [], "caption": "314.2 s · n10 (qwen3.8-max-0902) scored 0.74 · EX ✗; the reward backs up question"}, {"kind": "ask", "node": 1, "path": [0], "caption": "319.6 s · Select question → n0 (CONT), then GEN under n0: n12 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 3, "path": [2], "caption": "379.4 s · n8 (qwen3.8-max-0902) scored 0.79 · EX ✗; the reward backs up n1 → question"}, {"kind": "ask", "node": 7, "path": [5], "caption": "387.8 s · Select question → n2 (CONT), then GEN under n2: n13 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 1, "path": [0], "caption": "442.7 s · n12 (qwen3.8-max-0902) scored 0.85 · EX ✗; the reward backs up n0 → question"}, {"kind": "ask", "node": 4, "path": [2, 3], "caption": "449.9 s · Select question → n1 → n8 (CONT), then GEN under n8: n14 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 12, "path": [11], "caption": "447.1 s · n9 (qwen3.8-max-0902) scored 0.94 · EX ✓ (matches gold); the reward backs up n5 → question"}, {"kind": "ask", "node": 15, "path": [14], "caption": "454.6 s · Select question → n10 (CONT), then GEN under n10: n15 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 13, "path": [11], "caption": "480.7 s · n11 (qwen3.8-max-0902) scored 0.93 · EX ✓ (matches gold); the reward backs up n5 → question"}, {"kind": "tell", "node": 15, "path": [14], "caption": "545.0 s · n15 (qwen3.8-max-0902) scored 0.81 · EX ✗; the reward backs up n10 → question"}, {"kind": "tell", "node": 7, "path": [5], "caption": "605.1 s · n13 (qwen3.8-max-0902) scored 0.81 · EX ✗; the reward backs up n2 → question"}, {"kind": "tell", "node": 4, "path": [2, 3], "caption": "775.7 s · n14 (qwen3.8-max-0902) scored 0.92 · EX ✓ (matches gold); the reward backs up n8 → n1 → question"}, {"kind": "pick", "node": 10, "path": [8], "caption": "Final pick: n6 by selector, score 0.94 · EX ✓ (matches gold)"}]}</script><script>
+(() => {
+  "use strict";
+  const STEP_MS = 1400;
+  const byId = (id) => document.getElementById(id);
+  const data = JSON.parse(byId("search-events").textContent);
+  const events = data.events;
+  const player = byId("player");
+  const slider = byId("step");
+  const playButton = byId("play");
+  const speed = byId("speed");
+  let step = 0;
+  let timer = null;
+  let selected = null;
+
+  document.body.classList.add("js");
+  slider.max = String(events.length);
+  // each node's full hover text; while it generates, its title shows data-pending instead
+  const titles = [];
+  for (let index = 0; index < data.nodes; index++) {
+    const title = byId("g-" + index).querySelector("title");
+    const pending = title.getAttribute("data-pending");
+    titles.push({ title: title, full: title.textContent, pending: pending });
+  }
+
+  function select(index) {
+    if (selected !== null) byId("node-" + selected).classList.remove("selected");
+    selected = index;
+    if (index !== null) byId("node-" + index).classList.add("selected");
+    byId("panel-empty").hidden = index !== null;
+  }
+
+  function render() {
+    const asked = new Set();
+    const told = new Set();
+    for (const event of events.slice(0, step)) {
+      if (event.kind === "ask") asked.add(event.node);
+      if (event.kind === "tell") told.add(event.node);
+    }
+    const current = step > 0 ? events[step - 1] : null;
+    const path = new Set(current ? current.path : []);
+    for (let index = 0; index < data.nodes; index++) {
+      const group = byId("g-" + index);
+      const edge = byId("e-" + index);
+      const shown = asked.has(index);
+      const pending = shown && !told.has(index);
+      const isCurrent = current !== null && current.node === index;
+      group.classList.toggle("shown", shown);
+      group.classList.toggle("pending", pending);
+      byId("node-" + index).classList.toggle("pending", pending);
+      titles[index].title.textContent = pending ? titles[index].pending : titles[index].full;
+      group.classList.toggle("on-path", path.has(index));
+      group.classList.toggle("current", isCurrent);
+      edge.classList.toggle("shown", shown);
+      edge.classList.toggle("on-path", path.has(index) || isCurrent);
+    }
+    byId("root-node").classList.toggle("on-path", current !== null && current.kind !== "pick");
+    for (const kind of ["ask", "tell", "pick"]) {
+      player.classList.toggle("kind-" + kind, current !== null && current.kind === kind);
+    }
+    player.classList.toggle("finished", step === events.length);
+    byId("caption").textContent = current ? current.caption : data.start;
+    byId("counter").textContent = step + " / " + events.length;
+    slider.value = String(step);
+    select(current === null ? null : current.node);
+  }
+
+  function go(target) {
+    step = Math.max(0, Math.min(events.length, target));
+    render();
+  }
+
+  function pause() {
+    if (timer !== null) clearInterval(timer);
+    timer = null;
+    playButton.textContent = "\u25B6 Play";
+  }
+
+  function play() {
+    if (step >= events.length) go(0);
+    playButton.textContent = "\u23F8 Pause";
+    timer = setInterval(() => {
+      if (step >= events.length) pause();
+      else go(step + 1);
+    }, STEP_MS / Number(speed.value));
+  }
+
+  const toggle = () => (timer === null ? play() : pause());
+  const moves = {
+    first: () => 0,
+    back: () => step - 1,
+    forward: () => step + 1,
+    last: () => events.length,
+  };
+  for (const [id, target] of Object.entries(moves)) {
+    byId(id).addEventListener("click", () => { pause(); go(target()); });
+  }
+  playButton.addEventListener("click", toggle);
+  speed.addEventListener("change", () => { if (timer !== null) { pause(); play(); } });
+  slider.addEventListener("input", () => { pause(); go(Number(slider.value)); });
+  for (let index = 0; index < data.nodes; index++) {
+    byId("g-" + index).addEventListener("click", (event) => {
+      event.preventDefault();
+      pause();
+      select(index);
+    });
+  }
+  // a prompt's schema link opens the page's one copy of that DDL
+  for (const link of document.querySelectorAll("a.ctx-link")) {
+    link.addEventListener("click", () => {
+      const target = byId(link.getAttribute("href").slice(1));
+      if (target) target.open = true;
+    });
+  }
+  const keys = {
+    " ": toggle,
+    ArrowRight: () => { pause(); go(step + 1); },
+    ArrowLeft: () => { pause(); go(step - 1); },
+    Home: () => { pause(); go(0); },
+    End: () => { pause(); go(events.length); },
+  };
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    const tag = target.tagName;
+    // keys keep their own meaning in form controls, links, disclosures and the node panel
+    if (!(event.key in keys) || ["INPUT", "SELECT", "SUMMARY", "A", "a"].includes(tag)) return;
+    if (target.closest && target.closest(".panel")) return;
+    if (event.key === " " && tag === "BUTTON") return;  // the button's own click
+    event.preventDefault();
+    keys[event.key]();
+  });
+  render();
+})();
+</script></body></html>
