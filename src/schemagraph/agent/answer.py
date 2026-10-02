@@ -84,7 +84,7 @@ def reasoning_headroom(answer_tokens: int) -> int:
     (:data:`REASONING_BUDGET_PERCENT` at :func:`reasoning_level`), and never below
     :data:`REASONING_MAX_TOKENS`.
     """
-    percent = REASONING_BUDGET_PERCENT.get(reasoning_level(), REASONING_BUDGET_PERCENT["medium"])
+    percent = REASONING_BUDGET_PERCENT[reasoning_level()]
     return max(REASONING_MAX_TOKENS, math.ceil(answer_tokens * percent / (100 - percent)))
 
 
@@ -364,7 +364,7 @@ class Answerer:
                     "generator", GEN_MAX_TOKENS, GEN_TIMEOUT_S, model_name=model_name
                 ),
             },
-            usage_limits=agents.generator_limits(),
+            usage_limits=agents.generator_limits(self.cfg.output_retries),
             retries={"tools": 1, "output": self.cfg.output_retries},
         )
         return output

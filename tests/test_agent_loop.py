@@ -804,6 +804,32 @@ def test_schema_tools_past_the_tool_budget_are_not_called(store, monkeypatch):
     assert sum("DISTINCT" in sql for sql in executed) == budget
 
 
+def test_validator_round_trips_after_the_tool_budget_still_return_sql(store):
+    """Eight single calls, then a refused probe before each of three answers: 14 requests."""
+    after_budget = ["probe", "bad", "probe", "bad", "probe", "good"]
+
+    def gen(messages, info):
+        turn = sum(isinstance(message, ModelResponse) for message in messages)
+        if turn < agents.GENERATOR_TOOL_BUDGET:
+            return ModelResponse(parts=_sample_states(1))
+        step = after_budget[turn - agents.GENERATOR_TOOL_BUDGET]
+        if step == "probe":
+            return ModelResponse(parts=[ToolCallPart("run_query", {"sql": "select 1"})])
+        return _output(info, sql=GOOD if step == "good" else BAD)
+
+    result = _answer(store, AgentConfig(strategy="single", judge=False), _models(gen))
+    assert result.sql == GOOD
+    assert result.usage.by_role["generator"].requests == 14
+
+
+def test_one_batch_far_past_the_tool_budget_still_returns_sql(store):
+    """pydantic-ai refuses a whole batch that would cross its hard limit, so it sits far above."""
+    gen, seen = _batches(_sample_states(25))
+    result = _answer(store, AgentConfig(strategy="single", judge=False), _models(gen))
+    assert result.sql == GOOD
+    assert seen["sample_values"].count(agents.TOOL_BUDGET_SPENT) == 25 - agents.GENERATOR_TOOL_BUDGET
+
+
 # ------------------------------------------------------------------ checks over MCP lookups
 
 

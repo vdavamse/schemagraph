@@ -61,14 +61,11 @@ RETRY_DELAYS = (1.0, 4.0, 16.0)
 # alike). A soft budget: a call past it does not run and answers :data:`TOOL_BUDGET_SPENT`, so a
 # model that sends its calls in parallel batches still gets to return its query.
 GENERATOR_TOOL_BUDGET = 8
-# Hard backstops on one generator node, enforced by pydantic-ai, which ends the node with no SQL.
-# Tool calls: the soft budget plus room for two more refused batches, so only a model that keeps
-# calling tools after being told the budget is spent reaches it. pydantic-ai refuses a whole
-# batch that would cross it, which is why the soft budget must sit well below.
-GENERATOR_TOOL_CALLS_LIMIT = 3 * GENERATOR_TOOL_BUDGET
-# Requests: one per tool call when a model calls tools one at a time, then one to answer and up
-# to three more for answers the output validator sends back (``AgentConfig.output_retries``).
-GENERATOR_REQUEST_LIMIT = GENERATOR_TOOL_BUDGET + 4
+# Hard backstop on one generator node's tool calls, enforced by pydantic-ai, which ends the node
+# with no SQL. pydantic-ai refuses a whole batch that would cross it before running any of it, so
+# it sits far above any one batch; refused calls cost only the short message, and the request
+# limit (:func:`generator_limits`) is what ends a model that keeps calling tools.
+GENERATOR_TOOL_CALLS_LIMIT = GENERATOR_TOOL_BUDGET + 64
 # What a generator tool returns once the node's tool budget is spent.
 TOOL_BUDGET_SPENT = "tool budget spent; return your final query now"
 # Characters of a failure message kept on a usage record or a search node.
@@ -89,6 +86,10 @@ class AgentDeps:
         cfg: The answer's settings.
         probes_left: ``run_query`` calls left in this node.
         tools_left: Tool calls of any kind left in this node; build one ``AgentDeps`` per node.
+            A retry of a failed model call within the node (:data:`RETRY_DELAYS`) reuses it, as
+            it does ``probes_left`` and the usage limits, so the node's budget is spent at most
+            once however often its calls are retried; a late retry also inherits the requests
+            the node has already made.
     """
 
     executor: Executor
@@ -509,10 +510,16 @@ async def run_agent(
             sink.append(record)
 
 
-def generator_limits() -> UsageLimits:
-    """Return the generator's hard per-node request and tool-call limits (backstops)."""
+def generator_limits(output_retries: int) -> UsageLimits:
+    """Return the generator's hard per-node request and tool-call limits (backstops).
+
+    The requests: one per tool call when a model calls tools one at a time, then one per answer
+    (the first and up to ``output_retries`` the output validator sends back), each after one
+    refused tool call (a model told its query failed often probes before fixing it).
+    """
+    answers = output_retries + 1
     return UsageLimits(
-        request_limit=GENERATOR_REQUEST_LIMIT,
+        request_limit=GENERATOR_TOOL_BUDGET + 2 * answers,
         tool_calls_limit=GENERATOR_TOOL_CALLS_LIMIT,
     )
 
