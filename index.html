@@ -48,14 +48,14 @@ a { color: var(--accent); }
     <span>Question words seed the graph, personalized PageRank spreads the activation, PPR and BM25F rankings fuse, anchors are chosen, join paths pull in bridge tables, and the budget cuts the sub-schema. No LLM, deterministic.</span>
   </a>
 
-  <h2>Search replays (AB-MCTS-M, Jev judge)</h2>
+  <h2>Search replays without a specification (AB-MCTS-M, Jev judge, <code>--spec</code> off)</h2>
   <a class="card" href="replays/local008_qwen16.html">
     <b>One model, 16 nodes: the tree finds the answer <span class="tag">every draft wrong → refinement correct</span></b>
-    <span>Qwen 3.8 Max alone. All 6 first drafts are wrong; the critic's advice leads refinements to 4 correct queries, and a depth-1 refinement is picked.</span>
+    <span>No planner: the generator sees only the question and the schema. Qwen 3.8 Max alone. All 6 first drafts are wrong; the critic's advice leads refinements to 4 correct queries, and a depth-1 refinement is picked.</span>
   </a>
   <a class="card" href="replays/local008_multi20.html">
     <b>Five models, 20 nodes</b>
-    <span>Qwen, GLM-5.3, Grok 4.7, Gemini 3.8 Flash and GPT-6 Sol searched together; the search samples a model for every node. 6 correct queries, 3 of them first drafts; a depth-2 refinement is picked.</span>
+    <span>No planner. Qwen, GLM-5.3, Grok 4.7, Gemini 3.8 Flash and GPT-6 Sol searched together; the search samples a model for every node. 6 correct queries, 3 of them first drafts; a depth-2 refinement is picked.</span>
   </a>
 
   <footer>Generated from the repository's benchmark runs (<code>schemagraph viz-search</code>, <code>bench_results/link_viz</code>). Press ▶ or Space on a replay to play it; click a node for its SQL and prompt.</footer>
