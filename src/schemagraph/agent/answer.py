@@ -11,6 +11,7 @@ server's tools link in worker threads, so the Engine lock is never held across a
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from dataclasses import dataclass, field, replace
 from itertools import permutations
@@ -22,7 +23,7 @@ from schemagraph.agent import agents, prompts
 from schemagraph.agent.checks import det_of, join_keys, result_checks, static_checks, tables_read
 from schemagraph.agent.execute import Executor
 from schemagraph.agent.guard import GuardedSQL, GuardError, guard_sql
-from schemagraph.agent.models import AgentModels, reasons
+from schemagraph.agent.models import AgentModels, reasoning_level, reasons
 from schemagraph.agent.results import (
     Action,
     AgentConfig,
@@ -55,9 +56,14 @@ JUDGE_TIMEOUT_S = 30.0
 CRITIC_MAX_TOKENS = 800
 # Extra output tokens and request timeout of a role whose model reasons: reasoning counts
 # against ``max_tokens``, and a reasoning request takes longer (the node timeout still bounds
-# the whole node, ``AgentConfig.node_timeout_s``).
+# the whole node, ``AgentConfig.node_timeout_s``). The extra tokens are at least this many.
 REASONING_MAX_TOKENS = 8192
 REASONING_TIMEOUT_S = 180.0
+# Percent of ``max_tokens`` OpenRouter gives to thinking at each reasoning effort, for models that
+# take a token budget (Gemini, Anthropic; openrouter.ai/docs, reasoning tokens). At ``high`` a
+# flat 8192 extra left Gemini about 2450 tokens to answer in, and it often answered nothing;
+# the extra tokens are sized so the answer keeps its own cap at every effort.
+REASONING_BUDGET_PERCENT = {"low": 20, "medium": 50, "high": 80}
 # Timeout of counting one join key's rows and distinct values for the judge, in seconds.
 KEY_COUNT_TIMEOUT_S = 10.0
 # Join keys of tables with more rows than this (or an unknown count) are not measured for the
@@ -69,6 +75,17 @@ KEY_STATS_MAX_ROWS = 10_000_000
 JUDGE_COUNTS_TIMEOUT_S = 30.0
 # Usage roles whose records are attached to the node they ran for.
 _NODE_ROLES = frozenset({"generator", "judge"})
+
+
+def reasoning_headroom(answer_tokens: int) -> int:
+    """Return the extra output tokens a reasoning model gets on top of its answer's cap.
+
+    Sized so the answer keeps ``answer_tokens`` after OpenRouter's thinking share
+    (:data:`REASONING_BUDGET_PERCENT` at :func:`reasoning_level`), and never below
+    :data:`REASONING_MAX_TOKENS`.
+    """
+    percent = REASONING_BUDGET_PERCENT[reasoning_level()]
+    return max(REASONING_MAX_TOKENS, math.ceil(answer_tokens * percent / (100 - percent)))
 
 
 @dataclass
@@ -205,7 +222,7 @@ class Answerer:
         """
         reasoning = reasons(model_name) if model_name else self.models.reasoning(role)
         if reasoning:
-            max_tokens = (max_tokens or 0) + REASONING_MAX_TOKENS
+            max_tokens = (max_tokens or 0) + reasoning_headroom(max_tokens or 0)
             timeout = max(timeout, REASONING_TIMEOUT_S)
         limits: dict[str, Any] = {"timeout": timeout}
         if max_tokens is not None:
@@ -347,7 +364,7 @@ class Answerer:
                     "generator", GEN_MAX_TOKENS, GEN_TIMEOUT_S, model_name=model_name
                 ),
             },
-            usage_limits=agents.generator_limits(),
+            usage_limits=agents.generator_limits(self.cfg.output_retries),
             retries={"tools": 1, "output": self.cfg.output_retries},
         )
         return output

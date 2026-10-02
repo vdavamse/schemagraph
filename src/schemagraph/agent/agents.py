@@ -57,9 +57,17 @@ SAMPLE_VALUES_MAX = 50
 TOOL_QUERY_TIMEOUT_S = 10.0
 # Seconds before each retry of a rate-limited or failed model call (plus up to 25 % jitter).
 RETRY_DELAYS = (1.0, 4.0, 16.0)
-# Model requests and tool calls one generator node may make.
-GENERATOR_REQUEST_LIMIT = 10
-GENERATOR_TOOL_CALLS_LIMIT = 8
+# Tool calls one generator node may spend (schema tools, ``sample_values`` and ``run_query``
+# alike). A soft budget: a call past it does not run and answers :data:`TOOL_BUDGET_SPENT`, so a
+# model that sends its calls in parallel batches still gets to return its query.
+GENERATOR_TOOL_BUDGET = 8
+# Hard backstop on one generator node's tool calls, enforced by pydantic-ai, which ends the node
+# with no SQL. pydantic-ai refuses a whole batch that would cross it before running any of it, so
+# it sits far above any one batch; refused calls cost only the short message, and the request
+# limit (:func:`generator_limits`) is what ends a model that keeps calling tools.
+GENERATOR_TOOL_CALLS_LIMIT = GENERATOR_TOOL_BUDGET + 64
+# What a generator tool returns once the node's tool budget is spent.
+TOOL_BUDGET_SPENT = "tool budget spent; return your final query now"
 # Characters of a failure message kept on a usage record or a search node.
 FAILURE_CHARS = 500
 # USD per million (input, output) tokens of models whose responses carry no billed cost, by a
@@ -77,11 +85,29 @@ class AgentDeps:
         executor: The read-only database the query runs on.
         cfg: The answer's settings.
         probes_left: ``run_query`` calls left in this node.
+        tools_left: Tool calls of any kind left in this node; build one ``AgentDeps`` per node.
+            A retry of a failed model call within the node (:data:`RETRY_DELAYS`) reuses it, as
+            it does ``probes_left`` and the usage limits, so the node's budget is spent at most
+            once however often its calls are retried; a late retry also inherits the requests
+            the node has already made.
     """
 
     executor: Executor
     cfg: AgentConfig
     probes_left: int
+    tools_left: int = GENERATOR_TOOL_BUDGET
+
+
+def _spend_tool_call(deps: AgentDeps) -> bool:
+    """Spend one call of the node's tool budget; False when it is already spent.
+
+    Every generator tool calls this before its first ``await``, so the calls of one parallel
+    batch spend the budget in order and those past it are refused.
+    """
+    if deps.tools_left <= 0:
+        return False
+    deps.tools_left -= 1
+    return True
 
 
 def _cut(text: str) -> str:
@@ -121,7 +147,12 @@ async def _process_call(
     name: str,
     arguments: dict[str, Any],
 ) -> ToolResult:
-    """Call an MCP tool with pinned arguments and cap its result at :data:`TOOL_RESULT_CHARS`."""
+    """Call an MCP tool with pinned arguments and cap its result at :data:`TOOL_RESULT_CHARS`.
+
+    The call spends one of the node's tool budget; once it is spent the tool is not called.
+    """
+    if not _spend_tool_call(run_context.deps):
+        return TOOL_BUDGET_SPENT
     return _truncated(await call_tool(name, _pinned_arguments(name, arguments)))
 
 
@@ -197,6 +228,8 @@ async def sample_values(
         column: The column name.
         limit: How many values (1-50).
     """
+    if not _spend_tool_call(run_context.deps):
+        return TOOL_BUDGET_SPENT
     executor = run_context.deps.executor
     resolved = await asyncio.to_thread(_resolve_column, executor, table, column)
     if isinstance(resolved, str):
@@ -227,6 +260,8 @@ async def run_query(run_context: RunContext[AgentDeps], sql: str) -> str:
         sql: One SELECT query.
     """
     deps = run_context.deps
+    if not _spend_tool_call(deps):
+        return TOOL_BUDGET_SPENT
     if deps.probes_left <= 0:
         return "probe budget exhausted; return your final query now"
     deps.probes_left -= 1  # a refused probe spends the budget too
@@ -475,10 +510,16 @@ async def run_agent(
             sink.append(record)
 
 
-def generator_limits() -> UsageLimits:
-    """Return the per-node request and tool-call limits of the generator."""
+def generator_limits(output_retries: int) -> UsageLimits:
+    """Return the generator's hard per-node request and tool-call limits (backstops).
+
+    The requests: one per tool call when a model calls tools one at a time, then one per answer
+    (the first and up to ``output_retries`` the output validator sends back), each after one
+    refused tool call (a model told its query failed often probes before fixing it).
+    """
+    answers = output_retries + 1
     return UsageLimits(
-        request_limit=GENERATOR_REQUEST_LIMIT,
+        request_limit=GENERATOR_TOOL_BUDGET + 2 * answers,
         tool_calls_limit=GENERATOR_TOOL_CALLS_LIMIT,
     )
 
