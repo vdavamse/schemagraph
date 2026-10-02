@@ -58,6 +58,17 @@ a { color: var(--accent); }
     <span>No planner. Qwen, GLM-5.3, Grok 4.7, Gemini 3.8 Flash and GPT-6 Sol searched together; the search samples a model for every node. 6 correct queries, 3 of them first drafts; a depth-2 refinement is picked.</span>
   </a>
 
+
+  <h2>Search replays with a specification (<code>--spec</code>: one Opus planner call first)</h2>
+  <a class="card" href="replays/local008_qwen16_spec.html">
+    <b>One model, 16 nodes, with the spec <span class="tag">16 of 16 correct</span></b>
+    <span>Before the search, a planner (Opus 5.5) writes what the question means: career totals per player, one row per statistic, every quantity in its own column. With that in every prompt, all 7 first drafts and all 16 nodes are correct ($0.63, against $0.89 without the spec).</span>
+  </a>
+  <a class="card" href="replays/local008_multi20_spec.html">
+    <b>Five models, 20 nodes, with the spec <span class="tag">20 of 20 correct</span></b>
+    <span>The same five models as above, now reading the planner's specification: every node of every model is correct ($0.86, against $1.33 without the spec). The specification is shown at the top of the page and in each generator prompt.</span>
+  </a>
+
   <footer>Generated from the repository's benchmark runs (<code>schemagraph viz-search</code>, <code>bench_results/link_viz</code>). Press ▶ or Space on a replay to play it; click a node for its SQL and prompt.</footer>
 </main>
 </body>

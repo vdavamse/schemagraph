@@ -1,0 +1,1855 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src &#x27;none&#x27;; style-src &#x27;unsafe-inline&#x27;; script-src &#x27;sha256-nLuNjY3CChPi+FyjUSv+AziMJ/jYiWsqhUWi1KrvxlU=&#x27;"><meta name="viewport" content="width=device-width, initial-scale=1"><title>local008</title><style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --fg: #1b1f24; --muted: #5b6470; --line: #c3c9d1; --panel: #f3f4f6;
+  --accent: #b35900; --good: #1a7f37; --bad: #cf222e; --bar: #7d8590; --code: #f6f8fa;
+  --select: #8250df; --backup: #1a7f37;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115; --fg: #e6e8eb; --muted: #9aa4b1; --line: #3b424c; --panel: #1b1f26;
+    --accent: #ffb454; --good: #56d364; --bad: #ff7b72; --bar: #8b949e; --code: #161b22;
+    --select: #c297ff; --backup: #56d364;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto; max-width: 96rem; padding: 16px; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; overflow-wrap: anywhere;
+}
+a { color: inherit; }
+h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+h2 { font-size: 1.1rem; margin: 1.5rem 0 .5rem; }
+h3 { font-size: 1rem; margin: 0 0 .5rem; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: .15rem 1rem; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.scroll { overflow-x: auto; max-width: 100%; }
+table { border-collapse: collapse; }
+th, td { text-align: left; padding: .2rem .75rem .2rem 0; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.legend { margin: .5rem 0 1rem; }
+.swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%;
+  border: 1px solid var(--fg); vertical-align: -1px; margin-right: .4rem; }
+.key { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; color: var(--muted); margin: .5rem 0; }
+.key svg { vertical-align: -3px; margin-right: .3rem; }
+.key .node { stroke: var(--fg); }
+.key .chosen-ring { stroke: var(--accent); fill: none; stroke-width: 2; }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+.muted { color: var(--muted); }
+pre { background: var(--code); border: 1px solid var(--line); border-radius: 6px; padding: .6rem;
+  overflow-x: auto; font: 12.5px/1.45 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: normal; white-space: pre-wrap; }
+ul { margin: .25rem 0; padding-left: 1.25rem; }
+details > summary { cursor: pointer; color: var(--muted); }
+
+/* the player: the tree on the left, the node panel on the right */
+.player { display: grid; grid-template-columns: minmax(0, 3fr) minmax(20rem, 2fr); gap: 1rem;
+  align-items: start; }
+@media (max-width: 60rem) { .player { grid-template-columns: minmax(0, 1fr); } }
+.controls { display: none; flex-wrap: wrap; align-items: center; gap: .4rem; margin: 0 0 .5rem; }
+.js .controls { display: flex; }
+.controls button, .controls select { font: inherit; padding: .2rem .6rem; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg); cursor: pointer; }
+.controls input[type=range] { flex: 1 1 12rem; }
+.counter { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 5rem; }
+.caption { display: none; min-height: 3em; margin: 0 0 .5rem; padding: .4rem .6rem;
+  border-left: 4px solid var(--select); background: var(--panel); border-radius: 0 6px 6px 0; }
+.js .caption { display: block; }
+.kind-tell .caption { border-left-color: var(--backup); }
+.stage { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.stage svg { display: block; margin: 0 auto; max-width: 100%; height: auto;
+  font: 11px ui-monospace, "SFMono-Regular", Consolas, monospace; }
+.stage text { fill: var(--fg); }
+.stage .label { fill: var(--muted); text-anchor: middle; }
+.stage .score { text-anchor: middle; dominant-baseline: central; font-size: 9px;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 2.5px; }
+.stage .ex { dominant-baseline: central; font-size: 12px; font-weight: 700; }
+.stage .ex.good { fill: var(--good); }
+.stage .ex.bad { fill: var(--bad); }
+.stage .edge { stroke: var(--line); fill: none; stroke-width: 1.5; }
+.stage .root rect { fill: var(--panel); stroke: var(--muted); stroke-width: 1.5; }
+.stage .root text { text-anchor: middle; dominant-baseline: central; fill: var(--muted); }
+.stage .node { fill: var(--c); stroke: var(--fg); stroke-width: 1; }
+.stage .node.hollow { fill: none; stroke: var(--c); stroke-width: 3; }
+.stage .node.dashed { fill: none; stroke: var(--c); stroke-width: 2.5; stroke-dasharray: 4 3; }
+.stage .chosen-ring { stroke: var(--accent); fill: none; stroke-width: 2.5; }
+.stage a:focus-visible .node, .stage a:hover .node { stroke-width: 3; }
+.panel { border: 1px solid var(--line); border-radius: 6px; padding: .75rem;
+  max-height: 88vh; overflow-y: auto; position: sticky; top: 8px; }
+.panel-empty { color: var(--muted); display: none; }
+.js .panel-empty { display: block; }
+.node-detail { border-top: 1px solid var(--line); padding: .75rem 0; }
+.node-detail:first-of-type { border-top: 0; }
+.node-detail:target { background: var(--panel); }
+.marks { color: var(--accent); font-weight: 600; }
+.prompt-text { margin: .25rem 0; }
+.pending-note { display: none; }
+.schema-context { margin-top: .75rem; }
+.spec { margin: .5rem 0 1rem; }
+
+/* the replay: classes the player script toggles */
+.js .panel .node-detail { display: none; border-top: 0; padding-top: 0; }
+.js .panel .node-detail.selected { display: block; }
+.js .panel-empty[hidden] { display: none; }
+.js .node-detail.pending .outcome { display: none; }
+.js .node-detail.pending .pending-note { display: block; }
+.js .node-g, .js .edge { transition: opacity .35s ease; }
+.js .node-g:not(.shown), .js .edge:not(.shown) { opacity: 0; pointer-events: none; }
+.js .node-g.pending .node { fill: var(--bg); stroke: var(--c); stroke-dasharray: 3 3;
+  stroke-width: 2.5; }
+.js .node-g.pending .score, .js .node-g.pending .ex { opacity: 0; }
+.js .player-main:not(.finished) .chosen-ring { opacity: 0; }
+.js .edge.on-path { stroke: var(--select); stroke-width: 3.5; }
+.js .kind-tell .edge.on-path { stroke: var(--backup); }
+.js .node-g.on-path .node, .js .root.on-path rect { stroke: var(--select); stroke-width: 3.5; }
+.js .kind-tell .node-g.on-path .node, .js .kind-tell .root.on-path rect { stroke: var(--backup); }
+.js .node-g.current .node { stroke: var(--accent); stroke-width: 4; }
+.js .node-g.current .halo { opacity: 1; animation: halo 1.2s ease-out infinite; }
+.halo { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0; }
+@keyframes halo { from { stroke-opacity: .9; } to { stroke-opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .js .node-g, .js .edge { transition: none; }
+  .js .node-g.current .halo { animation: none; }
+}
+</style></head><body id="top"><h1>local008</h1><dl class="facts"><dt>database</dt><dd>Baseball</dd><dt>strategy</dt><dd>abmcts</dd><dt>budget</dt><dd>16</dd><dt>nodes</dt><dd>16</dd><dt>EX of the pick</dt><dd>1</dd><dt>EX of the top score</dt><dd>1</dd><dt>any node correct</dt><dd>1</dd><dt>cost</dt><dd>$0.6269</dd><dt>seconds</dt><dd>723</dd><dt>chosen</dt><dd>n6 by score</dd></dl><details class="spec"><summary>specification (planner)</summary><pre>Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)</pre></details><div class="legend"><div class="scroll"><table><thead><tr><th>model</th><th>family</th><th>nodes</th><th>best score</th><th>EX ✓</th></tr></thead><tbody><tr><td><span class="swatch" style="background:#7B5CD6"></span>openrouter:qwen/qwen3.8-max-0902</td><td>qwen</td><td>16</td><td>0.94</td><td>16</td></tr></tbody></table></div><div class="key"><span><svg width="20" height="20" aria-hidden="true"><circle cx="10.0" cy="10.0" r="6" class="node" fill="#0072B2"/></svg>ran (fill: model family)</span><span><svg width="20" height="20" aria-hidden="true"><circle cx="10.0" cy="10.0" r="6" class="node" fill="none" stroke-width="3"/></svg>exec error (hollow)</span><span><svg width="20" height="20" aria-hidden="true"><circle cx="10.0" cy="10.0" r="6" class="node" fill="none" stroke-dasharray="3 2"/></svg>⚠ generation failed</span><span><svg width="20" height="20" aria-hidden="true"><circle cx="10.0" cy="10.0" r="6" class="node" fill="#0072B2"/><circle cx="10.0" cy="10.0" r="9" class="chosen-ring"/></svg>★ chosen (ring)</span><span><svg width="20" height="20" aria-hidden="true"><line x1="2" y1="10.0" x2="18" y2="10.0" stroke-width="3.5" style="stroke:var(--select)"/></svg>selection path</span><span><svg width="20" height="20" aria-hidden="true"><line x1="2" y1="10.0" x2="18" y2="10.0" stroke-width="3.5" style="stroke:var(--backup)"/></svg>reward backup</span></div></div><div class="player"><div class="player-main" id="player"><div class="controls" role="toolbar" aria-label="replay"><button type="button" id="first" title="first step (Home)">|◀</button><button type="button" id="back" title="step back (←)">◀ step</button><button type="button" id="play" title="play or pause (Space)">▶ Play</button><button type="button" id="forward" title="step forward (→)">step ▶</button><button type="button" id="last" title="last step (End)">▶|</button><input type="range" id="step" min="0" max="0" value="0" aria-label="replay step"><span class="counter" id="counter"></span><label>speed <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div><p class="caption" id="caption" aria-live="polite"></p><div class="stage"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 456 210" width="730" height="336" role="img" aria-label="search tree"><path class="edge" id="e-0" d="M228.0 46.0 C228.0 67.0 41.0 67.0 41.0 88.0"/><path class="edge" id="e-1" d="M228.0 46.0 C228.0 67.0 92.0 67.0 92.0 88.0"/><path class="edge" id="e-2" d="M92.0 110.0 C92.0 131.0 75.0 131.0 75.0 152.0"/><path class="edge" id="e-3" d="M92.0 110.0 C92.0 131.0 109.0 131.0 109.0 152.0"/><path class="edge" id="e-4" d="M228.0 46.0 C228.0 67.0 160.0 67.0 160.0 88.0"/><path class="edge" id="e-5" d="M160.0 110.0 C160.0 131.0 143.0 131.0 143.0 152.0"/><path class="edge" id="e-6" d="M160.0 110.0 C160.0 131.0 177.0 131.0 177.0 152.0"/><path class="edge" id="e-7" d="M228.0 46.0 C228.0 67.0 211.0 67.0 211.0 88.0"/><path class="edge" id="e-8" d="M228.0 46.0 C228.0 67.0 279.0 67.0 279.0 88.0"/><path class="edge" id="e-9" d="M279.0 110.0 C279.0 131.0 245.0 131.0 245.0 152.0"/><path class="edge" id="e-10" d="M279.0 110.0 C279.0 131.0 279.0 131.0 279.0 152.0"/><path class="edge" id="e-11" d="M279.0 110.0 C279.0 131.0 313.0 131.0 313.0 152.0"/><path class="edge" id="e-12" d="M228.0 46.0 C228.0 67.0 364.0 67.0 364.0 88.0"/><path class="edge" id="e-13" d="M364.0 110.0 C364.0 131.0 347.0 131.0 347.0 152.0"/><path class="edge" id="e-14" d="M364.0 110.0 C364.0 131.0 381.0 131.0 381.0 152.0"/><path class="edge" id="e-15" d="M228.0 46.0 C228.0 67.0 415.0 67.0 415.0 88.0"/><g class="root" id="root-node"><rect x="190.0" y="24.0" width="76" height="22" rx="6"/><text x="228.0" y="35.0">question</text></g><a href="#node-0" class="node-g" id="g-0"><title data-pending="n0 · openrouter:qwen/qwen3.8-max-0902 · generating">n0 · openrouter:qwen/qwen3.8-max-0902 · score 0.93 · draft · wide · EX ✓</title><circle class="halo" cx="41.0" cy="99.0" r="16"/><circle cx="41.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="41.0" y="99.0">.93</text><text class="label" x="41.0" y="122.0">n0</text><text class="ex good" x="54.0" y="88.0">✓</text></a><a href="#node-1" class="node-g" id="g-1"><title data-pending="n1 · openrouter:qwen/qwen3.8-max-0902 · generating">n1 · openrouter:qwen/qwen3.8-max-0902 · score 0.92 · draft · wide · EX ✓</title><circle class="halo" cx="92.0" cy="99.0" r="16"/><circle cx="92.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="92.0" y="99.0">.92</text><text class="label" x="92.0" y="122.0">n1</text><text class="ex good" x="105.0" y="88.0">✓</text></a><a href="#node-2" class="node-g" id="g-2"><title data-pending="n4 · openrouter:qwen/qwen3.8-max-0902 · generating">n4 · openrouter:qwen/qwen3.8-max-0902 · score 0.91 · refines n1 · tight · EX ✓</title><circle class="halo" cx="75.0" cy="163.0" r="16"/><circle cx="75.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="75.0" y="163.0">.91</text><text class="label" x="75.0" y="186.0">n4</text><text class="ex good" x="88.0" y="152.0">✓</text></a><a href="#node-3" class="node-g" id="g-3"><title data-pending="n5 · openrouter:qwen/qwen3.8-max-0902 · generating">n5 · openrouter:qwen/qwen3.8-max-0902 · score 0.91 · refines n1 · wide · EX ✓</title><circle class="halo" cx="109.0" cy="163.0" r="16"/><circle cx="109.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="109.0" y="163.0">.91</text><text class="label" x="109.0" y="186.0">n5</text><text class="ex good" x="122.0" y="152.0">✓</text></a><a href="#node-4" class="node-g" id="g-4"><title data-pending="n2 · openrouter:qwen/qwen3.8-max-0902 · generating">n2 · openrouter:qwen/qwen3.8-max-0902 · score 0.91 · draft · wide · EX ✓</title><circle class="halo" cx="160.0" cy="99.0" r="16"/><circle cx="160.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="160.0" y="99.0">.91</text><text class="label" x="160.0" y="122.0">n2</text><text class="ex good" x="173.0" y="88.0">✓</text></a><a href="#node-5" class="node-g" id="g-5"><title data-pending="n14 · openrouter:qwen/qwen3.8-max-0902 · generating">n14 · openrouter:qwen/qwen3.8-max-0902 · score 0.92 · refines n2 · tight · EX ✓</title><circle class="halo" cx="143.0" cy="163.0" r="16"/><circle cx="143.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="143.0" y="163.0">.92</text><text class="label" x="143.0" y="186.0">n14</text><text class="ex good" x="156.0" y="152.0">✓</text></a><a href="#node-6" class="node-g" id="g-6"><title data-pending="n15 · openrouter:qwen/qwen3.8-max-0902 · generating">n15 · openrouter:qwen/qwen3.8-max-0902 · score 0.93 · refines n2 · tight · EX ✓</title><circle class="halo" cx="177.0" cy="163.0" r="16"/><circle cx="177.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="177.0" y="163.0">.93</text><text class="label" x="177.0" y="186.0">n15</text><text class="ex good" x="190.0" y="152.0">✓</text></a><a href="#node-7" class="node-g" id="g-7"><title data-pending="n3 · openrouter:qwen/qwen3.8-max-0902 · generating">n3 · openrouter:qwen/qwen3.8-max-0902 · score 0.92 · draft · tight · EX ✓</title><circle class="halo" cx="211.0" cy="99.0" r="16"/><circle cx="211.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="211.0" y="99.0">.92</text><text class="label" x="211.0" y="122.0">n3</text><text class="ex good" x="224.0" y="88.0">✓</text></a><a href="#node-8" class="node-g" id="g-8"><title data-pending="n6 · openrouter:qwen/qwen3.8-max-0902 · generating">n6 · openrouter:qwen/qwen3.8-max-0902 · score 0.94 · draft · tight · ★ chosen (score) · EX ✓</title><circle class="halo" cx="279.0" cy="99.0" r="16"/><circle cx="279.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><circle class="chosen-ring" cx="279.0" cy="99.0" r="15"/><text class="score" x="279.0" y="99.0">.94</text><text class="label" x="279.0" y="122.0">n6</text><text class="ex good" x="292.0" y="88.0">✓</text></a><a href="#node-9" class="node-g" id="g-9"><title data-pending="n8 · openrouter:qwen/qwen3.8-max-0902 · generating">n8 · openrouter:qwen/qwen3.8-max-0902 · score 0.93 · refines n6 · wide · EX ✓</title><circle class="halo" cx="245.0" cy="163.0" r="16"/><circle cx="245.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="245.0" y="163.0">.93</text><text class="label" x="245.0" y="186.0">n8</text><text class="ex good" x="258.0" y="152.0">✓</text></a><a href="#node-10" class="node-g" id="g-10"><title data-pending="n10 · openrouter:qwen/qwen3.8-max-0902 · generating">n10 · openrouter:qwen/qwen3.8-max-0902 · score 0.93 · refines n6 · wide · EX ✓</title><circle class="halo" cx="279.0" cy="163.0" r="16"/><circle cx="279.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="279.0" y="163.0">.93</text><text class="label" x="279.0" y="186.0">n10</text><text class="ex good" x="292.0" y="152.0">✓</text></a><a href="#node-11" class="node-g" id="g-11"><title data-pending="n11 · openrouter:qwen/qwen3.8-max-0902 · generating">n11 · openrouter:qwen/qwen3.8-max-0902 · score 0.91 · refines n6 · wide · EX ✓</title><circle class="halo" cx="313.0" cy="163.0" r="16"/><circle cx="313.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="313.0" y="163.0">.91</text><text class="label" x="313.0" y="186.0">n11</text><text class="ex good" x="326.0" y="152.0">✓</text></a><a href="#node-12" class="node-g" id="g-12"><title data-pending="n7 · openrouter:qwen/qwen3.8-max-0902 · generating">n7 · openrouter:qwen/qwen3.8-max-0902 · score 0.92 · draft · wide · EX ✓</title><circle class="halo" cx="364.0" cy="99.0" r="16"/><circle cx="364.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="364.0" y="99.0">.92</text><text class="label" x="364.0" y="122.0">n7</text><text class="ex good" x="377.0" y="88.0">✓</text></a><a href="#node-13" class="node-g" id="g-13"><title data-pending="n9 · openrouter:qwen/qwen3.8-max-0902 · generating">n9 · openrouter:qwen/qwen3.8-max-0902 · score 0.90 · refines n7 · wide · EX ✓</title><circle class="halo" cx="347.0" cy="163.0" r="16"/><circle cx="347.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="347.0" y="163.0">.90</text><text class="label" x="347.0" y="186.0">n9</text><text class="ex good" x="360.0" y="152.0">✓</text></a><a href="#node-14" class="node-g" id="g-14"><title data-pending="n12 · openrouter:qwen/qwen3.8-max-0902 · generating">n12 · openrouter:qwen/qwen3.8-max-0902 · score 0.89 · refines n7 · tight · EX ✓</title><circle class="halo" cx="381.0" cy="163.0" r="16"/><circle cx="381.0" cy="163.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="381.0" y="163.0">.89</text><text class="label" x="381.0" y="186.0">n12</text><text class="ex good" x="394.0" y="152.0">✓</text></a><a href="#node-15" class="node-g" id="g-15"><title data-pending="n13 · openrouter:qwen/qwen3.8-max-0902 · generating">n13 · openrouter:qwen/qwen3.8-max-0902 · score 0.92 · draft · tight · EX ✓</title><circle class="halo" cx="415.0" cy="99.0" r="16"/><circle cx="415.0" cy="99.0" r="11" class="node filled" style="--c:#7B5CD6"/><text class="score" x="415.0" y="99.0">.92</text><text class="label" x="415.0" y="122.0">n13</text><text class="ex good" x="428.0" y="88.0">✓</text></a></svg></div></div><aside class="panel" aria-label="node details"><p class="panel-empty" id="panel-empty">Play the replay, or click a node, to see its SQL and generator prompt.</p><section class="node-detail" id="node-0"><h3><span class="swatch" style="background:#7B5CD6"></span>n0 · qwen3.8-max-0902<span class="outcome"> · 0.93 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.85, x 0.91</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>35.1 s</dd></dl><pre><code>WITH career AS (SELECT b.player_id, p.name_given, SUM(b.g) AS tg, SUM(b.r) AS tr, SUM(b.h) AS th, SUM(b.hr) AS thr FROM batting b JOIN player p ON p.player_id = b.player_id GROUP BY b.player_id, p.name_given) SELECT category, name_given, score FROM (SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, name_given, tg AS score FROM career WHERE tg = (SELECT MAX(tg) FROM career) UNION ALL SELECT 2 AS ord, &#x27;Runs&#x27; AS category, name_given, tr AS score FROM career WHERE tr = (SELECT MAX(tr) FROM career) UNION ALL SELECT 3 AS ord, &#x27;Hits&#x27; AS category, name_given, th AS score FROM career WHERE th = (SELECT MAX(th) FROM career) UNION ALL SELECT 4 AS ord, &#x27;Home Runs&#x27; AS category, name_given, thr AS score FROM career WHERE thr = (SELECT MAX(thr) FROM career)) ORDER BY ord</code></pre><p><span class="muted">rationale:</span> Career totals per player are summed from all batting rows (g, r, h, hr) grouped by player_id and joined to player for name_given; each UNION ALL branch keeps only players whose career total equals the maximum for that stat, and the outer query returns just category, name_given, score ordered Games Played, Runs, Hits, Home Runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.87</td></tr><tr><td>right_columns</td><td>0.90</td></tr><tr><td>right_filters</td><td>0.76</td></tr><tr><td>right_grain</td><td>0.91</td></tr><tr><td>right_order</td><td>0.92</td></tr><tr><td>plausible</td><td>0.76</td></tr><tr><td>follows_spec</td><td>0.86</td></tr><tr><td>missing home_game</td><td>0.19</td></tr><tr><td>missing all_star</td><td>0.09</td></tr><tr><td>missing team</td><td>0.15</td></tr><tr><td>missing college</td><td>0.11</td></tr><tr><td>missing player_award</td><td>0.12</td></tr><tr><td>missing park</td><td>0.28</td></tr><tr><td>missing player_college</td><td>0.08</td></tr><tr><td>missing player_award_vote</td><td>0.06</td></tr><tr><td>missing team_franchise</td><td>0.11</td></tr><tr><td>missing manager_award</td><td>0.10</td></tr><tr><td>missing manager_award_vote</td><td>0.09</td></tr><tr><td>missing fielding_outfield</td><td>0.09</td></tr><tr><td>missing manager_half</td><td>0.11</td></tr><tr><td>missing appearances</td><td>0.13</td></tr><tr><td>missing batting_postseason</td><td>0.14</td></tr><tr><td>missing manager</td><td>0.15</td></tr><tr><td>missing fielding</td><td>0.14</td></tr><tr><td>missing fielding_postseason</td><td>0.09</td></tr><tr><td>missing hall_of_fame</td><td>0.08</td></tr><tr><td>missing pitching</td><td>0.13</td></tr><tr><td>missing pitching_postseason</td><td>0.07</td></tr><tr><td>missing salary</td><td>0.10</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-1"><h3><span class="swatch" style="background:#7B5CD6"></span>n1 · qwen3.8-max-0902<span class="outcome"> · 0.92 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.84, x 0.90</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>19.5 s</dd></dl><pre><code>WITH career AS (SELECT b.player_id, SUM(b.g) AS g, SUM(b.r) AS r, SUM(b.h) AS h, SUM(b.hr) AS hr FROM batting b GROUP BY b.player_id), named AS (SELECT p.name_given, c.g, c.r, c.h, c.hr FROM career c JOIN player p ON p.player_id = c.player_id) SELECT category, name_given, score FROM (SELECT &#x27;Games Played&#x27; AS category, name_given, g AS score FROM named WHERE g = (SELECT MAX(g) FROM named) UNION ALL SELECT &#x27;Runs&#x27;, name_given, r FROM named WHERE r = (SELECT MAX(r) FROM named) UNION ALL SELECT &#x27;Hits&#x27;, name_given, h FROM named WHERE h = (SELECT MAX(h) FROM named) UNION ALL SELECT &#x27;Home Runs&#x27;, name_given, hr FROM named WHERE hr = (SELECT MAX(hr) FROM named)) ORDER BY CASE category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 WHEN &#x27;Home Runs&#x27; THEN 4 END</code></pre><p><span class="muted">rationale:</span> Career totals are computed by SUMming each batting row per player_id (regular season only), joined to player for name_given; each of the four stats is then compared to its own MAX to select the leader(s) and their score, ordered Games Played, Runs, Hits, Home Runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.85</td></tr><tr><td>right_columns</td><td>0.90</td></tr><tr><td>right_filters</td><td>0.75</td></tr><tr><td>right_grain</td><td>0.91</td></tr><tr><td>right_order</td><td>0.92</td></tr><tr><td>plausible</td><td>0.75</td></tr><tr><td>follows_spec</td><td>0.81</td></tr><tr><td>missing home_game</td><td>0.22</td></tr><tr><td>missing all_star</td><td>0.09</td></tr><tr><td>missing team</td><td>0.22</td></tr><tr><td>missing college</td><td>0.10</td></tr><tr><td>missing player_award</td><td>0.13</td></tr><tr><td>missing park</td><td>0.27</td></tr><tr><td>missing player_college</td><td>0.10</td></tr><tr><td>missing player_award_vote</td><td>0.09</td></tr><tr><td>missing team_franchise</td><td>0.09</td></tr><tr><td>missing manager_award</td><td>0.20</td></tr><tr><td>missing manager_award_vote</td><td>0.10</td></tr><tr><td>missing fielding_outfield</td><td>0.10</td></tr><tr><td>missing manager_half</td><td>0.09</td></tr><tr><td>missing appearances</td><td>0.10</td></tr><tr><td>missing batting_postseason</td><td>0.19</td></tr><tr><td>missing manager</td><td>0.23</td></tr><tr><td>missing fielding</td><td>0.08</td></tr><tr><td>missing fielding_postseason</td><td>0.14</td></tr><tr><td>missing hall_of_fame</td><td>0.08</td></tr><tr><td>missing pitching</td><td>0.15</td></tr><tr><td>missing pitching_postseason</td><td>0.07</td></tr><tr><td>missing salary</td><td>0.16</td></tr></tbody></table></div><p><span class="muted">advice:</span> - Add an alias to the derived table after the `UNION ALL`; some SQL dialects require a subquery in `FROM` to be named.
+- Compare each stat to its own `MAX` from the aggregated career totals, so the four leaders are selected independently and ties are preserved.
+- Deduplicate the player join or use `DISTINCT` on the final output to avoid repeated rows if a `player_id` has multiple matching `player` rows.
+- Use `UNION ALL` rather than `UNION` so valid tied leaders are not accidentally collapsed.</p></div></section><section class="node-detail" id="node-2"><h3><span class="swatch" style="background:#7B5CD6"></span>n4 · qwen3.8-max-0902<span class="outcome"> · 0.91 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n1</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.83, x 0.90</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>126.8 s</dd></dl><pre><code>WITH career AS (SELECT b.player_id, SUM(b.g) AS g, SUM(b.r) AS r, SUM(b.h) AS h, SUM(b.hr) AS hr FROM batting b GROUP BY b.player_id), named AS (SELECT p.name_given, c.g, c.r, c.h, c.hr FROM career c JOIN player p ON p.player_id = c.player_id) SELECT DISTINCT category, name_given, score FROM (SELECT &#x27;Games Played&#x27; AS category, n.name_given AS name_given, n.g AS score FROM named n WHERE n.g = (SELECT MAX(g) FROM named) UNION ALL SELECT &#x27;Runs&#x27;, n.name_given, n.r FROM named n WHERE n.r = (SELECT MAX(r) FROM named) UNION ALL SELECT &#x27;Hits&#x27;, n.name_given, n.h FROM named n WHERE n.h = (SELECT MAX(h) FROM named) UNION ALL SELECT &#x27;Home Runs&#x27;, n.name_given, n.hr FROM named n WHERE n.hr = (SELECT MAX(hr) FROM named)) AS leaders ORDER BY CASE category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 WHEN &#x27;Home Runs&#x27; THEN 4 END, name_given</code></pre><p><span class="muted">rationale:</span> Career totals are computed by SUMming each regular-season batting row per player_id (batting only, no postseason), joined to player on player_id for name_given; each of the four stats is then compared with its own MAX so the all-time leaders (and any ties) are selected independently, ordered Games Played, Runs, Hits, Home Runs. The derived table is aliased and DISTINCT guards against duplicate player rows.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.92):
+SQL:
+WITH career AS (SELECT b.player_id, SUM(b.g) AS g, SUM(b.r) AS r, SUM(b.h) AS h, SUM(b.hr) AS hr FROM batting b GROUP BY b.player_id), named AS (SELECT p.name_given, c.g, c.r, c.h, c.hr FROM career c JOIN player p ON p.player_id = c.player_id) SELECT category, name_given, score FROM (SELECT &#x27;Games Played&#x27; AS category, name_given, g AS score FROM named WHERE g = (SELECT MAX(g) FROM named) UNION ALL SELECT &#x27;Runs&#x27;, name_given, r FROM named WHERE r = (SELECT MAX(r) FROM named) UNION ALL SELECT &#x27;Hits&#x27;, name_given, h FROM named WHERE h = (SELECT MAX(h) FROM named) UNION ALL SELECT &#x27;Home Runs&#x27;, name_given, hr FROM named WHERE hr = (SELECT MAX(hr) FROM named)) ORDER BY CASE category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 WHEN &#x27;Home Runs&#x27; THEN 4 END
+Result: 4 rows, columns: category, name_given, score (showing 4)
+category | name_given | score
+Games Played | Peter Edward | 3562
+Runs | Rickey Nelson Henley | 2295
+Hits | Peter Edward | 4256
+Home Runs | Barry Lamar | 762
+Judge, weakest first (1 = yes): right_filters 0.75, plausible 0.75, follows_spec 0.81, answers_question 0.85, right_columns 0.90, right_grain 0.91, right_order 0.92
+Its author&#x27;s reasoning: Career totals are computed by SUMming each batting row per player_id (regular season only), joined to player for name_given; each of the four stats is then compared to its own MAX to select the leader(s) and their score, ordered Games Played, Runs, Hits, Home Runs.
+
+Reviewer advice:
+- Add an alias to the derived table after the `UNION ALL`; some SQL dialects require a subquery in `FROM` to be named.
+- Compare each stat to its own `MAX` from the aggregated career totals, so the four leaders are selected independently and ties are preserved.
+- Deduplicate the player join or use `DISTINCT` on the final output to avoid repeated rows if a `player_id` has multiple matching `player` rows.
+- Use `UNION ALL` rather than `UNION` so valid tied leaders are not accidentally collapsed.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.85</td></tr><tr><td>right_columns</td><td>0.90</td></tr><tr><td>right_filters</td><td>0.76</td></tr><tr><td>right_grain</td><td>0.90</td></tr><tr><td>right_order</td><td>0.89</td></tr><tr><td>plausible</td><td>0.72</td></tr><tr><td>follows_spec</td><td>0.80</td></tr><tr><td>missing home_game</td><td>0.20</td></tr><tr><td>missing all_star</td><td>0.10</td></tr><tr><td>missing team</td><td>0.14</td></tr><tr><td>missing college</td><td>0.09</td></tr><tr><td>missing player_award</td><td>0.10</td></tr><tr><td>missing park</td><td>0.28</td></tr><tr><td>missing player_college</td><td>0.14</td></tr><tr><td>missing player_award_vote</td><td>0.19</td></tr><tr><td>missing team_franchise</td><td>0.09</td></tr><tr><td>missing manager_award</td><td>0.11</td></tr><tr><td>missing manager_award_vote</td><td>0.08</td></tr><tr><td>missing fielding_outfield</td><td>0.12</td></tr><tr><td>missing manager_half</td><td>0.09</td></tr><tr><td>missing appearances</td><td>0.12</td></tr><tr><td>missing batting_postseason</td><td>0.14</td></tr><tr><td>missing manager</td><td>0.22</td></tr><tr><td>missing fielding</td><td>0.08</td></tr><tr><td>missing fielding_postseason</td><td>0.13</td></tr><tr><td>missing hall_of_fame</td><td>0.09</td></tr><tr><td>missing pitching</td><td>0.11</td></tr><tr><td>missing pitching_postseason</td><td>0.07</td></tr><tr><td>missing salary</td><td>0.11</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-3"><h3><span class="swatch" style="background:#7B5CD6"></span>n5 · qwen3.8-max-0902<span class="outcome"> · 0.91 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n1</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.83, x 0.90</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>175.1 s</dd></dl><pre><code>WITH career AS (SELECT b.player_id, SUM(b.g) AS g_total, SUM(b.r) AS r_total, SUM(b.h) AS h_total, SUM(b.hr) AS hr_total FROM batting AS b GROUP BY b.player_id), named AS (SELECT DISTINCT p.name_given, c.g_total, c.r_total, c.h_total, c.hr_total FROM career AS c INNER JOIN player AS p ON p.player_id = c.player_id) SELECT leaders.category, leaders.name_given, leaders.score FROM (SELECT DISTINCT &#x27;Games Played&#x27; AS category, n.name_given AS name_given, n.g_total AS score FROM named AS n WHERE n.g_total = (SELECT MAX(x.g_total) FROM named AS x) UNION ALL SELECT DISTINCT &#x27;Runs&#x27; AS category, n.name_given AS name_given, n.r_total AS score FROM named AS n WHERE n.r_total = (SELECT MAX(x.r_total) FROM named AS x) UNION ALL SELECT DISTINCT &#x27;Hits&#x27; AS category, n.name_given AS name_given, n.h_total AS score FROM named AS n WHERE n.h_total = (SELECT MAX(x.h_total) FROM named AS x) UNION ALL SELECT DISTINCT &#x27;Home Runs&#x27; AS category, n.name_given AS name_given, n.hr_total AS score FROM named AS n WHERE n.hr_total = (SELECT MAX(x.hr_total) FROM named AS x)) AS leaders ORDER BY CASE leaders.category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 WHEN &#x27;Home Runs&#x27; THEN 4 END</code></pre><p><span class="muted">rationale:</span> Career totals are SUMmed per player_id from the regular-season batting table only, joined to player on player_id for name_given; each of the four stats is then compared independently to its own MAX over those career totals so the leader (and any ties) is returned per category, ordered Games Played, Runs, Hits, Home Runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.92):
+SQL:
+WITH career AS (SELECT b.player_id, SUM(b.g) AS g, SUM(b.r) AS r, SUM(b.h) AS h, SUM(b.hr) AS hr FROM batting b GROUP BY b.player_id), named AS (SELECT p.name_given, c.g, c.r, c.h, c.hr FROM career c JOIN player p ON p.player_id = c.player_id) SELECT category, name_given, score FROM (SELECT &#x27;Games Played&#x27; AS category, name_given, g AS score FROM named WHERE g = (SELECT MAX(g) FROM named) UNION ALL SELECT &#x27;Runs&#x27;, name_given, r FROM named WHERE r = (SELECT MAX(r) FROM named) UNION ALL SELECT &#x27;Hits&#x27;, name_given, h FROM named WHERE h = (SELECT MAX(h) FROM named) UNION ALL SELECT &#x27;Home Runs&#x27;, name_given, hr FROM named WHERE hr = (SELECT MAX(hr) FROM named)) ORDER BY CASE category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 WHEN &#x27;Home Runs&#x27; THEN 4 END
+Result: 4 rows, columns: category, name_given, score (showing 4)
+category | name_given | score
+Games Played | Peter Edward | 3562
+Runs | Rickey Nelson Henley | 2295
+Hits | Peter Edward | 4256
+Home Runs | Barry Lamar | 762
+Judge, weakest first (1 = yes): right_filters 0.75, plausible 0.75, follows_spec 0.81, answers_question 0.85, right_columns 0.90, right_grain 0.91, right_order 0.92
+Its author&#x27;s reasoning: Career totals are computed by SUMming each batting row per player_id (regular season only), joined to player for name_given; each of the four stats is then compared to its own MAX to select the leader(s) and their score, ordered Games Played, Runs, Hits, Home Runs.
+
+Reviewer advice:
+- Add an alias to the derived table after the `UNION ALL`; some SQL dialects require a subquery in `FROM` to be named.
+- Compare each stat to its own `MAX` from the aggregated career totals, so the four leaders are selected independently and ties are preserved.
+- Deduplicate the player join or use `DISTINCT` on the final output to avoid repeated rows if a `player_id` has multiple matching `player` rows.
+- Use `UNION ALL` rather than `UNION` so valid tied leaders are not accidentally collapsed.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.84</td></tr><tr><td>right_columns</td><td>0.90</td></tr><tr><td>right_filters</td><td>0.72</td></tr><tr><td>right_grain</td><td>0.90</td></tr><tr><td>right_order</td><td>0.92</td></tr><tr><td>plausible</td><td>0.75</td></tr><tr><td>follows_spec</td><td>0.79</td></tr><tr><td>missing home_game</td><td>0.26</td></tr><tr><td>missing all_star</td><td>0.11</td></tr><tr><td>missing team</td><td>0.20</td></tr><tr><td>missing college</td><td>0.12</td></tr><tr><td>missing player_award</td><td>0.08</td></tr><tr><td>missing park</td><td>0.24</td></tr><tr><td>missing player_college</td><td>0.12</td></tr><tr><td>missing player_award_vote</td><td>0.17</td></tr><tr><td>missing team_franchise</td><td>0.13</td></tr><tr><td>missing manager_award</td><td>0.10</td></tr><tr><td>missing manager_award_vote</td><td>0.10</td></tr><tr><td>missing fielding_outfield</td><td>0.12</td></tr><tr><td>missing manager_half</td><td>0.13</td></tr><tr><td>missing appearances</td><td>0.12</td></tr><tr><td>missing batting_postseason</td><td>0.16</td></tr><tr><td>missing manager</td><td>0.24</td></tr><tr><td>missing fielding</td><td>0.10</td></tr><tr><td>missing fielding_postseason</td><td>0.08</td></tr><tr><td>missing hall_of_fame</td><td>0.08</td></tr><tr><td>missing pitching</td><td>0.18</td></tr><tr><td>missing pitching_postseason</td><td>0.09</td></tr><tr><td>missing salary</td><td>0.15</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-4"><h3><span class="swatch" style="background:#7B5CD6"></span>n2 · qwen3.8-max-0902<span class="outcome"> · 0.91 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.83, x 0.90</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>30.3 s</dd></dl><pre><code>WITH career AS (SELECT b.player_id, MAX(p.name_given) AS name_given, SUM(b.g) AS g, SUM(b.r) AS r, SUM(b.h) AS h, SUM(b.hr) AS hr FROM batting b JOIN player p ON b.player_id = p.player_id GROUP BY b.player_id) SELECT category, name_given, score FROM (SELECT &#x27;Games Played&#x27; AS category, name_given, g AS score FROM career WHERE g = (SELECT MAX(g) FROM career) UNION ALL SELECT &#x27;Runs&#x27;, name_given, r FROM career WHERE r = (SELECT MAX(r) FROM career) UNION ALL SELECT &#x27;Hits&#x27;, name_given, h FROM career WHERE h = (SELECT MAX(h) FROM career) UNION ALL SELECT &#x27;Home Runs&#x27;, name_given, hr FROM career WHERE hr = (SELECT MAX(hr) FROM career)) ORDER BY CASE category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 ELSE 4 END</code></pre><p><span class="muted">rationale:</span> Career totals come from summing g, r, h and hr across every regular-season batting row per player_id, joined to player for name_given; each category&#x27;s leader(s) are the rows whose total equals the max, wrapped in a subquery so the four labeled rows can be ordered Games Played, Runs, Hits, Home Runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.85</td></tr><tr><td>right_columns</td><td>0.89</td></tr><tr><td>right_filters</td><td>0.72</td></tr><tr><td>right_grain</td><td>0.89</td></tr><tr><td>right_order</td><td>0.89</td></tr><tr><td>plausible</td><td>0.76</td></tr><tr><td>follows_spec</td><td>0.80</td></tr><tr><td>missing home_game</td><td>0.20</td></tr><tr><td>missing all_star</td><td>0.08</td></tr><tr><td>missing team</td><td>0.12</td></tr><tr><td>missing college</td><td>0.09</td></tr><tr><td>missing player_award</td><td>0.09</td></tr><tr><td>missing park</td><td>0.25</td></tr><tr><td>missing player_college</td><td>0.08</td></tr><tr><td>missing player_award_vote</td><td>0.12</td></tr><tr><td>missing team_franchise</td><td>0.07</td></tr><tr><td>missing manager_award</td><td>0.11</td></tr><tr><td>missing manager_award_vote</td><td>0.10</td></tr><tr><td>missing fielding_outfield</td><td>0.10</td></tr><tr><td>missing manager_half</td><td>0.11</td></tr><tr><td>missing appearances</td><td>0.14</td></tr><tr><td>missing batting_postseason</td><td>0.15</td></tr><tr><td>missing manager</td><td>0.18</td></tr><tr><td>missing fielding</td><td>0.07</td></tr><tr><td>missing fielding_postseason</td><td>0.08</td></tr><tr><td>missing hall_of_fame</td><td>0.07</td></tr><tr><td>missing pitching</td><td>0.13</td></tr><tr><td>missing pitching_postseason</td><td>0.05</td></tr><tr><td>missing salary</td><td>0.08</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-5"><h3><span class="swatch" style="background:#7B5CD6"></span>n14 · qwen3.8-max-0902<span class="outcome"> · 0.92 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n2</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.84, x 0.90</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>311.7 s</dd></dl><pre><code>WITH career AS (SELECT b.player_id AS player_id, p.name_given AS name_given, SUM(b.g) AS g_total, SUM(b.r) AS r_total, SUM(b.h) AS h_total, SUM(b.hr) AS hr_total FROM batting AS b INNER JOIN player AS p ON p.player_id = b.player_id GROUP BY b.player_id, p.name_given) SELECT c.category, c.name_given, c.score FROM (SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, name_given, g_total AS score FROM career WHERE g_total = (SELECT MAX(g_total) FROM career) UNION ALL SELECT 2 AS ord, &#x27;Runs&#x27; AS category, name_given, r_total AS score FROM career WHERE r_total = (SELECT MAX(r_total) FROM career) UNION ALL SELECT 3 AS ord, &#x27;Hits&#x27; AS category, name_given, h_total AS score FROM career WHERE h_total = (SELECT MAX(h_total) FROM career) UNION ALL SELECT 4 AS ord, &#x27;Home Runs&#x27; AS category, name_given, hr_total AS score FROM career WHERE hr_total = (SELECT MAX(hr_total) FROM career)) AS c ORDER BY c.ord</code></pre><p><span class="muted">rationale:</span> Career totals are computed by summing g, r, h and hr over every regular-season batting row per player_id (batting_postseason excluded), joined to player on player_id to obtain name_given; each stat&#x27;s leader is the row whose career total equals the maximum for that stat (ties would all be kept), and the four labeled categories are emitted in the order Games Played, Runs, Hits, Home Runs via an explicit ordering key.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.91):
+SQL:
+WITH career AS (SELECT b.player_id, MAX(p.name_given) AS name_given, SUM(b.g) AS g, SUM(b.r) AS r, SUM(b.h) AS h, SUM(b.hr) AS hr FROM batting b JOIN player p ON b.player_id = p.player_id GROUP BY b.player_id) SELECT category, name_given, score FROM (SELECT &#x27;Games Played&#x27; AS category, name_given, g AS score FROM career WHERE g = (SELECT MAX(g) FROM career) UNION ALL SELECT &#x27;Runs&#x27;, name_given, r FROM career WHERE r = (SELECT MAX(r) FROM career) UNION ALL SELECT &#x27;Hits&#x27;, name_given, h FROM career WHERE h = (SELECT MAX(h) FROM career) UNION ALL SELECT &#x27;Home Runs&#x27;, name_given, hr FROM career WHERE hr = (SELECT MAX(hr) FROM career)) ORDER BY CASE category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 ELSE 4 END
+Result: 4 rows, columns: category, name_given, score (showing 4)
+category | name_given | score
+Games Played | Peter Edward | 3562
+Runs | Rickey Nelson Henley | 2295
+Hits | Peter Edward | 4256
+Home Runs | Barry Lamar | 762
+Judge, weakest first (1 = yes): right_filters 0.72, plausible 0.76, follows_spec 0.80, answers_question 0.85, right_columns 0.89, right_grain 0.89, right_order 0.89
+Its author&#x27;s reasoning: Career totals come from summing g, r, h and hr across every regular-season batting row per player_id, joined to player for name_given; each category&#x27;s leader(s) are the rows whose total equals the max, wrapped in a subquery so the four labeled rows can be ordered Games Played, Runs, Hits, Home Runs.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.85</td></tr><tr><td>right_columns</td><td>0.89</td></tr><tr><td>right_filters</td><td>0.79</td></tr><tr><td>right_grain</td><td>0.90</td></tr><tr><td>right_order</td><td>0.91</td></tr><tr><td>plausible</td><td>0.74</td></tr><tr><td>follows_spec</td><td>0.81</td></tr><tr><td>missing home_game</td><td>0.17</td></tr><tr><td>missing all_star</td><td>0.07</td></tr><tr><td>missing team</td><td>0.13</td></tr><tr><td>missing college</td><td>0.09</td></tr><tr><td>missing player_award</td><td>0.08</td></tr><tr><td>missing park</td><td>0.21</td></tr><tr><td>missing player_college</td><td>0.09</td></tr><tr><td>missing player_award_vote</td><td>0.11</td></tr><tr><td>missing team_franchise</td><td>0.09</td></tr><tr><td>missing manager_award</td><td>0.20</td></tr><tr><td>missing manager_award_vote</td><td>0.14</td></tr><tr><td>missing fielding_outfield</td><td>0.09</td></tr><tr><td>missing manager_half</td><td>0.11</td></tr><tr><td>missing appearances</td><td>0.10</td></tr><tr><td>missing batting_postseason</td><td>0.15</td></tr><tr><td>missing manager</td><td>0.29</td></tr><tr><td>missing fielding</td><td>0.09</td></tr><tr><td>missing fielding_postseason</td><td>0.10</td></tr><tr><td>missing hall_of_fame</td><td>0.07</td></tr><tr><td>missing pitching</td><td>0.10</td></tr><tr><td>missing pitching_postseason</td><td>0.15</td></tr><tr><td>missing salary</td><td>0.12</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-6"><h3><span class="swatch" style="background:#7B5CD6"></span>n15 · qwen3.8-max-0902<span class="outcome"> · 0.93 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n2</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.85, x 0.91</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>277.0 s</dd></dl><pre><code>WITH career AS (SELECT b.player_id, SUM(b.g) AS g_total, SUM(b.r) AS r_total, SUM(b.h) AS h_total, SUM(b.hr) AS hr_total FROM batting b GROUP BY b.player_id), stats AS (SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, c.player_id, c.g_total AS score FROM career c UNION ALL SELECT 2, &#x27;Runs&#x27;, c.player_id, c.r_total FROM career c UNION ALL SELECT 3, &#x27;Hits&#x27;, c.player_id, c.h_total FROM career c UNION ALL SELECT 4, &#x27;Home Runs&#x27;, c.player_id, c.hr_total FROM career c), ranked AS (SELECT s.ord, s.category, p.name_given, s.score, RANK() OVER (PARTITION BY s.category ORDER BY s.score DESC) AS rk FROM stats s JOIN player p ON p.player_id = s.player_id) SELECT category, name_given, score FROM ranked WHERE rk = 1 ORDER BY ord, name_given</code></pre><p><span class="muted">rationale:</span> Career totals are summed per player_id over all regular-season batting rows (postseason excluded), unpivoted into the four stat categories, joined to player for name_given, and RANK() per category keeps the leader plus any ties; ordering by the explicit ord column yields Games Played, Runs, Hits, Home Runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.91):
+SQL:
+WITH career AS (SELECT b.player_id, MAX(p.name_given) AS name_given, SUM(b.g) AS g, SUM(b.r) AS r, SUM(b.h) AS h, SUM(b.hr) AS hr FROM batting b JOIN player p ON b.player_id = p.player_id GROUP BY b.player_id) SELECT category, name_given, score FROM (SELECT &#x27;Games Played&#x27; AS category, name_given, g AS score FROM career WHERE g = (SELECT MAX(g) FROM career) UNION ALL SELECT &#x27;Runs&#x27;, name_given, r FROM career WHERE r = (SELECT MAX(r) FROM career) UNION ALL SELECT &#x27;Hits&#x27;, name_given, h FROM career WHERE h = (SELECT MAX(h) FROM career) UNION ALL SELECT &#x27;Home Runs&#x27;, name_given, hr FROM career WHERE hr = (SELECT MAX(hr) FROM career)) ORDER BY CASE category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 ELSE 4 END
+Result: 4 rows, columns: category, name_given, score (showing 4)
+category | name_given | score
+Games Played | Peter Edward | 3562
+Runs | Rickey Nelson Henley | 2295
+Hits | Peter Edward | 4256
+Home Runs | Barry Lamar | 762
+Judge, weakest first (1 = yes): right_filters 0.72, plausible 0.76, follows_spec 0.80, answers_question 0.85, right_columns 0.89, right_grain 0.89, right_order 0.89
+Its author&#x27;s reasoning: Career totals come from summing g, r, h and hr across every regular-season batting row per player_id, joined to player for name_given; each category&#x27;s leader(s) are the rows whose total equals the max, wrapped in a subquery so the four labeled rows can be ordered Games Played, Runs, Hits, Home Runs.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.87</td></tr><tr><td>right_columns</td><td>0.91</td></tr><tr><td>right_filters</td><td>0.74</td></tr><tr><td>right_grain</td><td>0.92</td></tr><tr><td>right_order</td><td>0.91</td></tr><tr><td>plausible</td><td>0.81</td></tr><tr><td>follows_spec</td><td>0.82</td></tr><tr><td>missing home_game</td><td>0.26</td></tr><tr><td>missing all_star</td><td>0.10</td></tr><tr><td>missing team</td><td>0.18</td></tr><tr><td>missing college</td><td>0.09</td></tr><tr><td>missing player_award</td><td>0.15</td></tr><tr><td>missing park</td><td>0.20</td></tr><tr><td>missing player_college</td><td>0.24</td></tr><tr><td>missing player_award_vote</td><td>0.13</td></tr><tr><td>missing team_franchise</td><td>0.11</td></tr><tr><td>missing manager_award</td><td>0.13</td></tr><tr><td>missing manager_award_vote</td><td>0.09</td></tr><tr><td>missing fielding_outfield</td><td>0.16</td></tr><tr><td>missing manager_half</td><td>0.11</td></tr><tr><td>missing appearances</td><td>0.09</td></tr><tr><td>missing batting_postseason</td><td>0.15</td></tr><tr><td>missing manager</td><td>0.13</td></tr><tr><td>missing fielding</td><td>0.11</td></tr><tr><td>missing fielding_postseason</td><td>0.11</td></tr><tr><td>missing hall_of_fame</td><td>0.08</td></tr><tr><td>missing pitching</td><td>0.18</td></tr><tr><td>missing pitching_postseason</td><td>0.11</td></tr><tr><td>missing salary</td><td>0.15</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-7"><h3><span class="swatch" style="background:#7B5CD6"></span>n3 · qwen3.8-max-0902<span class="outcome"> · 0.92 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.85, x 0.91</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>24.7 s</dd></dl><pre><code>WITH career AS (
+  SELECT b.player_id,
+         p.name_given,
+         SUM(b.g) AS g_total,
+         SUM(b.r) AS r_total,
+         SUM(b.h) AS h_total,
+         SUM(b.hr) AS hr_total
+  FROM batting b
+  JOIN player p ON b.player_id = p.player_id
+  GROUP BY b.player_id, p.name_given
+)
+SELECT category, name_given, score
+FROM (
+  SELECT &#x27;Games Played&#x27; AS category, name_given, g_total AS score FROM career WHERE g_total = (SELECT MAX(g_total) FROM career)
+  UNION ALL
+  SELECT &#x27;Runs&#x27;, name_given, r_total FROM career WHERE r_total = (SELECT MAX(r_total) FROM career)
+  UNION ALL
+  SELECT &#x27;Hits&#x27;, name_given, h_total FROM career WHERE h_total = (SELECT MAX(h_total) FROM career)
+  UNION ALL
+  SELECT &#x27;Home Runs&#x27;, name_given, hr_total FROM career WHERE hr_total = (SELECT MAX(hr_total) FROM career)
+)
+ORDER BY CASE category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 WHEN &#x27;Home Runs&#x27; THEN 4 END</code></pre><p><span class="muted">rationale:</span> Career totals per player are computed by summing g, r, h and hr over all batting rows, joined to player for name_given; each stat&#x27;s all-time leader (max career total, ties kept) is emitted as its own category row and ordered Games Played, Runs, Hits, Home Runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.87</td></tr><tr><td>right_columns</td><td>0.90</td></tr><tr><td>right_filters</td><td>0.79</td></tr><tr><td>right_grain</td><td>0.91</td></tr><tr><td>right_order</td><td>0.91</td></tr><tr><td>plausible</td><td>0.76</td></tr><tr><td>follows_spec</td><td>0.81</td></tr><tr><td>missing home_game</td><td>0.20</td></tr><tr><td>missing all_star</td><td>0.09</td></tr><tr><td>missing team</td><td>0.17</td></tr><tr><td>missing college</td><td>0.09</td></tr><tr><td>missing player_award</td><td>0.11</td></tr><tr><td>missing park</td><td>0.25</td></tr><tr><td>missing player_college</td><td>0.09</td></tr><tr><td>missing player_award_vote</td><td>0.08</td></tr><tr><td>missing team_franchise</td><td>0.08</td></tr><tr><td>missing manager_award</td><td>0.09</td></tr><tr><td>missing manager_award_vote</td><td>0.09</td></tr><tr><td>missing fielding_outfield</td><td>0.09</td></tr><tr><td>missing manager_half</td><td>0.09</td></tr><tr><td>missing appearances</td><td>0.11</td></tr><tr><td>missing batting_postseason</td><td>0.16</td></tr><tr><td>missing manager</td><td>0.14</td></tr><tr><td>missing fielding</td><td>0.10</td></tr><tr><td>missing fielding_postseason</td><td>0.07</td></tr><tr><td>missing hall_of_fame</td><td>0.08</td></tr><tr><td>missing pitching</td><td>0.14</td></tr><tr><td>missing pitching_postseason</td><td>0.07</td></tr><tr><td>missing salary</td><td>0.10</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-8"><h3><span class="swatch" style="background:#7B5CD6"></span>n6 · qwen3.8-max-0902<span class="outcome"> · 0.94 <span class="marks">★ chosen (score)  EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.87, x 0.92</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>20.5 s</dd></dl><pre><code>WITH totals AS (
+  SELECT b.player_id,
+         SUM(b.g) AS g_total,
+         SUM(b.r) AS r_total,
+         SUM(b.h) AS h_total,
+         SUM(b.hr) AS hr_total
+  FROM batting b
+  GROUP BY b.player_id
+),
+leaders AS (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, p.name_given AS name_given, t.g_total AS score
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.g_total = (SELECT MAX(g_total) FROM totals)
+  UNION ALL
+  SELECT 2, &#x27;Runs&#x27;, p.name_given, t.r_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.r_total = (SELECT MAX(r_total) FROM totals)
+  UNION ALL
+  SELECT 3, &#x27;Hits&#x27;, p.name_given, t.h_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.h_total = (SELECT MAX(h_total) FROM totals)
+  UNION ALL
+  SELECT 4, &#x27;Home Runs&#x27;, p.name_given, t.hr_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.hr_total = (SELECT MAX(hr_total) FROM totals)
+)
+SELECT category, name_given, score
+FROM leaders
+ORDER BY ord</code></pre><p><span class="muted">rationale:</span> Career totals are computed by summing g, r, h and hr over every batting row per player_id, joined to player for name_given; each stat&#x27;s leader is the row whose total equals the per-stat MAX, with ties included, and output labelled and ordered Games Played, Runs, Hits, Home Runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.89</td></tr><tr><td>right_columns</td><td>0.91</td></tr><tr><td>right_filters</td><td>0.80</td></tr><tr><td>right_grain</td><td>0.92</td></tr><tr><td>right_order</td><td>0.93</td></tr><tr><td>plausible</td><td>0.83</td></tr><tr><td>follows_spec</td><td>0.84</td></tr><tr><td>missing home_game</td><td>0.25</td></tr><tr><td>missing all_star</td><td>0.10</td></tr><tr><td>missing team</td><td>0.25</td></tr><tr><td>missing college</td><td>0.20</td></tr><tr><td>missing player_award</td><td>0.27</td></tr><tr><td>missing park</td><td>0.22</td></tr><tr><td>missing player_college</td><td>0.16</td></tr><tr><td>missing player_award_vote</td><td>0.15</td></tr><tr><td>missing team_franchise</td><td>0.10</td></tr><tr><td>missing manager_award</td><td>0.28</td></tr><tr><td>missing manager_award_vote</td><td>0.26</td></tr><tr><td>missing fielding_outfield</td><td>0.11</td></tr><tr><td>missing manager_half</td><td>0.11</td></tr><tr><td>missing appearances</td><td>0.13</td></tr><tr><td>missing batting_postseason</td><td>0.19</td></tr><tr><td>missing manager</td><td>0.32</td></tr><tr><td>missing fielding</td><td>0.12</td></tr><tr><td>missing fielding_postseason</td><td>0.28</td></tr><tr><td>missing hall_of_fame</td><td>0.14</td></tr><tr><td>missing pitching</td><td>0.15</td></tr><tr><td>missing pitching_postseason</td><td>0.11</td></tr><tr><td>missing salary</td><td>0.11</td></tr></tbody></table></div><p><span class="muted">advice:</span> - Compute career totals from regular-season `batting` only, grouped by player, before joining to `player`.
+- Compare each of G, R, H, and HR to its own maximum career total; do not use one combined max.
+- Keep all tied leaders instead of using `LIMIT`/`TOP 1` per category.
+- Enforce the category order with an explicit sort key or CASE expression, not alphabetical order.
+- Return only `category`, `name_given`, and the corresponding total as `score`.</p></div></section><section class="node-detail" id="node-9"><h3><span class="swatch" style="background:#7B5CD6"></span>n8 · qwen3.8-max-0902<span class="outcome"> · 0.93 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n6</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.86, x 0.92</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>277.9 s</dd></dl><pre><code>WITH totals AS (
+  SELECT b.player_id,
+         SUM(b.g) AS g_total,
+         SUM(b.r) AS r_total,
+         SUM(b.h) AS h_total,
+         SUM(b.hr) AS hr_total
+  FROM batting b
+  GROUP BY b.player_id
+),
+stats AS (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, t.player_id, t.g_total AS score FROM totals t
+  UNION ALL
+  SELECT 2, &#x27;Runs&#x27;, t.player_id, t.r_total FROM totals t
+  UNION ALL
+  SELECT 3, &#x27;Hits&#x27;, t.player_id, t.h_total FROM totals t
+  UNION ALL
+  SELECT 4, &#x27;Home Runs&#x27;, t.player_id, t.hr_total FROM totals t
+),
+best AS (
+  SELECT s.category, MAX(s.score) AS max_score
+  FROM stats s
+  GROUP BY s.category
+)
+SELECT s.category, p.name_given, s.score
+FROM stats s
+JOIN best b ON b.category = s.category AND b.max_score = s.score
+JOIN player p ON p.player_id = s.player_id
+ORDER BY s.ord</code></pre><p><span class="muted">rationale:</span> Career totals are summed per player_id from regular-season batting only, then unpivoted into one row per (stat category, player); each category&#x27;s leader(s) are the rows whose total equals that category&#x27;s MAX, so ties are all kept, and joining player supplies name_given. The explicit ord key enforces the Games Played, Runs, Hits, Home Runs ordering.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.94):
+SQL:
+WITH totals AS (
+  SELECT b.player_id,
+         SUM(b.g) AS g_total,
+         SUM(b.r) AS r_total,
+         SUM(b.h) AS h_total,
+         SUM(b.hr) AS hr_total
+  FROM batting b
+  GROUP BY b.player_id
+),
+leaders AS (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, p.name_given AS name_given, t.g_total AS score
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.g_total = (SELECT MAX(g_total) FROM totals)
+  UNION ALL
+  SELECT 2, &#x27;Runs&#x27;, p.name_given, t.r_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.r_total = (SELECT MAX(r_total) FROM totals)
+  UNION ALL
+  SELECT 3, &#x27;Hits&#x27;, p.name_given, t.h_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.h_total = (SELECT MAX(h_total) FROM totals)
+  UNION ALL
+  SELECT 4, &#x27;Home Runs&#x27;, p.name_given, t.hr_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.hr_total = (SELECT MAX(hr_total) FROM totals)
+)
+SELECT category, name_given, score
+FROM leaders
+ORDER BY ord
+Result: 4 rows, columns: category, name_given, score (showing 4)
+category | name_given | score
+Games Played | Peter Edward | 3562
+Runs | Rickey Nelson Henley | 2295
+Hits | Peter Edward | 4256
+Home Runs | Barry Lamar | 762
+Judge, weakest first (1 = yes): right_filters 0.80, plausible 0.83, follows_spec 0.84, answers_question 0.89, right_columns 0.91, right_grain 0.92, right_order 0.93
+Its author&#x27;s reasoning: Career totals are computed by summing g, r, h and hr over every batting row per player_id, joined to player for name_given; each stat&#x27;s leader is the row whose total equals the per-stat MAX, with ties included, and output labelled and ordered Games Played, Runs, Hits, Home Runs.
+
+Reviewer advice:
+- Compute career totals from regular-season `batting` only, grouped by player, before joining to `player`.
+- Compare each of G, R, H, and HR to its own maximum career total; do not use one combined max.
+- Keep all tied leaders instead of using `LIMIT`/`TOP 1` per category.
+- Enforce the category order with an explicit sort key or CASE expression, not alphabetical order.
+- Return only `category`, `name_given`, and the corresponding total as `score`.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.86</td></tr><tr><td>right_columns</td><td>0.91</td></tr><tr><td>right_filters</td><td>0.79</td></tr><tr><td>right_grain</td><td>0.92</td></tr><tr><td>right_order</td><td>0.93</td></tr><tr><td>plausible</td><td>0.77</td></tr><tr><td>follows_spec</td><td>0.84</td></tr><tr><td>missing home_game</td><td>0.23</td></tr><tr><td>missing all_star</td><td>0.18</td></tr><tr><td>missing team</td><td>0.15</td></tr><tr><td>missing college</td><td>0.08</td></tr><tr><td>missing player_award</td><td>0.16</td></tr><tr><td>missing park</td><td>0.33</td></tr><tr><td>missing player_college</td><td>0.19</td></tr><tr><td>missing player_award_vote</td><td>0.10</td></tr><tr><td>missing team_franchise</td><td>0.08</td></tr><tr><td>missing manager_award</td><td>0.11</td></tr><tr><td>missing manager_award_vote</td><td>0.13</td></tr><tr><td>missing fielding_outfield</td><td>0.09</td></tr><tr><td>missing manager_half</td><td>0.20</td></tr><tr><td>missing appearances</td><td>0.19</td></tr><tr><td>missing batting_postseason</td><td>0.18</td></tr><tr><td>missing manager</td><td>0.29</td></tr><tr><td>missing fielding</td><td>0.09</td></tr><tr><td>missing fielding_postseason</td><td>0.10</td></tr><tr><td>missing hall_of_fame</td><td>0.09</td></tr><tr><td>missing pitching</td><td>0.15</td></tr><tr><td>missing pitching_postseason</td><td>0.14</td></tr><tr><td>missing salary</td><td>0.15</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-10"><h3><span class="swatch" style="background:#7B5CD6"></span>n10 · qwen3.8-max-0902<span class="outcome"> · 0.93 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n6</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.86, x 0.91</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>191.3 s</dd></dl><pre><code>WITH career AS (
+  SELECT b.player_id,
+         SUM(b.g) AS g_total,
+         SUM(b.r) AS r_total,
+         SUM(b.h) AS h_total,
+         SUM(b.hr) AS hr_total
+  FROM batting b
+  GROUP BY b.player_id
+),
+long_form AS (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, c.player_id, c.g_total AS score FROM career c
+  UNION ALL SELECT 2, &#x27;Runs&#x27;, c.player_id, c.r_total FROM career c
+  UNION ALL SELECT 3, &#x27;Hits&#x27;, c.player_id, c.h_total FROM career c
+  UNION ALL SELECT 4, &#x27;Home Runs&#x27;, c.player_id, c.hr_total FROM career c
+),
+ranked AS (
+  SELECT lf.ord, lf.category, p.name_given, lf.score,
+         RANK() OVER (PARTITION BY lf.ord ORDER BY lf.score DESC) AS rk
+  FROM long_form lf
+  JOIN player p ON p.player_id = lf.player_id
+)
+SELECT category, name_given, score
+FROM ranked
+WHERE rk = 1
+ORDER BY ord, name_given</code></pre><p><span class="muted">rationale:</span> Career totals for g, r, h and hr are summed per player_id from the regular-season batting table only, then unpivoted into one row per (stat category, player) and joined to player for name_given. RANK() partitioned by category and ordered by the total descending keeps every tied leader for each stat independently (no LIMIT), and the explicit ord key enforces the Games Played, Runs, Hits, Home Runs ordering.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.94):
+SQL:
+WITH totals AS (
+  SELECT b.player_id,
+         SUM(b.g) AS g_total,
+         SUM(b.r) AS r_total,
+         SUM(b.h) AS h_total,
+         SUM(b.hr) AS hr_total
+  FROM batting b
+  GROUP BY b.player_id
+),
+leaders AS (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, p.name_given AS name_given, t.g_total AS score
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.g_total = (SELECT MAX(g_total) FROM totals)
+  UNION ALL
+  SELECT 2, &#x27;Runs&#x27;, p.name_given, t.r_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.r_total = (SELECT MAX(r_total) FROM totals)
+  UNION ALL
+  SELECT 3, &#x27;Hits&#x27;, p.name_given, t.h_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.h_total = (SELECT MAX(h_total) FROM totals)
+  UNION ALL
+  SELECT 4, &#x27;Home Runs&#x27;, p.name_given, t.hr_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.hr_total = (SELECT MAX(hr_total) FROM totals)
+)
+SELECT category, name_given, score
+FROM leaders
+ORDER BY ord
+Result: 4 rows, columns: category, name_given, score (showing 4)
+category | name_given | score
+Games Played | Peter Edward | 3562
+Runs | Rickey Nelson Henley | 2295
+Hits | Peter Edward | 4256
+Home Runs | Barry Lamar | 762
+Judge, weakest first (1 = yes): right_filters 0.80, plausible 0.83, follows_spec 0.84, answers_question 0.89, right_columns 0.91, right_grain 0.92, right_order 0.93
+Its author&#x27;s reasoning: Career totals are computed by summing g, r, h and hr over every batting row per player_id, joined to player for name_given; each stat&#x27;s leader is the row whose total equals the per-stat MAX, with ties included, and output labelled and ordered Games Played, Runs, Hits, Home Runs.
+
+Reviewer advice:
+- Compute career totals from regular-season `batting` only, grouped by player, before joining to `player`.
+- Compare each of G, R, H, and HR to its own maximum career total; do not use one combined max.
+- Keep all tied leaders instead of using `LIMIT`/`TOP 1` per category.
+- Enforce the category order with an explicit sort key or CASE expression, not alphabetical order.
+- Return only `category`, `name_given`, and the corresponding total as `score`.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.87</td></tr><tr><td>right_columns</td><td>0.91</td></tr><tr><td>right_filters</td><td>0.77</td></tr><tr><td>right_grain</td><td>0.93</td></tr><tr><td>right_order</td><td>0.91</td></tr><tr><td>plausible</td><td>0.79</td></tr><tr><td>follows_spec</td><td>0.81</td></tr><tr><td>missing home_game</td><td>0.17</td></tr><tr><td>missing all_star</td><td>0.10</td></tr><tr><td>missing team</td><td>0.23</td></tr><tr><td>missing college</td><td>0.12</td></tr><tr><td>missing player_award</td><td>0.11</td></tr><tr><td>missing park</td><td>0.22</td></tr><tr><td>missing player_college</td><td>0.12</td></tr><tr><td>missing player_award_vote</td><td>0.20</td></tr><tr><td>missing team_franchise</td><td>0.09</td></tr><tr><td>missing manager_award</td><td>0.17</td></tr><tr><td>missing manager_award_vote</td><td>0.11</td></tr><tr><td>missing fielding_outfield</td><td>0.20</td></tr><tr><td>missing manager_half</td><td>0.14</td></tr><tr><td>missing appearances</td><td>0.10</td></tr><tr><td>missing batting_postseason</td><td>0.17</td></tr><tr><td>missing manager</td><td>0.11</td></tr><tr><td>missing fielding</td><td>0.09</td></tr><tr><td>missing fielding_postseason</td><td>0.19</td></tr><tr><td>missing hall_of_fame</td><td>0.08</td></tr><tr><td>missing pitching</td><td>0.12</td></tr><tr><td>missing pitching_postseason</td><td>0.07</td></tr><tr><td>missing salary</td><td>0.10</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-11"><h3><span class="swatch" style="background:#7B5CD6"></span>n11 · qwen3.8-max-0902<span class="outcome"> · 0.91 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n6</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.83, x 0.90</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>131.4 s</dd></dl><pre><code>WITH career AS (
+  SELECT b.player_id,
+         SUM(b.g) AS g_total,
+         SUM(b.r) AS r_total,
+         SUM(b.h) AS h_total,
+         SUM(b.hr) AS hr_total
+  FROM batting b
+  GROUP BY b.player_id
+),
+long_form AS (
+  SELECT player_id, 1 AS ord, &#x27;Games Played&#x27; AS category, g_total AS score FROM career
+  UNION ALL SELECT player_id, 2, &#x27;Runs&#x27;, r_total FROM career
+  UNION ALL SELECT player_id, 3, &#x27;Hits&#x27;, h_total FROM career
+  UNION ALL SELECT player_id, 4, &#x27;Home Runs&#x27;, hr_total FROM career
+),
+ranked AS (
+  SELECT lf.ord, lf.category, p.name_given, lf.score,
+         RANK() OVER (PARTITION BY lf.category ORDER BY lf.score DESC) AS rk
+  FROM long_form lf
+  JOIN player p ON p.player_id = lf.player_id
+)
+SELECT category, name_given, score
+FROM ranked
+WHERE rk = 1
+ORDER BY ord</code></pre><p><span class="muted">rationale:</span> Career totals are summed per player_id from the regular-season batting table only, unpivoted into one row per stat category, joined to player for name_given, and RANK() within each category keeps every tied all-time leader; the explicit ord key enforces the Games Played, Runs, Hits, Home Runs order.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.94):
+SQL:
+WITH totals AS (
+  SELECT b.player_id,
+         SUM(b.g) AS g_total,
+         SUM(b.r) AS r_total,
+         SUM(b.h) AS h_total,
+         SUM(b.hr) AS hr_total
+  FROM batting b
+  GROUP BY b.player_id
+),
+leaders AS (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, p.name_given AS name_given, t.g_total AS score
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.g_total = (SELECT MAX(g_total) FROM totals)
+  UNION ALL
+  SELECT 2, &#x27;Runs&#x27;, p.name_given, t.r_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.r_total = (SELECT MAX(r_total) FROM totals)
+  UNION ALL
+  SELECT 3, &#x27;Hits&#x27;, p.name_given, t.h_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.h_total = (SELECT MAX(h_total) FROM totals)
+  UNION ALL
+  SELECT 4, &#x27;Home Runs&#x27;, p.name_given, t.hr_total
+  FROM totals t JOIN player p ON p.player_id = t.player_id
+  WHERE t.hr_total = (SELECT MAX(hr_total) FROM totals)
+)
+SELECT category, name_given, score
+FROM leaders
+ORDER BY ord
+Result: 4 rows, columns: category, name_given, score (showing 4)
+category | name_given | score
+Games Played | Peter Edward | 3562
+Runs | Rickey Nelson Henley | 2295
+Hits | Peter Edward | 4256
+Home Runs | Barry Lamar | 762
+Judge, weakest first (1 = yes): right_filters 0.80, plausible 0.83, follows_spec 0.84, answers_question 0.89, right_columns 0.91, right_grain 0.92, right_order 0.93
+Its author&#x27;s reasoning: Career totals are computed by summing g, r, h and hr over every batting row per player_id, joined to player for name_given; each stat&#x27;s leader is the row whose total equals the per-stat MAX, with ties included, and output labelled and ordered Games Played, Runs, Hits, Home Runs.
+
+Reviewer advice:
+- Compute career totals from regular-season `batting` only, grouped by player, before joining to `player`.
+- Compare each of G, R, H, and HR to its own maximum career total; do not use one combined max.
+- Keep all tied leaders instead of using `LIMIT`/`TOP 1` per category.
+- Enforce the category order with an explicit sort key or CASE expression, not alphabetical order.
+- Return only `category`, `name_given`, and the corresponding total as `score`.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.84</td></tr><tr><td>right_columns</td><td>0.89</td></tr><tr><td>right_filters</td><td>0.77</td></tr><tr><td>right_grain</td><td>0.91</td></tr><tr><td>right_order</td><td>0.92</td></tr><tr><td>plausible</td><td>0.71</td></tr><tr><td>follows_spec</td><td>0.79</td></tr><tr><td>missing home_game</td><td>0.22</td></tr><tr><td>missing all_star</td><td>0.11</td></tr><tr><td>missing team</td><td>0.24</td></tr><tr><td>missing college</td><td>0.10</td></tr><tr><td>missing player_award</td><td>0.10</td></tr><tr><td>missing park</td><td>0.27</td></tr><tr><td>missing player_college</td><td>0.14</td></tr><tr><td>missing player_award_vote</td><td>0.10</td></tr><tr><td>missing team_franchise</td><td>0.09</td></tr><tr><td>missing manager_award</td><td>0.13</td></tr><tr><td>missing manager_award_vote</td><td>0.16</td></tr><tr><td>missing fielding_outfield</td><td>0.10</td></tr><tr><td>missing manager_half</td><td>0.10</td></tr><tr><td>missing appearances</td><td>0.12</td></tr><tr><td>missing batting_postseason</td><td>0.18</td></tr><tr><td>missing manager</td><td>0.15</td></tr><tr><td>missing fielding</td><td>0.08</td></tr><tr><td>missing fielding_postseason</td><td>0.10</td></tr><tr><td>missing hall_of_fame</td><td>0.08</td></tr><tr><td>missing pitching</td><td>0.13</td></tr><tr><td>missing pitching_postseason</td><td>0.07</td></tr><tr><td>missing salary</td><td>0.11</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-12"><h3><span class="swatch" style="background:#7B5CD6"></span>n7 · qwen3.8-max-0902<span class="outcome"> · 0.92 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.85, x 0.91</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>31.3 s</dd></dl><pre><code>WITH career AS (
+  SELECT b.player_id,
+         p.name_given,
+         SUM(b.g) AS g,
+         SUM(b.r) AS r,
+         SUM(b.h) AS h,
+         SUM(b.hr) AS hr
+  FROM batting b
+  JOIN player p ON b.player_id = p.player_id
+  GROUP BY b.player_id, p.name_given
+)
+SELECT category, name_given, score
+FROM (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, name_given, g AS score
+  FROM career WHERE g = (SELECT MAX(g) FROM career)
+  UNION ALL
+  SELECT 2, &#x27;Runs&#x27;, name_given, r
+  FROM career WHERE r = (SELECT MAX(r) FROM career)
+  UNION ALL
+  SELECT 3, &#x27;Hits&#x27;, name_given, h
+  FROM career WHERE h = (SELECT MAX(h) FROM career)
+  UNION ALL
+  SELECT 4, &#x27;Home Runs&#x27;, name_given, hr
+  FROM career WHERE hr = (SELECT MAX(hr) FROM career)
+)
+ORDER BY ord</code></pre><p><span class="muted">rationale:</span> Career totals sum every regular-season batting row per player_id, joined to player for name_given; each stat is then filtered to its own maximum (keeping ties), and an ordering key enforces the Games Played, Runs, Hits, Home Runs sequence.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.86</td></tr><tr><td>right_columns</td><td>0.90</td></tr><tr><td>right_filters</td><td>0.77</td></tr><tr><td>right_grain</td><td>0.89</td></tr><tr><td>right_order</td><td>0.92</td></tr><tr><td>plausible</td><td>0.78</td></tr><tr><td>follows_spec</td><td>0.82</td></tr><tr><td>missing home_game</td><td>0.15</td></tr><tr><td>missing all_star</td><td>0.07</td></tr><tr><td>missing team</td><td>0.18</td></tr><tr><td>missing college</td><td>0.07</td></tr><tr><td>missing player_award</td><td>0.10</td></tr><tr><td>missing park</td><td>0.18</td></tr><tr><td>missing player_college</td><td>0.08</td></tr><tr><td>missing player_award_vote</td><td>0.08</td></tr><tr><td>missing team_franchise</td><td>0.08</td></tr><tr><td>missing manager_award</td><td>0.16</td></tr><tr><td>missing manager_award_vote</td><td>0.13</td></tr><tr><td>missing fielding_outfield</td><td>0.10</td></tr><tr><td>missing manager_half</td><td>0.08</td></tr><tr><td>missing appearances</td><td>0.12</td></tr><tr><td>missing batting_postseason</td><td>0.14</td></tr><tr><td>missing manager</td><td>0.17</td></tr><tr><td>missing fielding</td><td>0.07</td></tr><tr><td>missing fielding_postseason</td><td>0.08</td></tr><tr><td>missing hall_of_fame</td><td>0.06</td></tr><tr><td>missing pitching</td><td>0.08</td></tr><tr><td>missing pitching_postseason</td><td>0.13</td></tr><tr><td>missing salary</td><td>0.09</td></tr></tbody></table></div><p><span class="muted">advice:</span> - Add an alias to the derived table in the outer `FROM` clause for engines that require subquery aliases.
+- Make the category ordering explicit in the outer query, e.g. keep `ord` available or sort with a `CASE` on category.
+- Cast all four stat expressions to the same numeric type before `UNION ALL` to avoid type mismatches in `score`.
+- Aggregate batting totals by `player_id` first, then join a deduplicated `player` table for `name_given` to avoid duplicate or split career totals.</p></div></section><section class="node-detail" id="node-13"><h3><span class="swatch" style="background:#7B5CD6"></span>n9 · qwen3.8-max-0902<span class="outcome"> · 0.90 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n7</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>wide</dd><dt>score parts</dt><dd>det 1.00, judge 0.81, x 0.89</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>293.4 s</dd></dl><pre><code>WITH career AS (
+  SELECT b.player_id,
+         CAST(SUM(b.g) AS INTEGER) AS g,
+         CAST(SUM(b.r) AS INTEGER) AS r,
+         CAST(SUM(b.h) AS INTEGER) AS h,
+         CAST(SUM(b.hr) AS INTEGER) AS hr
+  FROM batting b
+  GROUP BY b.player_id
+),
+named AS (
+  SELECT c.player_id, p.name_given, c.g, c.r, c.h, c.hr
+  FROM career c
+  JOIN (SELECT player_id, MAX(name_given) AS name_given FROM player GROUP BY player_id) p
+    ON c.player_id = p.player_id
+)
+SELECT category, name_given, score
+FROM (
+  SELECT &#x27;Games Played&#x27; AS category, name_given, g AS score
+  FROM named WHERE g = (SELECT MAX(g) FROM named)
+  UNION ALL
+  SELECT &#x27;Runs&#x27;, name_given, r FROM named WHERE r = (SELECT MAX(r) FROM named)
+  UNION ALL
+  SELECT &#x27;Hits&#x27;, name_given, h FROM named WHERE h = (SELECT MAX(h) FROM named)
+  UNION ALL
+  SELECT &#x27;Home Runs&#x27;, name_given, hr FROM named WHERE hr = (SELECT MAX(hr) FROM named)
+) AS leaders
+ORDER BY CASE category WHEN &#x27;Games Played&#x27; THEN 1 WHEN &#x27;Runs&#x27; THEN 2 WHEN &#x27;Hits&#x27; THEN 3 WHEN &#x27;Home Runs&#x27; THEN 4 END, score DESC, name_given</code></pre><p><span class="muted">rationale:</span> Career totals are aggregated from the regular-season batting table by player_id (all years/stints), then joined to a deduplicated player lookup for name_given; each of the four stats is filtered to its own maximum (keeping ties) and unioned with a category label, ordered Games Played, Runs, Hits, Home Runs via an explicit CASE.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (wide context, 20 tables):</pre><p><a class="ctx-link" href="#ctx-e82649f9c6b0">schema DDL (467 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.92):
+SQL:
+WITH career AS (
+  SELECT b.player_id,
+         p.name_given,
+         SUM(b.g) AS g,
+         SUM(b.r) AS r,
+         SUM(b.h) AS h,
+         SUM(b.hr) AS hr
+  FROM batting b
+  JOIN player p ON b.player_id = p.player_id
+  GROUP BY b.player_id, p.name_given
+)
+SELECT category, name_given, score
+FROM (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, name_given, g AS score
+  FROM career WHERE g = (SELECT MAX(g) FROM career)
+  UNION ALL
+  SELECT 2, &#x27;Runs&#x27;, name_given, r
+  FROM career WHERE r = (SELECT MAX(r) FROM career)
+  UNION ALL
+  SELECT 3, &#x27;Hits&#x27;, name_given, h
+  FROM career WHERE h = (SELECT MAX(h) FROM career)
+  UNION ALL
+  SELECT 4, &#x27;Home Runs&#x27;, name_given, hr
+  FROM career WHERE hr = (SELECT MAX(hr) FROM career)
+)
+ORDER BY ord
+Result: 4 rows, columns: category, name_given, score (showing 4)
+category | name_given | score
+Games Played | Peter Edward | 3562
+Runs | Rickey Nelson Henley | 2295
+Hits | Peter Edward | 4256
+Home Runs | Barry Lamar | 762
+Judge, weakest first (1 = yes): right_filters 0.77, plausible 0.78, follows_spec 0.82, answers_question 0.86, right_grain 0.89, right_columns 0.90, right_order 0.92
+Its author&#x27;s reasoning: Career totals sum every regular-season batting row per player_id, joined to player for name_given; each stat is then filtered to its own maximum (keeping ties), and an ordering key enforces the Games Played, Runs, Hits, Home Runs sequence.
+
+Reviewer advice:
+- Add an alias to the derived table in the outer `FROM` clause for engines that require subquery aliases.
+- Make the category ordering explicit in the outer query, e.g. keep `ord` available or sort with a `CASE` on category.
+- Cast all four stat expressions to the same numeric type before `UNION ALL` to avoid type mismatches in `score`.
+- Aggregate batting totals by `player_id` first, then join a deduplicated `player` table for `name_given` to avoid duplicate or split career totals.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.83</td></tr><tr><td>right_columns</td><td>0.88</td></tr><tr><td>right_filters</td><td>0.63</td></tr><tr><td>right_grain</td><td>0.90</td></tr><tr><td>right_order</td><td>0.88</td></tr><tr><td>plausible</td><td>0.76</td></tr><tr><td>follows_spec</td><td>0.78</td></tr><tr><td>missing home_game</td><td>0.26</td></tr><tr><td>missing all_star</td><td>0.10</td></tr><tr><td>missing team</td><td>0.23</td></tr><tr><td>missing college</td><td>0.10</td></tr><tr><td>missing player_award</td><td>0.08</td></tr><tr><td>missing park</td><td>0.28</td></tr><tr><td>missing player_college</td><td>0.16</td></tr><tr><td>missing player_award_vote</td><td>0.15</td></tr><tr><td>missing team_franchise</td><td>0.09</td></tr><tr><td>missing manager_award</td><td>0.08</td></tr><tr><td>missing manager_award_vote</td><td>0.20</td></tr><tr><td>missing fielding_outfield</td><td>0.11</td></tr><tr><td>missing manager_half</td><td>0.10</td></tr><tr><td>missing appearances</td><td>0.14</td></tr><tr><td>missing batting_postseason</td><td>0.17</td></tr><tr><td>missing manager</td><td>0.19</td></tr><tr><td>missing fielding</td><td>0.11</td></tr><tr><td>missing fielding_postseason</td><td>0.09</td></tr><tr><td>missing hall_of_fame</td><td>0.08</td></tr><tr><td>missing pitching</td><td>0.13</td></tr><tr><td>missing pitching_postseason</td><td>0.07</td></tr><tr><td>missing salary</td><td>0.12</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-14"><h3><span class="swatch" style="background:#7B5CD6"></span>n12 · qwen3.8-max-0902<span class="outcome"> · 0.89 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>refines</dt><dd>n7</dd><dt>depth</dt><dd>1</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.79, x 0.87</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>45.5 s</dd></dl><pre><code>WITH career AS (
+  SELECT b.player_id,
+         SUM(b.g) AS g_total,
+         SUM(b.r) AS r_total,
+         SUM(b.h) AS h_total,
+         SUM(b.hr) AS hr_total
+  FROM batting AS b
+  GROUP BY b.player_id
+),
+named AS (
+  SELECT c.player_id,
+         p.name_given,
+         c.g_total,
+         c.r_total,
+         c.h_total,
+         c.hr_total
+  FROM career AS c
+  JOIN (SELECT player_id, MAX(name_given) AS name_given FROM player GROUP BY player_id) AS p
+    ON c.player_id = p.player_id
+),
+leaders AS (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, name_given, CAST(g_total AS INTEGER) AS score
+  FROM named
+  WHERE g_total = (SELECT MAX(g_total) FROM named)
+  UNION ALL
+  SELECT 2 AS ord, &#x27;Runs&#x27; AS category, name_given, CAST(r_total AS INTEGER) AS score
+  FROM named
+  WHERE r_total = (SELECT MAX(r_total) FROM named)
+  UNION ALL
+  SELECT 3 AS ord, &#x27;Hits&#x27; AS category, name_given, CAST(h_total AS INTEGER) AS score
+  FROM named
+  WHERE h_total = (SELECT MAX(h_total) FROM named)
+  UNION ALL
+  SELECT 4 AS ord, &#x27;Home Runs&#x27; AS category, name_given, CAST(hr_total AS INTEGER) AS score
+  FROM named
+  WHERE hr_total = (SELECT MAX(hr_total) FROM named)
+)
+SELECT category, name_given, score
+FROM leaders AS l
+ORDER BY CASE l.category
+           WHEN &#x27;Games Played&#x27; THEN 1
+           WHEN &#x27;Runs&#x27; THEN 2
+           WHEN &#x27;Hits&#x27; THEN 3
+           WHEN &#x27;Home Runs&#x27; THEN 4
+         END, l.name_given</code></pre><p><span class="muted">rationale:</span> Career totals are aggregated from the regular-season batting table by player_id only (so stints/years never split a total), then joined to a deduplicated player table for name_given. Each of the four stats is compared to its own MAX so ties are kept, and an explicit CASE ordering returns the rows as Games Played, Runs, Hits, Home Runs with the leader&#x27;s given name and score.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p><pre class="prompt-text">Previous attempt (score 0.92):
+SQL:
+WITH career AS (
+  SELECT b.player_id,
+         p.name_given,
+         SUM(b.g) AS g,
+         SUM(b.r) AS r,
+         SUM(b.h) AS h,
+         SUM(b.hr) AS hr
+  FROM batting b
+  JOIN player p ON b.player_id = p.player_id
+  GROUP BY b.player_id, p.name_given
+)
+SELECT category, name_given, score
+FROM (
+  SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, name_given, g AS score
+  FROM career WHERE g = (SELECT MAX(g) FROM career)
+  UNION ALL
+  SELECT 2, &#x27;Runs&#x27;, name_given, r
+  FROM career WHERE r = (SELECT MAX(r) FROM career)
+  UNION ALL
+  SELECT 3, &#x27;Hits&#x27;, name_given, h
+  FROM career WHERE h = (SELECT MAX(h) FROM career)
+  UNION ALL
+  SELECT 4, &#x27;Home Runs&#x27;, name_given, hr
+  FROM career WHERE hr = (SELECT MAX(hr) FROM career)
+)
+ORDER BY ord
+Result: 4 rows, columns: category, name_given, score (showing 4)
+category | name_given | score
+Games Played | Peter Edward | 3562
+Runs | Rickey Nelson Henley | 2295
+Hits | Peter Edward | 4256
+Home Runs | Barry Lamar | 762
+Judge, weakest first (1 = yes): right_filters 0.77, plausible 0.78, follows_spec 0.82, answers_question 0.86, right_grain 0.89, right_columns 0.90, right_order 0.92
+Its author&#x27;s reasoning: Career totals sum every regular-season batting row per player_id, joined to player for name_given; each stat is then filtered to its own maximum (keeping ties), and an ordering key enforces the Games Played, Runs, Hits, Home Runs sequence.
+
+Reviewer advice:
+- Add an alias to the derived table in the outer `FROM` clause for engines that require subquery aliases.
+- Make the category ordering explicit in the outer query, e.g. keep `ord` available or sort with a `CASE` on category.
+- Cast all four stat expressions to the same numeric type before `UNION ALL` to avoid type mismatches in `score`.
+- Aggregate batting totals by `player_id` first, then join a deduplicated `player` table for `name_given` to avoid duplicate or split career totals.
+
+Write an improved query.</pre></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.80</td></tr><tr><td>right_columns</td><td>0.86</td></tr><tr><td>right_filters</td><td>0.66</td></tr><tr><td>right_grain</td><td>0.88</td></tr><tr><td>right_order</td><td>0.88</td></tr><tr><td>plausible</td><td>0.74</td></tr><tr><td>follows_spec</td><td>0.72</td></tr><tr><td>missing home_game</td><td>0.18</td></tr><tr><td>missing all_star</td><td>0.09</td></tr><tr><td>missing team</td><td>0.26</td></tr><tr><td>missing college</td><td>0.09</td></tr><tr><td>missing player_award</td><td>0.15</td></tr><tr><td>missing park</td><td>0.27</td></tr><tr><td>missing player_college</td><td>0.10</td></tr><tr><td>missing player_award_vote</td><td>0.23</td></tr><tr><td>missing team_franchise</td><td>0.12</td></tr><tr><td>missing manager_award</td><td>0.16</td></tr><tr><td>missing manager_award_vote</td><td>0.12</td></tr><tr><td>missing fielding_outfield</td><td>0.08</td></tr><tr><td>missing manager_half</td><td>0.13</td></tr><tr><td>missing appearances</td><td>0.15</td></tr><tr><td>missing batting_postseason</td><td>0.18</td></tr><tr><td>missing manager</td><td>0.13</td></tr><tr><td>missing fielding</td><td>0.09</td></tr><tr><td>missing fielding_postseason</td><td>0.10</td></tr><tr><td>missing hall_of_fame</td><td>0.09</td></tr><tr><td>missing pitching</td><td>0.10</td></tr><tr><td>missing pitching_postseason</td><td>0.15</td></tr><tr><td>missing salary</td><td>0.12</td></tr></tbody></table></div></div></section><section class="node-detail" id="node-15"><h3><span class="swatch" style="background:#7B5CD6"></span>n13 · qwen3.8-max-0902<span class="outcome"> · 0.92 <span class="marks">EX ✓</span></span></h3><p class="pending-note muted">Generating: the search has not been told this node's result yet.</p><div class="outcome"><dl class="facts"><dt>model</dt><dd>openrouter:qwen/qwen3.8-max-0902</dd><dt>depth</dt><dd>0</dd><dt>action</dt><dd>tight</dd><dt>score parts</dt><dd>det 1.00, judge 0.84, x 0.91</dd><dt>rows</dt><dd>4</dd><dt>time</dt><dd>29.5 s</dd></dl><pre><code>WITH career AS (SELECT b.player_id AS pid, p.name_given AS name_given, SUM(b.g) AS g_tot, SUM(b.r) AS r_tot, SUM(b.h) AS h_tot, SUM(b.hr) AS hr_tot FROM batting b JOIN player p ON p.player_id = b.player_id GROUP BY b.player_id, p.name_given) SELECT category, name_given, score FROM (SELECT 1 AS ord, &#x27;Games Played&#x27; AS category, name_given, g_tot AS score FROM career WHERE g_tot = (SELECT MAX(g_tot) FROM career) UNION ALL SELECT 2, &#x27;Runs&#x27;, name_given, r_tot FROM career WHERE r_tot = (SELECT MAX(r_tot) FROM career) UNION ALL SELECT 3, &#x27;Hits&#x27;, name_given, h_tot FROM career WHERE h_tot = (SELECT MAX(h_tot) FROM career) UNION ALL SELECT 4, &#x27;Home Runs&#x27;, name_given, hr_tot FROM career WHERE hr_tot = (SELECT MAX(hr_tot) FROM career)) ORDER BY ord</code></pre><p><span class="muted">rationale:</span> batting rows are summed per player_id over all years/stints to get career totals for g, r, h and hr, joined to player for name_given; each stat&#x27;s leaders (rows equal to that stat&#x27;s maximum) are emitted as one labelled row each, ordered Games Played, Runs, Hits, Home Runs.</p></div><details open><summary>generator prompt</summary><pre class="prompt-text">Question: I would like to know the given names of baseball players who have achieved the highest value of games played, runs, hits, and home runs, with their corresponding score values.
+
+Specification (written before any SQL):
+Question, restated: Add up each player&#x27;s regular-season batting statistics over his whole career from the batting table. For each of four stats (games played g, runs r, hits h, home runs hr), find the player or players with the highest career total. Return each leader&#x27;s given name (player.name_given) and that total.
+Main reading (confidence 0.75): Use career totals, which are SUM over every batting row (all years and stints) per player_id, for g, r, h and hr. Join to player to get name_given. For each stat, the leader is the player whose career total equals the maximum. Return one row per stat category, with the category label, the given name and the score. &quot;Highest value&quot; most naturally means the all-time career leader, which is the standard reading of this Lahman-style question.
+One result row: One row per (stat category, leading player). If no one ties, that is 4 rows: Games Played, Runs, Hits, Home Runs.
+Columns, in order:
+- category: Label of the stat: &#x27;Games Played&#x27;, &#x27;Runs&#x27;, &#x27;Hits&#x27; or &#x27;Home Runs&#x27;
+- name_given: player.name_given of the player with the maximum career total for that stat
+- score: The maximum career total for that stat: SUM(batting.g), SUM(batting.r), SUM(batting.h) or SUM(batting.hr) over all of the player&#x27;s batting rows
+Definitions:
+- Source: batting table only (regular season); batting_postseason is excluded.
+- Career total = SUM of the stat over every batting row for a player_id, across all years, stints and teams. NULL values are ignored by SUM.
+- Join batting.player_id = player.player_id to get name_given.
+- Leader = the player or players whose career total equals the MAX of all career totals for that stat. Ties are all included.
+- Each stat is ranked on its own; there is no combined score.
+Ordering and limits: Order by category in the sequence Games Played, Runs, Hits, Home Runs. Keep only the top player per category, plus any ties.
+Alternative readings:
+- Use the highest single-season (or single batting row) value of each stat instead of career totals (changes: Different players and much smaller scores, e.g. the single-season home run record instead of the career record.)
+- Return a single wide row with leader name and value columns for each of the four stats (changes: The shape changes from 4 rows × 3 columns to 1 row × 8 columns; the values are the same.)
+- Include postseason batting in the totals (changes: The totals go up slightly and the leaders could change.)
+
+Follow the specification&#x27;s main reading and its output contract: one row as its row definition says, its columns in order, each quantity in its own column. The alternative readings are there only for when probing the data shows the main reading cannot be right.
+
+Schema (tight context, 7 tables):</pre><p><a class="ctx-link" href="#ctx-67d717bb495a">schema DDL (223 lines)</a></p></details><div class="outcome"><div class="scroll"><table><tbody><tr><td>answers_question</td><td>0.85</td></tr><tr><td>right_columns</td><td>0.90</td></tr><tr><td>right_filters</td><td>0.76</td></tr><tr><td>right_grain</td><td>0.90</td></tr><tr><td>right_order</td><td>0.91</td></tr><tr><td>plausible</td><td>0.77</td></tr><tr><td>follows_spec</td><td>0.82</td></tr><tr><td>missing home_game</td><td>0.19</td></tr><tr><td>missing all_star</td><td>0.07</td></tr><tr><td>missing team</td><td>0.14</td></tr><tr><td>missing college</td><td>0.11</td></tr><tr><td>missing player_award</td><td>0.14</td></tr><tr><td>missing park</td><td>0.22</td></tr><tr><td>missing player_college</td><td>0.13</td></tr><tr><td>missing player_award_vote</td><td>0.07</td></tr><tr><td>missing team_franchise</td><td>0.09</td></tr><tr><td>missing manager_award</td><td>0.29</td></tr><tr><td>missing manager_award_vote</td><td>0.12</td></tr><tr><td>missing fielding_outfield</td><td>0.12</td></tr><tr><td>missing manager_half</td><td>0.18</td></tr><tr><td>missing appearances</td><td>0.15</td></tr><tr><td>missing batting_postseason</td><td>0.16</td></tr><tr><td>missing manager</td><td>0.31</td></tr><tr><td>missing fielding</td><td>0.09</td></tr><tr><td>missing fielding_postseason</td><td>0.18</td></tr><tr><td>missing hall_of_fame</td><td>0.12</td></tr><tr><td>missing pitching</td><td>0.17</td></tr><tr><td>missing pitching_postseason</td><td>0.08</td></tr><tr><td>missing salary</td><td>0.09</td></tr></tbody></table></div></div></section><details class="schema-context" id="ctx-e82649f9c6b0"><summary>schema DDL e82649f9c6b0 (467 lines)</summary><pre>CREATE TABLE home_game (
+  year INTEGER,
+  league_id TEXT,
+  team_id TEXT,
+  park_id TEXT,
+  span_first TEXT,
+  span_last TEXT,
+  games INTEGER,
+  openings INTEGER,
+  attendance INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE player (
+  player_id TEXT,
+  birth_year NUMERIC,
+  birth_month NUMERIC,
+  birth_day NUMERIC,
+  birth_country TEXT,
+  birth_state TEXT,
+  birth_city TEXT,
+  death_year NUMERIC,
+  death_month NUMERIC,
+  death_day NUMERIC,
+  death_country TEXT,
+  death_state TEXT,
+  death_city TEXT,
+  name_first TEXT,
+  name_last TEXT,
+  name_given TEXT,
+  weight NUMERIC,
+  height NUMERIC,
+  bats TEXT,
+  throws TEXT,
+  debut TEXT,
+  final_game TEXT,
+  retro_id TEXT,
+  bbref_id TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE all_star (
+  player_id TEXT,
+  year INTEGER,
+  game_num INTEGER,
+  game_id TEXT,
+  team_id TEXT,
+  league_id TEXT,
+  gp NUMERIC,
+  starting_pos NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE team (
+  year INTEGER,
+  league_id TEXT,
+  team_id TEXT,
+  franchise_id TEXT,
+  div_id TEXT,
+  rank INTEGER,
+  ghome NUMERIC,
+  div_win TEXT,
+  wc_win TEXT,
+  lg_win TEXT,
+  ws_win TEXT,
+  ab INTEGER,
+  double INTEGER,
+  triple INTEGER,
+  hr INTEGER,
+  bb INTEGER,
+  so NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC,
+  ra INTEGER,
+  er INTEGER,
+  era NUMERIC,
+  cg INTEGER,
+  sho INTEGER,
+  sv INTEGER,
+  ipouts INTEGER,
+  ha INTEGER,
+  hra INTEGER,
+  bba INTEGER,
+  soa INTEGER,
+  dp NUMERIC,
+  fp NUMERIC,
+  name TEXT,
+  park TEXT,
+  attendance NUMERIC,
+  bpf INTEGER,
+  ppf INTEGER,
+  team_id_br TEXT,
+  team_id_lahman45 TEXT,
+  team_id_retro TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE college (
+  college_id TEXT,
+  name_full TEXT,
+  city TEXT,
+  state TEXT,
+  country TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE player_award (
+  player_id TEXT,
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  tie TEXT,
+  notes TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE park (
+  park_id TEXT,
+  park_name TEXT,
+  park_alias TEXT,
+  city TEXT,
+  state TEXT,
+  country TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE player_college (
+  player_id TEXT,
+  college_id TEXT,
+  year INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE player_award_vote (
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  player_id TEXT,
+  points_won NUMERIC,
+  points_max INTEGER,
+  votes_first NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE team_franchise (
+  franchise_id TEXT,
+  franchise_name TEXT,
+  active TEXT,
+  na_assoc TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE manager_award (
+  player_id TEXT,
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  tie TEXT,
+  notes NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE manager_award_vote (
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  player_id TEXT,
+  points_won INTEGER,
+  points_max INTEGER,
+  votes_first INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE fielding_outfield (
+  player_id TEXT,
+  year INTEGER,
+  stint INTEGER,
+  glf NUMERIC,
+  gcf NUMERIC,
+  grf NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE manager_half (
+  player_id TEXT,
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  inseason INTEGER,
+  half INTEGER,
+  g INTEGER,
+  w INTEGER,
+  l INTEGER,
+  rank INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE appearances (
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  player_id TEXT,
+  g_all NUMERIC,
+  gs NUMERIC,
+  g_batting INTEGER,
+  g_defense NUMERIC,
+  g_p INTEGER,
+  g_c INTEGER,
+  g_1b INTEGER,
+  g_2b INTEGER,
+  g_3b INTEGER,
+  g_ss INTEGER,
+  g_lf INTEGER,
+  g_cf INTEGER,
+  g_rf INTEGER,
+  g_of INTEGER,
+  g_dh NUMERIC,
+  g_ph NUMERIC,
+  g_pr NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE batting_postseason (
+  year INTEGER,
+  round TEXT,
+  player_id TEXT,
+  team_id TEXT,
+  league_id TEXT,
+  g INTEGER,
+  ab INTEGER,
+  r INTEGER,
+  h INTEGER,
+  double INTEGER,
+  triple INTEGER,
+  hr INTEGER,
+  rbi INTEGER,
+  sb INTEGER,
+  cs NUMERIC,
+  bb INTEGER,
+  so INTEGER,
+  ibb NUMERIC,
+  hbp NUMERIC,
+  sh NUMERIC,
+  sf NUMERIC,
+  g_idp NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE manager (
+  player_id TEXT,
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  inseason INTEGER,
+  g INTEGER,
+  w INTEGER,
+  l INTEGER,
+  rank NUMERIC,
+  plyr_mgr TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE fielding (
+  player_id TEXT,
+  year INTEGER,
+  stint INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  pos TEXT,
+  g INTEGER,
+  gs NUMERIC,
+  inn_outs NUMERIC,
+  po NUMERIC,
+  a NUMERIC,
+  e NUMERIC,
+  dp NUMERIC,
+  pb NUMERIC,
+  wp NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC,
+  zr NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE fielding_postseason (
+  player_id TEXT,
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  round TEXT,
+  pos TEXT,
+  g INTEGER,
+  gs NUMERIC,
+  inn_outs NUMERIC,
+  po INTEGER,
+  a INTEGER,
+  e INTEGER,
+  dp INTEGER,
+  tp INTEGER,
+  pb NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE batting (
+  player_id TEXT,
+  year INTEGER,
+  stint INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  g INTEGER,
+  ab NUMERIC,
+  r NUMERIC,
+  h NUMERIC,
+  double NUMERIC,
+  triple NUMERIC,
+  hr NUMERIC,
+  rbi NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC,
+  bb NUMERIC,
+  so NUMERIC,
+  ibb NUMERIC,
+  hbp NUMERIC,
+  sh NUMERIC,
+  sf NUMERIC,
+  g_idp NUMERIC
+);  -- from spider2:Baseball
+
+-- === Join paths (most reliable last) ===
+-- path [1.32]: home_game -&gt; team -&gt; appearances -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: appearances.team_id = team.team_id
+--   inferred: appearances.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; batting -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: batting.team_id = team.team_id
+--   inferred: batting.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; batting_postseason -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: batting_postseason.team_id = team.team_id
+--   inferred: batting_postseason.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; fielding -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: fielding.team_id = team.team_id
+--   inferred: fielding.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; fielding_postseason -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: fielding_postseason.team_id = team.team_id
+--   inferred: fielding_postseason.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; manager -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: manager.team_id = team.team_id
+--   inferred: manager.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; manager_half -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: manager_half.team_id = team.team_id
+--   inferred: manager_half.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.53]: home_game -&gt; team -&gt; all_star -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: all_star.team_id = team.team_id
+--   inferred: all_star.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+
+-- === Sample Values ===
+-- Sample values for home_game:
+--   league_id: &#x27;AL&#x27;
+--   team_id: &#x27;KCA&#x27;, &#x27;BOS&#x27;, &#x27;CHA&#x27;, &#x27;DET&#x27;
+--   park_id: &#x27;KAN06&#x27;, &#x27;BOS07&#x27;, &#x27;CHI10&#x27;, &#x27;CHI09&#x27;, &#x27;DET04&#x27;
+--   span_first: &#x27;1997-04-07&#x27;, &#x27;2002-04-01&#x27;, &#x27;1963-04-16&#x27;, &#x27;1902-04-23&#x27;, &#x27;1934-04-24&#x27;
+--   span_last: &#x27;1997-09-21&#x27;, &#x27;2002-09-29&#x27;, &#x27;1963-09-29&#x27;, &#x27;1902-09-25&#x27;, &#x27;1934-09-30&#x27;
+-- Sample values for player:
+--   player_id: &#x27;leicejo01&#x27;, &#x27;wilkian01&#x27;, &#x27;bootyjo01&#x27;, &#x27;powelal01&#x27;, &#x27;uppje01&#x27;
+--   birth_country: &#x27;USA&#x27;
+--   birth_state: &#x27;CA&#x27;, &#x27;OK&#x27;, &#x27;MS&#x27;, &#x27;OH&#x27;
+--   birth_city: &#x27;Mariposa&#x27;, &#x27;Tulsa&#x27;, &#x27;Starkville&#x27;, &#x27;San Francisco&#x27;, &#x27;Sandusky&#x27;
+--   death_country: &#x27;USA&#x27;
+--   death_state: &#x27;OH&#x27;
+--   death_city: &#x27;Sandusky&#x27;
+--   name_first: &#x27;Jon&#x27;, &#x27;Andy&#x27;, &#x27;Josh&#x27;, &#x27;Alonzo&#x27;, &#x27;Jerry&#x27;
+--   name_last: &#x27;Leicester&#x27;, &#x27;Wilkins&#x27;, &#x27;Booty&#x27;, &#x27;Powell&#x27;, &#x27;Upp&#x27;
+--   name_given: &#x27;Jonathan David&#x27;, &#x27;Andrew Robert&#x27;, &#x27;Joshua Gibson&#x27;, &#x27;Alonzo Sidney&#x27;, &#x27;George Henry&#x27;
+--   bats: &#x27;R&#x27;, &#x27;L&#x27;
+--   throws: &#x27;R&#x27;, &#x27;L&#x27;
+--   debut: &#x27;2004-06-09&#x27;, &#x27;2014-08-31&#x27;, &#x27;1996-09-24&#x27;, &#x27;1987-04-06&#x27;, &#x27;1909-09-02&#x27;
+--   final_game: &#x27;2007-09-28&#x27;, &#x27;2014-09-28&#x27;, &#x27;1998-04-11&#x27;, &#x27;1991-10-06&#x27;, &#x27;1909-09-27&#x27;
+--   retro_id: &#x27;leicj001&#x27;, &#x27;wilka002&#x27;, &#x27;bootj001&#x27;, &#x27;powea001&#x27;, &#x27;upp-j101&#x27;
+--   bbref_id: &#x27;leicejo01&#x27;, &#x27;wilkian01&#x27;, &#x27;bootyjo01&#x27;, &#x27;powelal01&#x27;, &#x27;uppje01&#x27;
+-- Sample values for all_star:
+--   player_id: &#x27;quantpa01&#x27;, &#x27;hackst01&#x27;, &#x27;phillbr01&#x27;, &#x27;vaughar01&#x27;, &#x27;biggicr01&#x27;
+--   game_id: &#x27;ALS200107100&#x27;, &#x27;NLS201107120&#x27;, &#x27;NLS194007090&#x27;, &#x27;NLS199807070&#x27;
+--   team_id: &#x27;TOR&#x27;, &#x27;CHN&#x27;, &#x27;CIN&#x27;, &#x27;PIT&#x27;, &#x27;HOU&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+-- Sample values for team:
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+--   team_id: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+--   franchise_id: &#x27;STL&#x27;, &#x27;BOS&#x27;, &#x27;ATL&#x27;, &#x27;NYY&#x27;
+--   div_id: &#x27;E&#x27;, &#x27;C&#x27;
+--   div_win: &#x27;N&#x27;, &#x27;Y&#x27;
+--   wc_win: &#x27;Y&#x27;, &#x27;N&#x27;
+--   lg_win: &#x27;N&#x27;, &#x27;Y&#x27;
+--   ws_win: &#x27;N&#x27;
+--   name: &#x27;St. Louis Cardinals&#x27;, &#x27;Boston Red Sox&#x27;, &#x27;Boston Braves&#x27;, &#x27;New York Yankees&#x27;
+--   park: &#x27;Busch Stadium II&#x27;, &#x27;Fenway Park II&#x27;, &#x27;Braves Field&#x27;, &#x27;Yankee Stadium II&#x27;
+--   team_id_br: &#x27;STL&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYY&#x27;
+--   team_id_lahman45: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+--   team_id_retro: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+-- Sample values for college:
+--   college_id: &#x27;whittierca&#x27;, &#x27;moharri&#x27;, &#x27;caantel&#x27;, &#x27;wheatonma&#x27;, &#x27;oksemin&#x27;
+--   name_full: &#x27;Whittier College&#x27;, &#x27;Harris-Stowe State College&#x27;, &#x27;Antelope Valley College&#x27;, &#x27;Wheaton College&#x27;, &#x27;Seminole State College&#x27;
+--   city: &#x27;Whittier&#x27;, &#x27;St. Louis&#x27;, &#x27;Lancaster&#x27;, &#x27;Wheaton&#x27;, &#x27;Seminole&#x27;
+--   state: &#x27;CA&#x27;, &#x27;MO&#x27;, &#x27;MA&#x27;, &#x27;OK&#x27;
+--   country: &#x27;USA&#x27;
+-- Sample values for player_award:
+--   player_id: &#x27;mantlmi01&#x27;, &#x27;terrybi01&#x27;, &#x27;maranra01&#x27;, &#x27;bartedi01&#x27;, &#x27;ensbemo01&#x27;
+--   award_id: &#x27;TSN All-Star&#x27;, &#x27;Baseball Magazine All-Star&#x27;, &#x27;Silver Slugger&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;, &#x27;ML&#x27;
+--   notes: &#x27;OF&#x27;, &#x27;1B&#x27;, &#x27;SS&#x27;, &#x27;3B&#x27;
+-- Sample values for park:
+--   park_id: &#x27;WAT01&#x27;, &#x27;WAS02&#x27;, &#x27;ARL01&#x27;, &#x27;BAL07&#x27;, &#x27;SEA03&#x27;
+--   park_name: &#x27;Troy Ball Club Grounds&#x27;, &#x27;National Grounds&#x27;, &#x27;Arlington Stadium&#x27;, &#x27;Oriole Park III&#x27;, &#x27;Safeco Field&#x27;
+--   city: &#x27;Watervliet&#x27;, &#x27;Washington&#x27;, &#x27;Arlington&#x27;, &#x27;Baltimore&#x27;, &#x27;Seattle&#x27;
+--   state: &#x27;NY&#x27;, &#x27;DC&#x27;, &#x27;TX&#x27;, &#x27;MD&#x27;, &#x27;WA&#x27;
+--   country: &#x27;US&#x27;
+-- Sample values for player_college:
+--   player_id: &#x27;hazledo01&#x27;, &#x27;eshelva01&#x27;, &#x27;espinda01&#x27;, &#x27;smithto02&#x27;, &#x27;maholpa01&#x27;
+--   college_id: &#x27;tuftsma&#x27;, &#x27;txblinn&#x27;, &#x27;longbeach&#x27;, &#x27;fordham&#x27;, &#x27;missst&#x27;
+-- Sample values for player_award_vote:
+--   award_id: &#x27;MVP&#x27;
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+--   player_id: &#x27;konstji01&#x27;, &#x27;hansero02&#x27;, &#x27;mayswi01&#x27;, &#x27;bickfve01&#x27;, &#x27;putzjj01&#x27;
+-- Sample values for team_franchise:
+--   franchise_id: &#x27;TOL&#x27;, &#x27;CLS&#x27;, &#x27;CBL&#x27;, &#x27;BLC&#x27;, &#x27;KCR&#x27;
+--   franchise_name: &#x27;Toledo Blue Stockings&#x27;, &#x27;Columbus Solons&#x27;, &#x27;Cleveland Blues&#x27;, &#x27;Baltimore Canaries&#x27;, &#x27;Kansas City Royals&#x27;
+--   active: &#x27;N&#x27;, &#x27;Y&#x27;
+-- Sample values for manager_award:
+--   player_id: &#x27;dyered01&#x27;, &#x27;blackbu02&#x27;, &#x27;williji03&#x27;, &#x27;herzowh01&#x27;, &#x27;bakerdu01&#x27;
+--   award_id: &#x27;TSN Manager of the Year&#x27;, &#x27;BBWAA Manager of the year&#x27;
+--   league_id: &#x27;ML&#x27;, &#x27;NL&#x27;, &#x27;AL&#x27;
+-- Sample values for manager_award_vote:
+--   award_id: &#x27;Mgr of the year&#x27;
+--   league_id: &#x27;NL&#x27;
+--   player_id: &#x27;coxbo01&#x27;, &#x27;lasorto01&#x27;, &#x27;bochybr01&#x27;, &#x27;craigro01&#x27;
+-- Sample values for fielding_outfield:
+--   player_id: &#x27;rosemch01&#x27;, &#x27;isbelfr01&#x27;, &#x27;oullijo01&#x27;, &#x27;fletcge01&#x27;, &#x27;ewingbo01&#x27;
+-- Sample values for manager_half:
+--   player_id: &#x27;powerpa99&#x27;, &#x27;chapmja01&#x27;, &#x27;herzowh01&#x27;, &#x27;fregoji01&#x27;, &#x27;mcnamjo99&#x27;
+--   team_id: &#x27;NY1&#x27;, &#x27;LS3&#x27;, &#x27;SLN&#x27;, &#x27;CAL&#x27;, &#x27;CIN&#x27;
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+-- Sample values for appearances:
+--   team_id: &#x27;NYA&#x27;, &#x27;BRO&#x27;, &#x27;MON&#x27;, &#x27;DET&#x27;, &#x27;SEA&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+--   player_id: &#x27;newkifl01&#x27;, &#x27;browned02&#x27;, &#x27;kirbycl01&#x27;, &#x27;olivejo01&#x27;, &#x27;newfima01&#x27;
+-- Sample values for batting_postseason:
+--   round: &#x27;WS&#x27;, &#x27;ALDS1&#x27;
+--   player_id: &#x27;papeljo01&#x27;, &#x27;rossda01&#x27;, &#x27;hardyjj01&#x27;, &#x27;smithoz01&#x27;, &#x27;podrejo01&#x27;
+--   team_id: &#x27;BOS&#x27;, &#x27;BAL&#x27;, &#x27;SLN&#x27;, &#x27;LAN&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+-- Sample values for manager:
+--   player_id: &#x27;hutchfr01&#x27;, &#x27;harribu01&#x27;, &#x27;boudrlo01&#x27;, &#x27;dressch01&#x27;, &#x27;larusto01&#x27;
+--   team_id: &#x27;DET&#x27;, &#x27;PHI&#x27;, &#x27;BOS&#x27;, &#x27;CIN&#x27;, &#x27;SLN&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+--   plyr_mgr: &#x27;N&#x27;
+-- Sample values for fielding:
+--   player_id: &#x27;beckzi01&#x27;, &#x27;nageocl01&#x27;, &#x27;smithdw01&#x27;, &#x27;russeri01&#x27;, &#x27;bladera01&#x27;
+--   team_id: &#x27;NYA&#x27;, &#x27;SEA&#x27;, &#x27;CHN&#x27;, &#x27;SLN&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+--   pos: &#x27;1B&#x27;, &#x27;P&#x27;, &#x27;RF&#x27;, &#x27;OF&#x27;
+-- Sample values for fielding_postseason:
+--   player_id: &#x27;lidgebr01&#x27;, &#x27;mierked01&#x27;, &#x27;clemero02&#x27;, &#x27;sotoge01&#x27;, &#x27;rodrifr03&#x27;
+--   team_id: &#x27;HOU&#x27;, &#x27;DET&#x27;, &#x27;NYA&#x27;, &#x27;OAK&#x27;, &#x27;ANA&#x27;
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+--   round: &#x27;WS&#x27;, &#x27;ALCS&#x27;, &#x27;ALWC&#x27;
+--   pos: &#x27;P&#x27;, &#x27;LF&#x27;, &#x27;C&#x27;
+-- Sample values for batting:
+--   player_id: &#x27;bocekmi01&#x27;, &#x27;sanfoja02&#x27;, &#x27;boardch01&#x27;, &#x27;bigbila01&#x27;, &#x27;varvaan01&#x27;
+--   team_id: &#x27;CHA&#x27;, &#x27;SFN&#x27;, &#x27;PHA&#x27;, &#x27;BAL&#x27;, &#x27;ATL&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;</pre></details><details class="schema-context" id="ctx-67d717bb495a"><summary>schema DDL 67d717bb495a (223 lines)</summary><pre>CREATE TABLE home_game (
+  year INTEGER,
+  league_id TEXT,
+  team_id TEXT,
+  park_id TEXT,
+  span_first TEXT,
+  span_last TEXT,
+  games INTEGER,
+  openings INTEGER,
+  attendance INTEGER
+);  -- from spider2:Baseball
+
+CREATE TABLE player (
+  player_id TEXT,
+  birth_year NUMERIC,
+  birth_month NUMERIC,
+  birth_day NUMERIC,
+  birth_country TEXT,
+  birth_state TEXT,
+  birth_city TEXT,
+  death_year NUMERIC,
+  death_month NUMERIC,
+  death_day NUMERIC,
+  death_country TEXT,
+  death_state TEXT,
+  death_city TEXT,
+  name_first TEXT,
+  name_last TEXT,
+  name_given TEXT,
+  weight NUMERIC,
+  height NUMERIC,
+  bats TEXT,
+  throws TEXT,
+  debut TEXT,
+  final_game TEXT,
+  retro_id TEXT,
+  bbref_id TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE all_star (
+  player_id TEXT,
+  year INTEGER,
+  game_num INTEGER,
+  game_id TEXT,
+  team_id TEXT,
+  league_id TEXT,
+  gp NUMERIC,
+  starting_pos NUMERIC
+);  -- from spider2:Baseball
+
+CREATE TABLE team (
+  year INTEGER,
+  league_id TEXT,
+  team_id TEXT,
+  franchise_id TEXT,
+  div_id TEXT,
+  rank INTEGER,
+  ghome NUMERIC,
+  div_win TEXT,
+  wc_win TEXT,
+  lg_win TEXT,
+  ws_win TEXT,
+  ab INTEGER,
+  double INTEGER,
+  triple INTEGER,
+  hr INTEGER,
+  bb INTEGER,
+  so NUMERIC,
+  sb NUMERIC,
+  cs NUMERIC,
+  ra INTEGER,
+  er INTEGER,
+  era NUMERIC,
+  cg INTEGER,
+  sho INTEGER,
+  sv INTEGER,
+  ipouts INTEGER,
+  ha INTEGER,
+  hra INTEGER,
+  bba INTEGER,
+  soa INTEGER,
+  dp NUMERIC,
+  fp NUMERIC,
+  name TEXT,
+  park TEXT,
+  attendance NUMERIC,
+  bpf INTEGER,
+  ppf INTEGER,
+  team_id_br TEXT,
+  team_id_lahman45 TEXT,
+  team_id_retro TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE college (
+  college_id TEXT,
+  name_full TEXT,
+  city TEXT,
+  state TEXT,
+  country TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE player_award (
+  player_id TEXT,
+  award_id TEXT,
+  year INTEGER,
+  league_id TEXT,
+  tie TEXT,
+  notes TEXT
+);  -- from spider2:Baseball
+
+CREATE TABLE manager_half (
+  player_id TEXT,
+  year INTEGER,
+  team_id TEXT,
+  league_id TEXT,
+  inseason INTEGER,
+  half INTEGER,
+  g INTEGER,
+  w INTEGER,
+  l INTEGER,
+  rank INTEGER
+);  -- from spider2:Baseball
+
+-- === Join paths (most reliable last) ===
+-- path [1.32]: home_game -&gt; team -&gt; appearances -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: appearances.team_id = team.team_id
+--   inferred: appearances.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; batting -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: batting.team_id = team.team_id
+--   inferred: batting.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; batting_postseason -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: batting_postseason.team_id = team.team_id
+--   inferred: batting_postseason.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; fielding -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: fielding.team_id = team.team_id
+--   inferred: fielding.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; fielding_postseason -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: fielding_postseason.team_id = team.team_id
+--   inferred: fielding_postseason.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; manager -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: manager.team_id = team.team_id
+--   inferred: manager.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.32]: home_game -&gt; team -&gt; manager_half -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: manager_half.team_id = team.team_id
+--   inferred: manager_half.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+-- path [1.53]: home_game -&gt; team -&gt; all_star -&gt; player -&gt; player_award
+--   inferred: home_game.team_id = team.team_id
+--   inferred: all_star.team_id = team.team_id
+--   inferred: all_star.player_id = player.player_id
+--   inferred: player_award.player_id = player.player_id
+
+-- === Sample Values ===
+-- Sample values for home_game:
+--   league_id: &#x27;AL&#x27;
+--   team_id: &#x27;KCA&#x27;, &#x27;BOS&#x27;, &#x27;CHA&#x27;, &#x27;DET&#x27;
+--   park_id: &#x27;KAN06&#x27;, &#x27;BOS07&#x27;, &#x27;CHI10&#x27;, &#x27;CHI09&#x27;, &#x27;DET04&#x27;
+--   span_first: &#x27;1997-04-07&#x27;, &#x27;2002-04-01&#x27;, &#x27;1963-04-16&#x27;, &#x27;1902-04-23&#x27;, &#x27;1934-04-24&#x27;
+--   span_last: &#x27;1997-09-21&#x27;, &#x27;2002-09-29&#x27;, &#x27;1963-09-29&#x27;, &#x27;1902-09-25&#x27;, &#x27;1934-09-30&#x27;
+-- Sample values for player:
+--   player_id: &#x27;leicejo01&#x27;, &#x27;wilkian01&#x27;, &#x27;bootyjo01&#x27;, &#x27;powelal01&#x27;, &#x27;uppje01&#x27;
+--   birth_country: &#x27;USA&#x27;
+--   birth_state: &#x27;CA&#x27;, &#x27;OK&#x27;, &#x27;MS&#x27;, &#x27;OH&#x27;
+--   birth_city: &#x27;Mariposa&#x27;, &#x27;Tulsa&#x27;, &#x27;Starkville&#x27;, &#x27;San Francisco&#x27;, &#x27;Sandusky&#x27;
+--   death_country: &#x27;USA&#x27;
+--   death_state: &#x27;OH&#x27;
+--   death_city: &#x27;Sandusky&#x27;
+--   name_first: &#x27;Jon&#x27;, &#x27;Andy&#x27;, &#x27;Josh&#x27;, &#x27;Alonzo&#x27;, &#x27;Jerry&#x27;
+--   name_last: &#x27;Leicester&#x27;, &#x27;Wilkins&#x27;, &#x27;Booty&#x27;, &#x27;Powell&#x27;, &#x27;Upp&#x27;
+--   name_given: &#x27;Jonathan David&#x27;, &#x27;Andrew Robert&#x27;, &#x27;Joshua Gibson&#x27;, &#x27;Alonzo Sidney&#x27;, &#x27;George Henry&#x27;
+--   bats: &#x27;R&#x27;, &#x27;L&#x27;
+--   throws: &#x27;R&#x27;, &#x27;L&#x27;
+--   debut: &#x27;2004-06-09&#x27;, &#x27;2014-08-31&#x27;, &#x27;1996-09-24&#x27;, &#x27;1987-04-06&#x27;, &#x27;1909-09-02&#x27;
+--   final_game: &#x27;2007-09-28&#x27;, &#x27;2014-09-28&#x27;, &#x27;1998-04-11&#x27;, &#x27;1991-10-06&#x27;, &#x27;1909-09-27&#x27;
+--   retro_id: &#x27;leicj001&#x27;, &#x27;wilka002&#x27;, &#x27;bootj001&#x27;, &#x27;powea001&#x27;, &#x27;upp-j101&#x27;
+--   bbref_id: &#x27;leicejo01&#x27;, &#x27;wilkian01&#x27;, &#x27;bootyjo01&#x27;, &#x27;powelal01&#x27;, &#x27;uppje01&#x27;
+-- Sample values for all_star:
+--   player_id: &#x27;quantpa01&#x27;, &#x27;hackst01&#x27;, &#x27;phillbr01&#x27;, &#x27;vaughar01&#x27;, &#x27;biggicr01&#x27;
+--   game_id: &#x27;ALS200107100&#x27;, &#x27;NLS201107120&#x27;, &#x27;NLS194007090&#x27;, &#x27;NLS199807070&#x27;
+--   team_id: &#x27;TOR&#x27;, &#x27;CHN&#x27;, &#x27;CIN&#x27;, &#x27;PIT&#x27;, &#x27;HOU&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;
+-- Sample values for team:
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;
+--   team_id: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+--   franchise_id: &#x27;STL&#x27;, &#x27;BOS&#x27;, &#x27;ATL&#x27;, &#x27;NYY&#x27;
+--   div_id: &#x27;E&#x27;, &#x27;C&#x27;
+--   div_win: &#x27;N&#x27;, &#x27;Y&#x27;
+--   wc_win: &#x27;Y&#x27;, &#x27;N&#x27;
+--   lg_win: &#x27;N&#x27;, &#x27;Y&#x27;
+--   ws_win: &#x27;N&#x27;
+--   name: &#x27;St. Louis Cardinals&#x27;, &#x27;Boston Red Sox&#x27;, &#x27;Boston Braves&#x27;, &#x27;New York Yankees&#x27;
+--   park: &#x27;Busch Stadium II&#x27;, &#x27;Fenway Park II&#x27;, &#x27;Braves Field&#x27;, &#x27;Yankee Stadium II&#x27;
+--   team_id_br: &#x27;STL&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYY&#x27;
+--   team_id_lahman45: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+--   team_id_retro: &#x27;SLN&#x27;, &#x27;BOS&#x27;, &#x27;BSN&#x27;, &#x27;NYA&#x27;
+-- Sample values for college:
+--   college_id: &#x27;whittierca&#x27;, &#x27;moharri&#x27;, &#x27;caantel&#x27;, &#x27;wheatonma&#x27;, &#x27;oksemin&#x27;
+--   name_full: &#x27;Whittier College&#x27;, &#x27;Harris-Stowe State College&#x27;, &#x27;Antelope Valley College&#x27;, &#x27;Wheaton College&#x27;, &#x27;Seminole State College&#x27;
+--   city: &#x27;Whittier&#x27;, &#x27;St. Louis&#x27;, &#x27;Lancaster&#x27;, &#x27;Wheaton&#x27;, &#x27;Seminole&#x27;
+--   state: &#x27;CA&#x27;, &#x27;MO&#x27;, &#x27;MA&#x27;, &#x27;OK&#x27;
+--   country: &#x27;USA&#x27;
+-- Sample values for player_award:
+--   player_id: &#x27;mantlmi01&#x27;, &#x27;terrybi01&#x27;, &#x27;maranra01&#x27;, &#x27;bartedi01&#x27;, &#x27;ensbemo01&#x27;
+--   award_id: &#x27;TSN All-Star&#x27;, &#x27;Baseball Magazine All-Star&#x27;, &#x27;Silver Slugger&#x27;
+--   league_id: &#x27;AL&#x27;, &#x27;NL&#x27;, &#x27;ML&#x27;
+--   notes: &#x27;OF&#x27;, &#x27;1B&#x27;, &#x27;SS&#x27;, &#x27;3B&#x27;
+-- Sample values for manager_half:
+--   player_id: &#x27;powerpa99&#x27;, &#x27;chapmja01&#x27;, &#x27;herzowh01&#x27;, &#x27;fregoji01&#x27;, &#x27;mcnamjo99&#x27;
+--   team_id: &#x27;NY1&#x27;, &#x27;LS3&#x27;, &#x27;SLN&#x27;, &#x27;CAL&#x27;, &#x27;CIN&#x27;
+--   league_id: &#x27;NL&#x27;, &#x27;AL&#x27;</pre></details><details><summary>generator instructions (system prompt)</summary><pre>You write exactly one read-only SQL query in the sqlite dialect that answers the user&#x27;s question. Use only tables and columns that appear in the schema you are given or that you found with the tools. If the schema lacks a concept the question needs, call link_schema with that concept, or search_tables. Read a table&#x27;s columns and relations with get_table, the join keys between two tables with find_join_path, and business terms with list_glossary. Prefer the join columns listed in the schema. Check literal values with sample_values before filtering on them. You may probe with run_query (at most 3 times, small results only). Return the final query through the output tool: no markdown, no comments, no trailing semicolon. SQLite: use strftime()/date() for dates, || to concatenate, CAST(x AS REAL) before dividing integers; there is no ILIKE, no FULL JOIN before 3.39, no date_trunc.</pre></details></aside></div><script type="application/json" id="search-events">{"nodes": 16, "start": "Press ▶ Play (or Space) to replay the search: 16 nodes by 1 model. ← and → step through it; click a node for its prompt and SQL.", "events": [{"kind": "ask", "node": 0, "path": [], "caption": "0.0 s · GEN at the question: a new draft n0 with qwen3.8-max-0902 (wide context)"}, {"kind": "ask", "node": 1, "path": [], "caption": "0.0 s · GEN at the question: a new draft n1 with qwen3.8-max-0902 (wide context)"}, {"kind": "ask", "node": 4, "path": [], "caption": "0.0 s · GEN at the question: a new draft n2 with qwen3.8-max-0902 (wide context)"}, {"kind": "ask", "node": 7, "path": [], "caption": "0.0 s · GEN at the question: a new draft n3 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 1, "path": [], "caption": "19.5 s · n1 (qwen3.8-max-0902) scored 0.92 · EX ✓ (matches gold); the reward backs up question"}, {"kind": "ask", "node": 2, "path": [1], "caption": "29.1 s · Select question → n1 (CONT), then GEN under n1: n4 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 7, "path": [], "caption": "24.7 s · n3 (qwen3.8-max-0902) scored 0.92 · EX ✓ (matches gold); the reward backs up question"}, {"kind": "ask", "node": 3, "path": [1], "caption": "34.5 s · Select question → n1 (CONT), then GEN under n1: n5 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 4, "path": [], "caption": "30.3 s · n2 (qwen3.8-max-0902) scored 0.91 · EX ✓ (matches gold); the reward backs up question"}, {"kind": "ask", "node": 8, "path": [], "caption": "39.8 s · GEN at the question: a new draft n6 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 0, "path": [], "caption": "35.1 s · n0 (qwen3.8-max-0902) scored 0.93 · EX ✓ (matches gold); the reward backs up question"}, {"kind": "ask", "node": 12, "path": [], "caption": "45.8 s · GEN at the question: a new draft n7 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 8, "path": [], "caption": "60.3 s · n6 (qwen3.8-max-0902) scored 0.94 · EX ✓ (matches gold); the reward backs up question"}, {"kind": "ask", "node": 9, "path": [8], "caption": "66.2 s · Select question → n6 (CONT), then GEN under n6: n8 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 12, "path": [], "caption": "77.1 s · n7 (qwen3.8-max-0902) scored 0.92 · EX ✓ (matches gold); the reward backs up question"}, {"kind": "ask", "node": 13, "path": [12], "caption": "82.8 s · Select question → n7 (CONT), then GEN under n7: n9 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 2, "path": [1], "caption": "155.9 s · n4 (qwen3.8-max-0902) scored 0.91 · EX ✓ (matches gold); the reward backs up n1 → question"}, {"kind": "ask", "node": 10, "path": [8], "caption": "161.4 s · Select question → n6 (CONT), then GEN under n6: n10 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 3, "path": [1], "caption": "209.6 s · n5 (qwen3.8-max-0902) scored 0.91 · EX ✓ (matches gold); the reward backs up n1 → question"}, {"kind": "ask", "node": 11, "path": [8], "caption": "215.6 s · Select question → n6 (CONT), then GEN under n6: n11 with qwen3.8-max-0902 (wide context)"}, {"kind": "tell", "node": 9, "path": [8], "caption": "344.1 s · n8 (qwen3.8-max-0902) scored 0.93 · EX ✓ (matches gold); the reward backs up n6 → question"}, {"kind": "ask", "node": 14, "path": [12], "caption": "350.5 s · Select question → n7 (CONT), then GEN under n7: n12 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 11, "path": [8], "caption": "346.9 s · n11 (qwen3.8-max-0902) scored 0.91 · EX ✓ (matches gold); the reward backs up n6 → question"}, {"kind": "ask", "node": 15, "path": [], "caption": "357.3 s · GEN at the question: a new draft n13 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 10, "path": [8], "caption": "352.7 s · n10 (qwen3.8-max-0902) scored 0.93 · EX ✓ (matches gold); the reward backs up n6 → question"}, {"kind": "ask", "node": 5, "path": [4], "caption": "363.0 s · Select question → n2 (CONT), then GEN under n2: n14 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 13, "path": [12], "caption": "376.2 s · n9 (qwen3.8-max-0902) scored 0.90 · EX ✓ (matches gold); the reward backs up n7 → question"}, {"kind": "ask", "node": 6, "path": [4], "caption": "381.9 s · Select question → n2 (CONT), then GEN under n2: n15 with qwen3.8-max-0902 (tight context)"}, {"kind": "tell", "node": 15, "path": [], "caption": "386.9 s · n13 (qwen3.8-max-0902) scored 0.92 · EX ✓ (matches gold); the reward backs up question"}, {"kind": "tell", "node": 14, "path": [12], "caption": "395.9 s · n12 (qwen3.8-max-0902) scored 0.89 · EX ✓ (matches gold); the reward backs up n7 → question"}, {"kind": "tell", "node": 6, "path": [4], "caption": "658.9 s · n15 (qwen3.8-max-0902) scored 0.93 · EX ✓ (matches gold); the reward backs up n2 → question"}, {"kind": "tell", "node": 5, "path": [4], "caption": "674.7 s · n14 (qwen3.8-max-0902) scored 0.92 · EX ✓ (matches gold); the reward backs up n2 → question"}, {"kind": "pick", "node": 8, "path": [], "caption": "Final pick: n6 by score, score 0.94 · EX ✓ (matches gold)"}]}</script><script>
+(() => {
+  "use strict";
+  const STEP_MS = 1400;
+  const byId = (id) => document.getElementById(id);
+  const data = JSON.parse(byId("search-events").textContent);
+  const events = data.events;
+  const player = byId("player");
+  const slider = byId("step");
+  const playButton = byId("play");
+  const speed = byId("speed");
+  let step = 0;
+  let timer = null;
+  let selected = null;
+
+  document.body.classList.add("js");
+  slider.max = String(events.length);
+  // each node's full hover text; while it generates, its title shows data-pending instead
+  const titles = [];
+  for (let index = 0; index < data.nodes; index++) {
+    const title = byId("g-" + index).querySelector("title");
+    const pending = title.getAttribute("data-pending");
+    titles.push({ title: title, full: title.textContent, pending: pending });
+  }
+
+  function select(index) {
+    if (selected !== null) byId("node-" + selected).classList.remove("selected");
+    selected = index;
+    if (index !== null) byId("node-" + index).classList.add("selected");
+    byId("panel-empty").hidden = index !== null;
+  }
+
+  function render() {
+    const asked = new Set();
+    const told = new Set();
+    for (const event of events.slice(0, step)) {
+      if (event.kind === "ask") asked.add(event.node);
+      if (event.kind === "tell") told.add(event.node);
+    }
+    const current = step > 0 ? events[step - 1] : null;
+    const path = new Set(current ? current.path : []);
+    for (let index = 0; index < data.nodes; index++) {
+      const group = byId("g-" + index);
+      const edge = byId("e-" + index);
+      const shown = asked.has(index);
+      const pending = shown && !told.has(index);
+      const isCurrent = current !== null && current.node === index;
+      group.classList.toggle("shown", shown);
+      group.classList.toggle("pending", pending);
+      byId("node-" + index).classList.toggle("pending", pending);
+      titles[index].title.textContent = pending ? titles[index].pending : titles[index].full;
+      group.classList.toggle("on-path", path.has(index));
+      group.classList.toggle("current", isCurrent);
+      edge.classList.toggle("shown", shown);
+      edge.classList.toggle("on-path", path.has(index) || isCurrent);
+    }
+    byId("root-node").classList.toggle("on-path", current !== null && current.kind !== "pick");
+    for (const kind of ["ask", "tell", "pick"]) {
+      player.classList.toggle("kind-" + kind, current !== null && current.kind === kind);
+    }
+    player.classList.toggle("finished", step === events.length);
+    byId("caption").textContent = current ? current.caption : data.start;
+    byId("counter").textContent = step + " / " + events.length;
+    slider.value = String(step);
+    select(current === null ? null : current.node);
+  }
+
+  function go(target) {
+    step = Math.max(0, Math.min(events.length, target));
+    render();
+  }
+
+  function pause() {
+    if (timer !== null) clearInterval(timer);
+    timer = null;
+    playButton.textContent = "\u25B6 Play";
+  }
+
+  function play() {
+    if (step >= events.length) go(0);
+    playButton.textContent = "\u23F8 Pause";
+    timer = setInterval(() => {
+      if (step >= events.length) pause();
+      else go(step + 1);
+    }, STEP_MS / Number(speed.value));
+  }
+
+  const toggle = () => (timer === null ? play() : pause());
+  const moves = {
+    first: () => 0,
+    back: () => step - 1,
+    forward: () => step + 1,
+    last: () => events.length,
+  };
+  for (const [id, target] of Object.entries(moves)) {
+    byId(id).addEventListener("click", () => { pause(); go(target()); });
+  }
+  playButton.addEventListener("click", toggle);
+  speed.addEventListener("change", () => { if (timer !== null) { pause(); play(); } });
+  slider.addEventListener("input", () => { pause(); go(Number(slider.value)); });
+  for (let index = 0; index < data.nodes; index++) {
+    byId("g-" + index).addEventListener("click", (event) => {
+      event.preventDefault();
+      pause();
+      select(index);
+    });
+  }
+  // a prompt's schema link opens the page's one copy of that DDL
+  for (const link of document.querySelectorAll("a.ctx-link")) {
+    link.addEventListener("click", () => {
+      const target = byId(link.getAttribute("href").slice(1));
+      if (target) target.open = true;
+    });
+  }
+  const keys = {
+    " ": toggle,
+    ArrowRight: () => { pause(); go(step + 1); },
+    ArrowLeft: () => { pause(); go(step - 1); },
+    Home: () => { pause(); go(0); },
+    End: () => { pause(); go(events.length); },
+  };
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    const tag = target.tagName;
+    // keys keep their own meaning in form controls, links, disclosures and the node panel
+    if (!(event.key in keys) || ["INPUT", "SELECT", "SUMMARY", "A", "a"].includes(tag)) return;
+    if (target.closest && target.closest(".panel")) return;
+    if (event.key === " " && tag === "BUTTON") return;  // the button's own click
+    event.preventDefault();
+    keys[event.key]();
+  });
+  render();
+})();
+</script></body></html>
