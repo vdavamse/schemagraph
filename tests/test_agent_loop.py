@@ -33,9 +33,11 @@ from pydantic_ai.models.test import TestModel  # noqa: E402
 from pydantic_ai.usage import RequestUsage  # noqa: E402
 from typer.testing import CliRunner  # noqa: E402
 
-from schemagraph.agent import agents  # noqa: E402
+from schemagraph.agent import agents, prompts  # noqa: E402
 from schemagraph.agent import models as agent_models  # noqa: E402
 from schemagraph.agent.answer import (  # noqa: E402
+    PLANNER_MAX_TOKENS,
+    PLANNER_TIMEOUT_S,
     REASONING_BUDGET_PERCENT,
     REASONING_MAX_TOKENS,
     REASONING_TIMEOUT_S,
@@ -45,15 +47,19 @@ from schemagraph.agent.answer import (  # noqa: E402
 from schemagraph.agent.execute import AgentError, DuckDBExecutor, SQLiteExecutor  # noqa: E402
 from schemagraph.agent.models import AgentModels, model_names  # noqa: E402
 from schemagraph.agent.results import (  # noqa: E402
+    SPEC_FIELD,
     AgentConfig,
     AnswerResult,
     Candidate,
     CheckReport,
     ExecResult,
     Finding,
+    QuestionSpec,
+    RubricBase,
     UsageRecord,
     UsageSummary,
     expand_prompt,
+    rubric_type,
 )
 from schemagraph.agent.schema_client import SchemaClient  # noqa: E402
 from schemagraph.agent.search import (  # noqa: E402
@@ -1020,6 +1026,204 @@ def test_concurrent_children_share_one_critic_call(store):
 
     asyncio.run(expand_three_times())
     assert len(critic_calls) == 1 and parent.advice == "- use total_amount"
+
+
+# ------------------------------------------------------------------ the planner (question spec)
+
+SPEC = {
+    "restated_question": "Sum of order total_amount per customer state",
+    "main_reading": "one row per state with the summed order amounts",
+    "row_definition": "one customer state",
+    "columns": [
+        {"name": "state", "meaning": "customer.state"},
+        {"name": "total", "meaning": "SUM(orders.total_amount)"},
+    ],
+    "definitions": ["orders join customer on customer_id"],
+    "ordering_and_limits": "none",
+    "alternative_readings": [{"reading": "per customer", "changes": "one row per customer"}],
+    "confidence": 0.8,
+}
+SPEC_HEADER = "Specification (written before any SQL):"
+
+
+class Planned:
+    """Planner, judge and critic that record the prompts they read; the planner may fail."""
+
+    def __init__(self, fail: bool = False):
+        self.fail = fail
+        self.planner_prompts: list[str] = []
+        self.judge_materials: list[str] = []
+        self.rubric_fields: list[set[str]] = []
+        self.critic_prompts: list[str] = []
+
+    @staticmethod
+    def _prompt(messages) -> str:
+        return next(p.content for p in messages[0].parts if isinstance(p, UserPromptPart))
+
+    def plan(self, messages, info: AgentInfo) -> ModelResponse:
+        self.planner_prompts.append(self._prompt(messages))
+        if self.fail:
+            raise RuntimeError("planner down")
+        return _output(info, **SPEC)
+
+    def judge(self, messages, info: AgentInfo) -> ModelResponse:
+        properties = info.output_tools[0].parameters_json_schema["properties"]
+        if "a_is_better" not in properties:
+            self.judge_materials.append(self._prompt(messages))
+            self.rubric_fields.append(set(properties))
+        return judge_fn()(messages, info)
+
+    def critic(self, messages, info: AgentInfo) -> ModelResponse:
+        self.critic_prompts.append(self._prompt(messages))
+        return ModelResponse(parts=[TextPart("- use total_amount")])
+
+    def models(self, script: Script) -> AgentModels:
+        judge = FunctionModel(self.judge)
+        names = {**NAMES, "planner": "p"}
+        return AgentModels(
+            FunctionModel(script.gen), judge, judge, FunctionModel(self.critic), names,
+            planner=FunctionModel(self.plan),
+        )  # fmt: skip
+
+
+def test_the_planner_reasons_at_its_own_effort(monkeypatch):
+    pytest.importorskip("openai")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "x")
+    monkeypatch.setenv("SCHEMAGRAPH_REASONING", "low")  # the other roles' effort
+    monkeypatch.delenv("SCHEMAGRAPH_PLANNER_REASONING", raising=False)
+    planner = "openrouter:anthropic/claude-opus-5.5"
+    cfg = AgentConfig(strategy="single", judge=False, gen_model="test", spec=True)
+    models = AgentModels.resolve(replace(cfg, planner_model=planner))
+    assert models.planner.settings["openrouter_reasoning"] == {"enabled": True, "effort": "high"}
+    limits = Answerer._limits(
+        SimpleNamespace(models=models), "planner", PLANNER_MAX_TOKENS, PLANNER_TIMEOUT_S
+    )
+    assert limits == {"max_tokens": PLANNER_MAX_TOKENS * 5, "timeout": PLANNER_TIMEOUT_S}
+
+    monkeypatch.setenv("SCHEMAGRAPH_PLANNER_REASONING", "off")
+    models = AgentModels.resolve(replace(cfg, planner_model=planner))
+    assert models.planner.settings["openrouter_reasoning"] == {"enabled": False}
+    assert not models.reasoning("planner")
+
+
+def test_model_names_add_the_planner_only_with_the_spec(monkeypatch):
+    monkeypatch.delenv("SCHEMAGRAPH_PLANNER_MODEL", raising=False)
+    assert "planner" not in model_names(AgentConfig())  # names (and bench hashes) unchanged
+    assert model_names(AgentConfig(spec=True))["planner"] == agent_models.DEFAULT_PLANNER_MODEL
+    monkeypatch.setenv("SCHEMAGRAPH_PLANNER_MODEL", "env-planner")
+    assert model_names(AgentConfig(spec=True))["planner"] == "env-planner"
+    assert model_names(AgentConfig(spec=True, planner_model="p"))["planner"] == "p"
+    seen: list[str] = []
+
+    def resolve(name, effort=None):
+        seen.append(name if effort is None else f"{name}@{effort}")
+        return name
+
+    monkeypatch.setattr(agent_models, "resolve_model", resolve)
+    monkeypatch.delenv("SCHEMAGRAPH_PLANNER_REASONING", raising=False)
+    cfg = AgentConfig(strategy="single", judge=False, gen_model="g")
+    assert AgentModels.resolve(cfg).planner is None and seen == ["g"]
+    seen.clear()
+    # the planner resolves through resolve_model too, at its own effort
+    assert AgentModels.resolve(replace(cfg, spec=True, planner_model="p")).planner == "p"
+    assert seen == ["g", "p@high"]
+
+
+def test_the_planner_runs_once_and_every_agent_reads_the_spec(store):
+    script, planned = Script(), Planned()
+    cfg = AgentConfig(strategy="refine", budget=2, early_stop=1.01, spec=True)
+    answerer = _answerer(store, cfg, planned.models(script))
+    result = asyncio.run(answerer.answer(QUESTION))
+    assert len(planned.planner_prompts) == 1  # once per answer, before the search
+    plan_prompt = planned.planner_prompts[0]
+    assert plan_prompt.startswith(f"Question: {QUESTION}") and "CREATE TABLE" in plan_prompt
+    assert result.spec is not None and result.spec.model_dump() == SPEC
+    assert result.models["planner"] == "p"
+    planner_usage = result.usage.by_role["planner"]
+    assert planner_usage.calls == 1 and planner_usage.ok and planner_usage.model == "p"
+    assert all(record.node_id is None for record in answerer.records if record.role == "planner")
+    # drafts and refinements, the critic and the judge all read the specification
+    assert len(script.prompts) == 2 and all(SPEC_HEADER in prompt for prompt in script.prompts)
+    assert all(prompts.SPEC_GUIDANCE in prompt for prompt in script.prompts)
+    assert "- total: SUM(orders.total_amount)" in script.prompts[0]
+    assert planned.critic_prompts and SPEC_HEADER in planned.critic_prompts[0]
+    assert planned.judge_materials and all(SPEC_HEADER in m for m in planned.judge_materials)
+    assert all(SPEC_FIELD in fields for fields in planned.rubric_fields)
+    assert SPEC_FIELD in result.candidates[0].judgement.fields  # counted in the judge's mean
+    a, b = result.candidates[:2]
+
+    async def pick_material(context: bool) -> str:
+        answerer.cfg = replace(cfg, selector_context=context)
+        async with answerer.schema:
+            await answerer.prepare(QUESTION)
+            return await answerer._pick_material(a, b)
+
+    assert SPEC_HEADER in asyncio.run(pick_material(False))
+    assert SPEC_HEADER in asyncio.run(pick_material(True))
+
+
+def test_without_the_spec_no_planner_runs_and_no_prompt_mentions_it(store):
+    script, planned = Script(), Planned()
+    cfg = AgentConfig(strategy="refine", budget=2, early_stop=1.01)
+    result = _answer(store, cfg, planned.models(script))
+    assert not planned.planner_prompts and result.spec is None
+    assert "planner" not in result.usage.by_role
+    texts = [*script.prompts, *planned.critic_prompts, *planned.judge_materials]
+    assert texts and not any("Specification" in text for text in texts)
+    assert planned.rubric_fields and not any(SPEC_FIELD in f for f in planned.rubric_fields)
+
+
+def test_a_planner_failure_answers_without_a_spec(store):
+    script, planned = Script(), Planned(fail=True)
+    cfg = AgentConfig(strategy="single", spec=True)
+    answerer = _answerer(store, cfg, planned.models(script))
+    result = asyncio.run(answerer.answer(QUESTION))
+    assert len(planned.planner_prompts) == 1 and result.spec is None
+    assert result.sql == GOOD  # the search ran as without the planner
+    planner_usage = result.usage.by_role["planner"]
+    assert planner_usage.calls == 1 and not planner_usage.ok
+    failed = next(record for record in answerer.records if record.role == "planner")
+    assert "planner down" in failed.error
+    assert not any(SPEC_HEADER in prompt for prompt in script.prompts)
+    assert not any(SPEC_FIELD in fields for fields in planned.rubric_fields)
+
+
+def test_the_spec_adds_one_section_and_changes_nothing_else():
+    spec = QuestionSpec.model_validate(SPEC)
+    section = prompts.spec_section(spec)
+    parent = Candidate(id="n0", sql="select 1", feedback=["empty result"])
+    other = Candidate(id="n1", sql="select 2")
+
+    def without(text: str, extra: str = "") -> str:
+        assert text.count(section) == 1
+        return text.replace(f"\n\n{section}{extra}", "", 1)
+
+    draft = dict(evidence="notes", action="wide", ddl="CREATE TABLE t (a INT);", n_tables=1)
+    for refined in (None, parent):
+        plain = prompts.generator_prompt(QUESTION, **draft, parent=refined, evidence_chars=100)
+        planned = prompts.generator_prompt(
+            QUESTION, **draft, parent=refined, evidence_chars=100, spec=spec
+        )
+        assert without(planned, f"\n\n{prompts.SPEC_GUIDANCE}") == plain
+    judged = dict(rows=5, evidence="notes", evidence_chars=100, schema="t", stats=True)
+    assert without(
+        prompts.judge_material(QUESTION, "select 1", None, **judged, spec=spec)
+    ) == prompts.judge_material(QUESTION, "select 1", None, **judged)
+    for context in ({}, {"evidence": "notes", "evidence_chars": 100, "schema_a": "t"}):
+        assert without(
+            prompts.pick_material(QUESTION, parent, other, **context, spec=spec)
+        ) == prompts.pick_material(QUESTION, parent, other, **context)
+    assert without(
+        prompts.critic_prompt(QUESTION, parent, "CREATE TABLE t (a INT);", spec=spec)
+    ) == prompts.critic_prompt(QUESTION, parent, "CREATE TABLE t (a INT);")
+    assert rubric_type() is RubricBase and SPEC_FIELD in rubric_type(spec=True).model_fields
+
+
+def test_planner_model_without_spec_is_rejected(tmp_path):
+    result = CliRunner().invoke(
+        cli_app, ["ask", "q", "--planner-model", "x", "--home", str(tmp_path)]
+    )
+    assert result.exit_code == 2 and "--spec" in result.output
 
 
 # ------------------------------------------------------------------ Engine and CLI

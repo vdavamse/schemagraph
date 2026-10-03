@@ -295,6 +295,23 @@ def test_the_reasoning_node_timeout_counts_only_for_a_reasoning_generator(monkey
     assert chash(None) != chash(600.0)
 
 
+def test_config_records_the_planner_effort_only_when_it_differs(monkeypatch):
+    from schemagraph.agent.results import AgentConfig
+    from schemagraph.bench.spider2_exec import _run_config
+
+    models = _Models().agent_models()
+    models.names = {**models.names, "planner": "openrouter:anthropic/claude-opus-5.5"}
+    monkeypatch.delenv("SCHEMAGRAPH_PLANNER_REASONING", raising=False)
+
+    def config_at(level):
+        monkeypatch.setenv("SCHEMAGRAPH_REASONING", level)
+        return _run_config(AgentConfig(spec=True), models, seed=0, use_docs=True, concurrency=1)
+
+    # the live --spec runs planned at the shared high effort, so they keep their hash
+    assert "planner_reasoning" not in config_at("high")
+    assert config_at("medium")["planner_reasoning"] == "high"
+
+
 def test_config_records_the_reasoning_effort_only_for_openrouter_models(monkeypatch):
     from schemagraph.agent.results import AgentConfig
     from schemagraph.bench.spider2_exec import _run_config
@@ -510,3 +527,55 @@ def test_a_run_with_several_generators_records_each_nodes_model(tmp_path):
     assert [row["nodes_by_generator"] for row in result["rows"]] == [{"g": 1, "g2": 1}] * 2
     lines = (out / "spider2_exec_mixed_candidates.jsonl").read_text().splitlines()
     assert sorted(json.loads(line)["generator"] for line in lines) == ["g", "g", "g2", "g2"]
+
+
+def test_the_spec_options_off_keep_the_config_hash():
+    from schemagraph.agent.results import AgentConfig
+    from schemagraph.bench.spider2_exec import _run_config
+
+    models = _Models().agent_models()
+    off = _legacy_config(spec=False, planner_model=None)
+    plain = _run_config(off, models, seed=0, use_docs=True, concurrency=1)
+    assert plain["config_hash"] == PRE_REFACTOR_DEFAULT_HASH  # earlier rows still resume
+    assert _run_config(AgentConfig(), models, seed=0, use_docs=True, concurrency=1)[
+        "agent_config"
+    ].keys().isdisjoint({"spec", "planner_model"})
+    planned = _run_config(_legacy_config(spec=True), models, seed=0, use_docs=True, concurrency=1)
+    assert planned["config_hash"] != PRE_REFACTOR_DEFAULT_HASH
+
+
+def test_a_run_with_the_planner_keeps_its_spec_for_the_search_pages(tmp_path):
+    scripted = _Models()  # skips without the agent extra, before importing from it
+    from dataclasses import replace
+
+    from pydantic_ai.messages import ModelResponse, ToolCallPart
+    from pydantic_ai.models.function import FunctionModel
+
+    from schemagraph.agent.viz import render_search_html
+    from schemagraph.bench import spider2_exec
+
+    spec = {
+        "restated_question": "count the movies", "main_reading": "one count",
+        "row_definition": "one row", "columns": [{"name": "n", "meaning": "COUNT(*)"}],
+        "definitions": [], "ordering_and_limits": "none", "alternative_readings": [],
+        "confidence": 0.9,
+    }  # fmt: skip
+
+    def plan(messages, info):
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, spec)])
+
+    models = replace(
+        scripted.agent_models(), planner=FunctionModel(plan), names={**NAMES, "planner": "p"}
+    )
+    root, out = _spider2(tmp_path / "s2"), tmp_path / "out"
+    cfg = _config(early_stop=1.01, spec=True)
+    result = spider2_exec.run(root, cfg=cfg, models=models, out_dir=out, tag="spec")
+    assert all(row["planned"] for row in result["rows"])
+    assert result["config"]["agent_config"]["spec"] is True
+    contexts = [json.loads(line) for line in (out / "spider2_exec_spec_contexts.jsonl").open()]
+    assert [record["spec"] for record in contexts] == [spec, spec]
+    candidates = out / "spider2_exec_spec_candidates.jsonl"
+    files = spider2_exec.run_files(candidates)
+    trees = spider2_exec.load_search_trees(candidates, files.rows, files.report, None, files.contexts)
+    page = render_search_html(trees[0])
+    assert "specification (planner)" in page and "- n: COUNT(*)" in page

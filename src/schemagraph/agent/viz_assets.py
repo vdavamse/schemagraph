@@ -101,6 +101,7 @@ details > summary { cursor: pointer; color: var(--muted); }
 .prompt-text { margin: .25rem 0; }
 .pending-note { display: none; }
 .schema-context { margin-top: .75rem; }
+.spec { margin: .5rem 0 1rem; }
 
 /* the replay: classes the player script toggles */
 .js .panel .node-detail { display: none; border-top: 0; padding-top: 0; }

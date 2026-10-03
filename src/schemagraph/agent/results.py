@@ -2,8 +2,8 @@
 
 Core dependencies only (pydantic), so the executor, checks, score and benchmark comparator can be
 used and tested without the ``agent`` extra. The models the agents answer with (`SqlCandidate`,
-`RubricBase`, `Pick`) carry their instructions in their docstrings and field descriptions, which
-pydantic turns into the output tool's JSON schema.
+`QuestionSpec`, `RubricBase`, `Pick`) carry their instructions in their docstrings and field
+descriptions, which pydantic turns into the output tool's JSON schema.
 """
 
 from __future__ import annotations
@@ -117,6 +117,61 @@ class SqlCandidate(BaseModel):
     )
 
 
+class SpecColumn(BaseModel):
+    """One column of the result, in order."""
+
+    name: str = Field(description="The column's name, as the query should output it")
+    meaning: str = Field(
+        description=(
+            "What the column holds, with its formula: the table and column it comes from, "
+            "aggregation, division, rounding and unit"
+        )
+    )
+
+
+class SpecAlternative(BaseModel):
+    """Another reasonable reading of the question, which would change the result."""
+
+    reading: str = Field(description="The other reading, stated precisely")
+    changes: str = Field(description="What it changes in the result: rows, columns or values")
+
+
+class QuestionSpec(BaseModel):
+    """What the question asks, written before any SQL from the question and the schema only.
+
+    The output contract (one row, the columns in order) is what every query is checked against.
+    """
+
+    restated_question: str = Field(description="The question restated in unambiguous terms")
+    main_reading: str = Field(description="The reading the query should follow, and why")
+    row_definition: str = Field(
+        description="What exactly one result row is (one per customer, one per month, ...)"
+    )
+    columns: list[SpecColumn] = Field(
+        description=(
+            "Every result column in order. Each quantity the question mentions gets its own "
+            "column; keep the identifying columns the schema has (ids, names as stored)"
+        )
+    )
+    definitions: list[str] = Field(
+        description=(
+            "Every definition that changes the numbers: where each measure comes from, filters, "
+            "tie-breaking, NULLs and duplicates, top-N per group or overall"
+        )
+    )
+    ordering_and_limits: str = Field(
+        description="The result's ordering and any top-N or limit; say none when there is none"
+    )
+    alternative_readings: list[SpecAlternative] = Field(
+        description=(
+            "Other reasonable readings that would change the result; empty for a clear question"
+        )
+    )
+    confidence: float = Field(
+        ge=0, le=1, description="Probability that the main reading is what the asker meant"
+    )
+
+
 def _probability(question: str) -> Any:
     """A judge field: the probability in [0, 1] that the answer to ``question`` is yes."""
     return Field(ge=0, le=1, description=question)
@@ -163,11 +218,24 @@ READINGS_DESCRIPTION = (
     "and a figure per group), does the result give what every reasonable reading asks for? "
     "If the question has only one reading, answer yes."
 )
+# Rubric field added when a planner wrote a specification (AgentConfig.spec): the judges preferred
+# packed one-row-per-entity shapes that the question's reading does not ask for.
+SPEC_FIELD = "follows_spec"
+SPEC_DESCRIPTION = (
+    "Does the result follow the specification: one row as its row definition says, its "
+    "columns, and every quantity in its own column?"
+)
+# Every rubric field's question, opt-in fields included, for the judge's refine feedback.
+RUBRIC_DESCRIPTIONS: dict[str, str] = {
+    **{name: str(info.description) for name, info in RubricBase.model_fields.items()},
+    READINGS_FIELD: READINGS_DESCRIPTION,
+    SPEC_FIELD: SPEC_DESCRIPTION,
+}
 
 
 @lru_cache(maxsize=256)
 def rubric_type(
-    missing_options: tuple[str, ...] = (), *, readings: bool = False
+    missing_options: tuple[str, ...] = (), *, readings: bool = False, spec: bool = False
 ) -> type[RubricBase]:
     """Build the judge's output type.
 
@@ -178,16 +246,19 @@ def rubric_type(
         missing_options: Candidate table names; blanks and duplicates are dropped and at most
             `MAX_OPTIONS` are kept.
         readings: Add the :data:`READINGS_FIELD` probability, which counts in the judge's mean.
+        spec: Add the :data:`SPEC_FIELD` probability, which counts in the judge's mean.
 
     Returns:
-        `RubricBase` itself when fewer than two options remain and ``readings`` is off, else a
-        ``Rubric`` subclass with a ``missing: list[Literal[...]]`` field and/or the readings
-        field.
+        `RubricBase` itself when fewer than two options remain and ``readings`` and ``spec``
+        are off, else a ``Rubric`` subclass with a ``missing: list[Literal[...]]`` field and/or
+        the readings and specification fields.
     """
     options = tuple(dict.fromkeys(option for option in missing_options if option))[:MAX_OPTIONS]
     extra: dict[str, Any] = {}
     if readings:
         extra[READINGS_FIELD] = (float, _probability(READINGS_DESCRIPTION))
+    if spec:
+        extra[SPEC_FIELD] = (float, _probability(SPEC_DESCRIPTION))
     if len(options) >= _MIN_OPTIONS:
         missing_field = Field(default_factory=list, description=MISSING_DESCRIPTION)
         extra["missing"] = (list[Literal[options]], missing_field)  # type: ignore[valid-type]
@@ -314,7 +385,7 @@ class Transcript(BaseModel):
     """The messages of one model call attempt, kept when ``AgentConfig.trace`` is on.
 
     Attributes:
-        role: The agent's role (``generator``, ``judge``, ``selector`` or ``critic``).
+        role: The agent's role (``generator``, ``judge``, ``selector``, ``critic`` or ``planner``).
         model: The model's name.
         node_id: The search node the call belongs to, if any.
         attempt: 1 for the first try, higher for retries after a rate limit or server error.
@@ -442,6 +513,8 @@ class AnswerResult(BaseModel):
         transcripts: The messages of every model call, when ``AgentConfig.trace`` is on.
         contexts: The schema DDL of each context key the candidates' prompts name.
         instructions: The generator's system instructions.
+        spec: The planner's specification of the question, when ``AgentConfig.spec`` is on and
+            the planner succeeded.
     """
 
     question: str
@@ -463,6 +536,7 @@ class AnswerResult(BaseModel):
     transcripts: list[Transcript] = Field(default_factory=list)
     contexts: dict[str, str] = Field(default_factory=dict)
     instructions: str = ""
+    spec: QuestionSpec | None = None
 
 
 def context_key(ddl: str) -> str:
@@ -634,6 +708,11 @@ class AgentConfig:
         mcp_url: URL of a schemagraph MCP server (streamable HTTP); None starts one in-process
             for the call.
         trace: Keep every model call's messages on ``AnswerResult.transcripts``.
+        spec: Run the planner once per answer, before the search: it writes a
+            :class:`QuestionSpec` (main reading, output contract, alternative readings) that the
+            generator, critic, judge and selector read. Off by default; a planner failure leaves
+            the answer without a specification.
+        planner_model: Planner model; None reads the environment, then the default.
     """
 
     strategy: Strategy = "abmcts"
@@ -677,6 +756,8 @@ class AgentConfig:
     weights: ScoreWeights = field(default_factory=ScoreWeights)
     mcp_url: str | None = None
     trace: bool = False
+    spec: bool = False
+    planner_model: str | None = None
 
     def searched_generators(self) -> tuple[str, ...]:
         """Return the generator models the search chooses between; empty with one.

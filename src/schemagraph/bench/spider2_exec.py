@@ -90,13 +90,15 @@ _LEGACY_VALUES = {
     "gen_models": (),
     "generator_selection": 1,
     "cost_gate": False,  # no CLI flag: CLI runs keep the gate on and get a new config hash
+    "spec": False,
+    "planner_model": None,
 }
 # Decimals of a USD cost in rows and summaries.
 COST_DECIMALS = 6
 # A run's files, each ``spider2_exec_<tag>`` plus a suffix: one record per candidate, one row
 # per task attempt, the report (summary, config and rows), the per-task CSV, the model-call
 # transcripts and one record per task of what its generator prompts share (schema DDL by context
-# key, the generator's instructions).
+# key, the generator's instructions, and the planner's specification when there is one).
 CANDIDATES_SUFFIX = "_candidates.jsonl"
 ROWS_SUFFIX = ".rows.jsonl"
 REPORT_SUFFIX = ".json"
@@ -424,7 +426,8 @@ def _run_config(
     written before the field existed. ``trace`` is left out too: it records, it changes no
     answer. Fields added later (:data:`_LEGACY_VALUES`) count only when they differ from the
     behaviour earlier runs had, for the same reason as ``mcp_url``; so does
-    ``reasoning_node_timeout_s``, which counts only when the generator reasons.
+    ``reasoning_node_timeout_s``, which counts only when the generator reasons, and the
+    planner's own effort, which counts only when it differs from the shared one.
     """
     from schemagraph.agent.models import reasoning_level
 
@@ -452,6 +455,11 @@ def _run_config(
         # the reasoning effort changes the answers; recorded only when a model reads it, so the
         # hash of runs on other providers is unchanged
         config["reasoning"] = reasoning_level()
+    planner_reads_it = models.names.get("planner", "").startswith("openrouter:")
+    if planner_reads_it and reasoning_level("planner") != reasoning_level():
+        # recorded only when it differs: the planner reasoned at the shared effort before it had
+        # its own, so runs planned at that effort keep their hash and resume
+        config["planner_reasoning"] = reasoning_level("planner")
     config["config_hash"] = config_hash(config)
     return config
 
@@ -518,7 +526,8 @@ class RunFiles(NamedTuple):
     Attributes:
         rows: The rows file.
         report: The report.
-        contexts: The contexts file (schema DDL and generator instructions per task).
+        contexts: The contexts file (schema DDL, generator instructions and the planner's
+            specification per task).
     """
 
     rows: Path
@@ -559,8 +568,9 @@ def load_search_trees(
             name none), the configured generators' order and the strategy; None or a missing
             file leaves those unknown.
         tasks: Only these instance ids; None keeps every task.
-        contexts_path: Its contexts file, for the schema DDL in the prompts and the generator's
-            instructions; None or a missing file shows the prompts with schema markers.
+        contexts_path: Its contexts file, for the schema DDL in the prompts, the generator's
+            instructions and the planner's specification; None or a missing file shows the
+            prompts with schema markers.
 
     Returns:
         One tree per task, in the order the candidates file first names them. Every tree
@@ -591,6 +601,7 @@ def load_search_trees(
             facts=_task_facts(rows.get(instance_id, {}), config),
             contexts=_dict_field(contexts.get(instance_id, {}), "contexts"),
             instructions=str(contexts.get(instance_id, {}).get("instructions") or ""),
+            spec=_spec_text(contexts.get(instance_id, {}).get("spec")),
         )
         for instance_id, task_records in records.items()
     ]
@@ -629,6 +640,21 @@ def _task_contexts(contexts_path: Path | None, tasks: Collection[str] | None) ->
             if record is not None and (tasks is None or record["instance_id"] in tasks):
                 records[record["instance_id"]] = record
     return records
+
+
+def _spec_text(spec: Any) -> str:
+    """Render a stored specification for the task page; raw JSON when it no longer validates."""
+    from pydantic import ValidationError
+
+    from schemagraph.agent.prompts import spec_text
+    from schemagraph.agent.results import QuestionSpec
+
+    if not spec:
+        return ""
+    try:
+        return spec_text(QuestionSpec.model_validate(spec))
+    except ValidationError:
+        return json.dumps(spec, indent=1, default=str)
 
 
 def _dict_field(record: dict, name: str) -> dict:
@@ -761,7 +787,7 @@ class _ExecBench:
             ``cfg.trace`` is on, also for a task whose answer raises (the calls made before the
             failure; a resume that retries the task drops them).
         contexts_path: The contexts file (one record per answered task: the schema DDL its
-            prompts name and the generator's instructions).
+            prompts name, the generator's instructions and the planner's specification).
         config_hash: Stamped on every row.
         seed: The run seed.
         total: Tasks in the run, done ones included.
@@ -827,6 +853,8 @@ class _ExecBench:
                     append_record(self.candidates_path, _candidate_record(task, candidate, match))
                 self._write_transcripts(task, result.transcripts)
                 contexts = {"contexts": result.contexts, "instructions": result.instructions}
+                if result.spec is not None:
+                    contexts["spec"] = result.spec.model_dump(mode="json")
                 append_record(self.contexts_path, {"instance_id": task.instance_id, **contexts})
             append_record(self.rows_path, row)
             self.finished += 1
@@ -930,6 +958,8 @@ def _score_task(runner: Runner, task: Instance, result: AnswerResult, standard: 
         "candidate_ex": candidate_ex,
         "sql": result.sql,
         "error": None if any_ran else all_failed(result.candidates),
+        # only in runs with the planner: whether it wrote the specification the search read
+        **({"planned": result.spec is not None} if "planner" in result.models else {}),
     }
 
 

@@ -2438,6 +2438,24 @@
      "abmcts: the paper's generator selection algorithm. 1 chooses a new node or a refinement, then samples the action (the model with several --gen-model, else the context width); 2 gives each action its own GEN node (the paper's ARC-AGI-2 setup)"
     ],
     [
+     "spec",
+     [
+      "--spec"
+     ],
+     "False",
+     "boolean",
+     "plan first: one planner call writes a specification of the question (main reading, output columns, alternative readings) that every agent reads"
+    ],
+    [
+     "planner_model",
+     [
+      "--planner-model"
+     ],
+     "None",
+     "str",
+     "planner model for --spec (default $SCHEMAGRAPH_PLANNER_MODEL or openrouter:anthropic/claude-opus-5.5)"
+    ],
+    [
      "as_json",
      [
       "--json"
@@ -2717,6 +2735,24 @@
      "1",
      "int range",
      "abmcts: the paper's generator selection algorithm. 1 chooses a new node or a refinement, then samples the action (the model with several --gen-model, else the context width); 2 gives each action its own GEN node (the paper's ARC-AGI-2 setup)"
+    ],
+    [
+     "spec",
+     [
+      "--spec"
+     ],
+     "False",
+     "boolean",
+     "plan first: one planner call writes a specification of the question (main reading, output columns, alternative readings) that every agent reads"
+    ],
+    [
+     "planner_model",
+     [
+      "--planner-model"
+     ],
+     "None",
+     "str",
+     "planner model for --spec (default $SCHEMAGRAPH_PLANNER_MODEL or openrouter:anthropic/claude-opus-5.5)"
     ],
     [
      "judge_only",

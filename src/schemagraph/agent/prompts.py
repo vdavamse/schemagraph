@@ -1,13 +1,15 @@
-"""Instructions and prompt material for the four agents (pure strings, no model imports).
+"""Instructions and prompt material for the agents (pure strings, no model imports).
 
 The judge and selector run on Jev, which reads the prompt as the material being judged and takes
 its questions from the output type; so their material carries no instructions and no DDL (Jev
-degrades on irrelevant context), only the question, the SQL and a short result preview.
+degrades on irrelevant context), only the question, the SQL and a short result preview. The
+optional planner's specification (:func:`spec_section`) is material too: every agent reads the
+same text, and only the generator is told what to do with it.
 """
 
 from __future__ import annotations
 
-from schemagraph.agent.results import Candidate, ExecResult
+from schemagraph.agent.results import Candidate, ExecResult, QuestionSpec
 
 GENERATOR_INSTRUCTIONS = (
     "You write exactly one read-only SQL query in the {dialect} dialect that answers the user's "
@@ -38,6 +40,29 @@ DIALECT_NOTES = {
 }
 
 JUDGE_INSTRUCTIONS = "Judge only against the question."
+
+PLANNER_INSTRUCTIONS = """\
+You are the first step of a text-to-SQL pipeline. Before anyone writes SQL, write a precise
+specification of what the question asks, using only the schema you are shown.
+
+- Restate the question in unambiguous terms and give your main reading.
+- Give the output contract: what exactly one result row is, and every column in order with its
+  meaning or formula (aggregations, divisions, rounding, units). Each quantity the question
+  mentions gets its own column; never pack several values into one string; keep the identifying
+  columns the schema has (ids, names as the schema stores them).
+- State every definition that changes the numbers: which table and column a measure comes from,
+  filters, how ties are broken, how NULLs and duplicates are handled, top-N per group or overall.
+- If the question can reasonably be read another way that changes the result, list each
+  alternative reading and what it changes. Do not invent alternatives for clear questions.
+- Your confidence (0-1) that the main reading is what the asker meant.
+"""
+
+# What the generator is told about the specification, after it.
+SPEC_GUIDANCE = (
+    "Follow the specification's main reading and its output contract: one row as its row "
+    "definition says, its columns in order, each quantity in its own column. The alternative "
+    "readings are there only for when probing the data shows the main reading cannot be right."
+)
 
 CRITIC_INSTRUCTIONS = (
     "You review a SQL attempt that did not fully answer a question. "
@@ -105,6 +130,45 @@ def generator_instructions(dialect: str, probes: int) -> str:
     return GENERATOR_INSTRUCTIONS.format(dialect=dialect, probes=probes, notes=notes)
 
 
+def planner_prompt(question: str, evidence: str | None, ddl: str, *, evidence_chars: int) -> str:
+    """Build the planner's prompt: the question, its external knowledge and the linked schema.
+
+    Args:
+        question: The user's question.
+        evidence: External knowledge for the question, if any.
+        ddl: The wide context's DDL.
+        evidence_chars: Characters of ``evidence`` kept (``AgentConfig.evidence_chars``).
+    """
+    sections = [f"Question: {question}"]
+    if evidence:
+        sections.append(f"External knowledge:\n{evidence[:evidence_chars]}")
+    sections.append(f"Schema:\n{ddl.strip()}")
+    return "\n\n".join(sections)
+
+
+def spec_text(spec: QuestionSpec) -> str:
+    """Render a specification as plain text: reading, row, columns, definitions, alternatives."""
+    lines = [
+        f"Question, restated: {spec.restated_question}",
+        f"Main reading (confidence {spec.confidence:.2f}): {spec.main_reading}",
+        f"One result row: {spec.row_definition}",
+        "Columns, in order:",
+        *(f"- {column.name}: {column.meaning}" for column in spec.columns),
+    ]
+    if spec.definitions:
+        lines += ["Definitions:", *(f"- {definition}" for definition in spec.definitions)]
+    lines.append(f"Ordering and limits: {spec.ordering_and_limits}")
+    if spec.alternative_readings:
+        lines.append("Alternative readings:")
+        lines += [f"- {alt.reading} (changes: {alt.changes})" for alt in spec.alternative_readings]
+    return "\n".join(lines)
+
+
+def spec_section(spec: QuestionSpec) -> str:
+    """Render the "Specification" section every agent reads when a planner wrote one."""
+    return f"Specification (written before any SQL):\n{spec_text(spec)}"
+
+
 def _problems(feedback: list[str]) -> str:
     """Render feedback lines as a bulleted "Problems found" section."""
     return "Problems found:\n" + "\n".join(f"- {line}" for line in feedback)
@@ -168,6 +232,7 @@ def generator_prompt(
     *,
     evidence_chars: int,
     siblings: list[Candidate] | None = None,
+    spec: QuestionSpec | None = None,
 ) -> str:
     """Build the generator's user prompt for a fresh draft, or a refinement of ``parent``.
 
@@ -180,6 +245,7 @@ def generator_prompt(
         parent: The attempt to refine; None for a fresh draft.
         siblings: Earlier refinements of ``parent``.
         evidence_chars: Characters of ``evidence`` kept (``AgentConfig.evidence_chars``).
+        spec: The planner's specification, shown with :data:`SPEC_GUIDANCE`; None shows none.
 
     Returns:
         The prompt's sections, separated by blank lines.
@@ -187,6 +253,8 @@ def generator_prompt(
     sections = [f"Question: {question}"]
     if evidence:
         sections.append(f"External knowledge:\n{evidence[:evidence_chars]}")
+    if spec is not None:
+        sections.append(f"{spec_section(spec)}\n\n{SPEC_GUIDANCE}")
     sections.append(f"Schema ({action} context, {n_tables} tables):\n{ddl.strip()}")
     if parent is not None:
         sections.extend(_refine_sections(parent, siblings))
@@ -204,8 +272,9 @@ def judge_material(
     schema: str | None = None,
     findings: list[str] | None = None,
     stats: bool = False,
+    spec: QuestionSpec | None = None,
 ) -> str:
-    """Build what the judge reads: the question, notes, schema, SQL, result and checks.
+    """Build what the judge reads: the question, notes, specification, schema, SQL, result, checks.
 
     Args:
         question: The user's question.
@@ -218,6 +287,7 @@ def judge_material(
         schema: The tables the query reads (:func:`judge_schema`), if shown.
         findings: The deterministic checks' messages, if shown.
         stats: Add per-column statistics of the fetched rows (:func:`result_stats`).
+        spec: The planner's specification; None shows none.
 
     Returns:
         The material's sections, separated by blank lines.
@@ -225,6 +295,10 @@ def judge_material(
     sections = [f"Question: {question}"]
     if evidence and evidence_chars > 0:
         sections.append(f"Notes: {evidence[:evidence_chars]}")
+    if spec is not None:
+        # whole and uncut, as in the measured runs: a planner writes 2-4k characters, and a
+        # compact judge's version (no alternatives) waits for a judge study
+        sections.append(spec_section(spec))
     if schema:
         sections.append(f"Tables the query reads:\n{schema[:JUDGE_SCHEMA_CHARS]}")
     sections.append(f"SQL:\n{sql[:JUDGE_SQL_CHARS]}")
@@ -368,6 +442,7 @@ def pick_material(
     rows: int = PICK_PREVIEW_ROWS,
     stats: bool = False,
     findings: bool = False,
+    spec: QuestionSpec | None = None,
 ) -> str:
     """Build what the selector reads to compare candidates ``a`` and ``b``.
 
@@ -386,6 +461,7 @@ def pick_material(
         rows: Result rows shown per candidate.
         stats: Show per-column result statistics (:func:`result_stats`).
         findings: Show the deterministic checks' findings.
+        spec: The planner's specification, with or without context; None shows none.
 
     Returns:
         The selector's user prompt.
@@ -393,6 +469,8 @@ def pick_material(
     sections = [f"Question: {question}"]
     if evidence and evidence_chars > 0:
         sections.append(f"Notes: {evidence[:evidence_chars]}")
+    if spec is not None:
+        sections.append(spec_section(spec))
     if schema_a and schema_a == schema_b:
         sections.append(f"Tables both queries read:\n{schema_a[:JUDGE_SCHEMA_CHARS]}")
     else:
@@ -404,10 +482,14 @@ def pick_material(
     return "\n\n".join(sections)
 
 
-def critic_prompt(question: str, candidate: Candidate, schema: str) -> str:
-    """Build the critic's prompt: the question, the schema and the attempt with its problems."""
-    sections = [
-        f"Question: {question}",
+def critic_prompt(
+    question: str, candidate: Candidate, schema: str, *, spec: QuestionSpec | None = None
+) -> str:
+    """Build the critic's prompt: question, specification if any, schema, attempt and problems."""
+    sections = [f"Question: {question}"]
+    if spec is not None:
+        sections.append(spec_section(spec))
+    sections += [
         f"Schema:\n{schema[:CRITIC_SCHEMA_CHARS]}",
         f"SQL:\n{candidate.sql or '(none)'}",
         f"Result: {preview(candidate.exec, ATTEMPT_PREVIEW_ROWS)}",

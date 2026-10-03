@@ -402,13 +402,16 @@ def _reject_ignored(strategy: Strategy, settings: dict[str, Any]) -> None:
 
     Raises:
         typer.BadParameter: ``--action`` with several ``--gen-model`` (the models are then the
-            actions and every node links wide), or ``--generator-selection 2`` or
-            ``--algorithm m`` outside ``abmcts`` (only the tree search uses them).
+            actions and every node links wide), ``--planner-model`` without ``--spec`` (no
+            planner runs), or ``--generator-selection 2`` or ``--algorithm m`` outside
+            ``abmcts`` (only the tree search uses them).
     """
     if len(settings.get("gen_models", ())) > 1 and "actions" in settings:
         raise typer.BadParameter(
             "with several --gen-model the models are the actions", param_hint="'--action'"
         )
+    if settings.get("planner_model") and not settings.get("spec"):
+        raise typer.BadParameter("only --spec runs the planner", param_hint="'--planner-model'")
     if strategy == "abmcts":
         return
     if settings.get("generator_selection", 1) != 1:
@@ -552,6 +555,24 @@ DraftTemperatureOpt = Annotated[
 RefineTemperatureOpt = Annotated[
     float, typer.Option(help="generator temperature for refinements")
 ]
+SpecOpt = Annotated[
+    bool,
+    typer.Option(
+        help=(
+            "plan first: one planner call writes a specification of the question (main reading, "
+            "output columns, alternative readings) that every agent reads"
+        )
+    ),
+]
+PlannerModelOpt = Annotated[
+    str | None,
+    typer.Option(
+        help=(
+            "planner model for --spec (default $SCHEMAGRAPH_PLANNER_MODEL or "
+            "openrouter:anthropic/claude-opus-5.5)"
+        )
+    ),
+]
 GeneratorSelectionOpt = Annotated[
     int,
     typer.Option(
@@ -610,6 +631,8 @@ def ask(
     draft_temperature: DraftTemperatureOpt = 0.8,
     refine_temperature: RefineTemperatureOpt = 0.4,
     generator_selection: GeneratorSelectionOpt = 1,
+    spec: SpecOpt = False,
+    planner_model: PlannerModelOpt = None,
     as_json: Annotated[
         bool, typer.Option("--json", help="print the full AnswerResult as JSON")
     ] = False,
@@ -647,6 +670,8 @@ def ask(
         draft_temperature=draft_temperature,
         refine_temperature=refine_temperature,
         generator_selection=generator_selection,
+        spec=spec,
+        planner_model=planner_model,
         mcp_url=mcp_url,
         trace=trace,
     )
@@ -733,6 +758,8 @@ def bench_spider2_exec(
     draft_temperature: DraftTemperatureOpt = 0.8,
     refine_temperature: RefineTemperatureOpt = 0.4,
     generator_selection: GeneratorSelectionOpt = 1,
+    spec: SpecOpt = False,
+    planner_model: PlannerModelOpt = None,
     judge_only: Annotated[
         bool,
         typer.Option(
@@ -797,6 +824,8 @@ def bench_spider2_exec(
         draft_temperature=draft_temperature,
         refine_temperature=refine_temperature,
         generator_selection=generator_selection,
+        spec=spec,
+        planner_model=planner_model,
         trace=trace,
     )
     ids = None

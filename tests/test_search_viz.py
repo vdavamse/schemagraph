@@ -22,6 +22,8 @@ from schemagraph.agent.results import (
     ExecResult,
     Finding,
     Judgement,
+    QuestionSpec,
+    SpecColumn,
     UsageSummary,
     candidate_record,
     exec_error_text,
@@ -481,6 +483,19 @@ def test_the_answer_tree_falls_back_to_the_run_generator():
     candidates = [Candidate(id="n0", sql="SELECT 1")]  # a single-generator run names none
     tree = tree_from_answer(_answer(candidates))
     assert tree.nodes[0].model == GLM and tree.models == (GLM,)
+
+
+def test_the_planners_spec_is_folded_under_the_facts_and_escaped():
+    spec = QuestionSpec(
+        restated_question="<b>orders</b>", main_reading="count them", row_definition="one row",
+        columns=[SpecColumn(name="n", meaning="COUNT(*)")], definitions=[],
+        ordering_and_limits="none", alternative_readings=[], confidence=0.9,
+    )  # fmt: skip
+    answer = _answer(_candidates())
+    assert "specification (planner)" not in render_search_html(tree_from_answer(answer))
+    page = render_search_html(tree_from_answer(answer.model_copy(update={"spec": spec})))
+    assert "specification (planner)" in page and "- n: COUNT(*)" in page
+    assert "&lt;b&gt;orders&lt;/b&gt;" in page and "<b>orders" not in page
 
 
 # ----------------------------------------------------------------------------- 10. viz-search

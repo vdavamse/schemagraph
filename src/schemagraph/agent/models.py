@@ -1,10 +1,13 @@
 """Which model plays which role, resolved once per answer.
 
 Generator and critic default to Qwen on Alibaba DashScope (``ALIBABA_API_KEY`` or
-``DASHSCOPE_API_KEY``); judge and selector default to TypeSafe Jev (``TYPESAFE_API_KEY``). Any
-pydantic-ai model string works for each role through the ``SCHEMAGRAPH_*_MODEL`` variables.
-``openrouter:`` models reason at ``SCHEMAGRAPH_REASONING`` effort (default medium) and report
-their billed cost; Jev goes through OpenRouter with ``TYPESAFE_BASE_URL=https://openrouter.ai/api``.
+``DASHSCOPE_API_KEY``); judge and selector default to TypeSafe Jev (``TYPESAFE_API_KEY``); the
+planner, which runs only with ``AgentConfig.spec``, defaults to Claude Opus through OpenRouter
+(``OPENROUTER_API_KEY``). Any pydantic-ai model string works for each role through the
+``SCHEMAGRAPH_*_MODEL`` variables.
+``openrouter:`` models reason at ``SCHEMAGRAPH_REASONING`` effort (default medium), the planner at
+``SCHEMAGRAPH_PLANNER_REASONING`` (default high), and report their billed cost; Jev goes through
+OpenRouter with ``TYPESAFE_BASE_URL=https://openrouter.ai/api``.
 """
 
 from __future__ import annotations
@@ -17,44 +20,65 @@ from schemagraph.agent.results import AgentConfig
 
 DEFAULT_GEN_MODEL = "alibaba:qwen3.8-max"
 DEFAULT_JUDGE_MODEL = "typesafe:jev-1.13.0"
+# The planner's default: the model that matched the gold reading on 18 of 21 tasks offline
+# (bench_results/planner_study), at high reasoning (DEFAULT_PLANNER_REASONING).
+DEFAULT_PLANNER_MODEL = "openrouter:anthropic/claude-opus-5.5"
 ENV_GEN = "SCHEMAGRAPH_GEN_MODEL"
 ENV_JUDGE = "SCHEMAGRAPH_JUDGE_MODEL"
 ENV_CRITIC = "SCHEMAGRAPH_CRITIC_MODEL"
+ENV_PLANNER = "SCHEMAGRAPH_PLANNER_MODEL"
 ENV_ALIBABA_BASE_URL = "SCHEMAGRAPH_ALIBABA_BASE_URL"
 ENV_REASONING = "SCHEMAGRAPH_REASONING"
 # Reasoning effort of ``openrouter:`` models; ``off`` asks the route not to reason.
 REASONING_LEVELS = ("off", "low", "medium", "high")
 DEFAULT_REASONING = "medium"
+ENV_PLANNER_REASONING = "SCHEMAGRAPH_PLANNER_REASONING"
+# The planner's own effort: the offline study and the live runs planned at high, and it is one
+# call per answer, so high costs little next to the search.
+DEFAULT_PLANNER_REASONING = "high"
 
 
 def model_names(cfg: AgentConfig) -> dict[str, str]:
     """Name the model of each role: the config first, then the environment, then the default.
 
-    With several generator models (``cfg.gen_models``) the generator is the first of them.
+    With several generator models (``cfg.gen_models``) the generator is the first of them. The
+    planner is named only when ``cfg.spec`` is on, so the names of runs without it (recorded in
+    the benchmark's config hash) are unchanged.
     """
     configured = cfg.gen_models[0] if cfg.gen_models else cfg.gen_model
     generator = configured or os.environ.get(ENV_GEN) or DEFAULT_GEN_MODEL
     judge = cfg.judge_model or os.environ.get(ENV_JUDGE) or DEFAULT_JUDGE_MODEL
     critic = cfg.critic_model or os.environ.get(ENV_CRITIC) or generator
-    return {"generator": generator, "judge": judge, "selector": judge, "critic": critic}
+    names = {"generator": generator, "judge": judge, "selector": judge, "critic": critic}
+    if cfg.spec:
+        names["planner"] = cfg.planner_model or os.environ.get(ENV_PLANNER) or DEFAULT_PLANNER_MODEL
+    return names
 
 
-def reasoning_level() -> str:
-    """Return the reasoning effort of ``openrouter:`` models, from the environment.
+def reasoning_level(role: str | None = None) -> str:
+    """Return the reasoning effort of ``openrouter:`` models in ``role``, from the environment.
+
+    The planner reads ``SCHEMAGRAPH_PLANNER_REASONING`` (default high); every other role reads
+    ``SCHEMAGRAPH_REASONING`` (default medium).
 
     Raises:
-        ValueError: ``SCHEMAGRAPH_REASONING`` is not one of :data:`REASONING_LEVELS`.
+        ValueError: The variable is not one of :data:`REASONING_LEVELS`.
     """
-    level = os.environ.get(ENV_REASONING, DEFAULT_REASONING).strip().lower() or DEFAULT_REASONING
+    if role == "planner":
+        env, default = ENV_PLANNER_REASONING, DEFAULT_PLANNER_REASONING
+    else:
+        env, default = ENV_REASONING, DEFAULT_REASONING
+    level = os.environ.get(env, default).strip().lower() or default
     if level not in REASONING_LEVELS:
         expected = ", ".join(REASONING_LEVELS)
-        raise ValueError(f"{ENV_REASONING}={level!r}: expected one of {expected}")
+        raise ValueError(f"{env}={level!r}: expected one of {expected}")
     return level
 
 
-def reasons(name: Any) -> bool:
+def reasons(name: Any, role: str | None = None) -> bool:
     """Whether the model named ``name`` is asked to reason (an ``openrouter:`` model, not off)."""
-    return isinstance(name, str) and name.startswith("openrouter:") and reasoning_level() != "off"
+    is_openrouter = isinstance(name, str) and name.startswith("openrouter:")
+    return is_openrouter and reasoning_level(role) != "off"
 
 
 def _no_forced_tools() -> Any:
@@ -83,8 +107,8 @@ def _alibaba_model(model: str) -> Any:
     return OpenAIChatModel(model, provider=provider, profile=profile)
 
 
-def _openrouter_model(model: str) -> Any:
-    """Build an OpenRouter model that reasons at :func:`reasoning_level` and reports its cost.
+def _openrouter_model(model: str, level: str) -> Any:
+    """Build an OpenRouter model that reasons at effort ``level`` and reports its cost.
 
     Reasoning uses OpenRouter's unified ``reasoning`` field, which the gateway translates for the
     upstream (Qwen's thinking mode included); ``usage.include`` asks for the billed cost of every
@@ -95,7 +119,6 @@ def _openrouter_model(model: str) -> Any:
     from pydantic_ai.profiles import merge_profile
     from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-    level = reasoning_level()
     settings = OpenRouterModelSettings(openrouter_usage={"include": True})
     if level == "off":
         settings["openrouter_reasoning"] = {"enabled": False}
@@ -107,15 +130,16 @@ def _openrouter_model(model: str) -> Any:
     return OpenRouterModel(model, provider=OpenRouterProvider(), profile=profile, settings=settings)
 
 
-def resolve_model(name: Any) -> Any:
+def resolve_model(name: Any, *, effort: str | None = None) -> Any:
     """Return a pydantic-ai model for ``name``; a model object passes through.
 
     Qwen models on DashScope get ``tool_choice="auto"`` instead of ``"required"`` for structured
     output (pydantic-ai's Qwen profile sets that only for ``qwen-3-coder``; DashScope rejects forced
     tool choice for thinking models, pydantic-ai issue #1265) and no strict tool schemas. A
     text-only reply then triggers pydantic-ai's retry prompt for the output tool, bounded by
-    ``output_retries``. ``openrouter:`` models reason (:func:`_openrouter_model`). Other strings
-    (``"openai:..."``, ``"test"``, ...) are left for pydantic-ai to infer.
+    ``output_retries``. ``openrouter:`` models reason (:func:`_openrouter_model`) at ``effort``,
+    or the shared :func:`reasoning_level` when None. Other strings (``"openai:..."``, ``"test"``,
+    ...) are left for pydantic-ai to infer.
     """
     if not isinstance(name, str):
         return name
@@ -123,7 +147,7 @@ def resolve_model(name: Any) -> Any:
     if provider == "alibaba":
         return _alibaba_model(model)
     if provider == "openrouter":
-        return _openrouter_model(model)
+        return _openrouter_model(model, effort or reasoning_level())
     if provider == "typesafe":
         from pydantic_ai.models.typesafe import TypeSafeModel
 
@@ -138,6 +162,7 @@ def _roles_used(cfg: AgentConfig) -> dict[str, bool]:
         "judge": cfg.judge,
         "selector": cfg.selector and cfg.strategy != "single",
         "critic": cfg.strategy in {"refine", "abmcts"},
+        "planner": cfg.spec,
     }
 
 
@@ -150,10 +175,12 @@ class AgentModels:
         judge: Judge model, or None when the judge is off.
         selector: Pairwise selector model, or None when it does not run.
         critic: Critic model, or None when the strategy never refines.
-        names: Model name by role, including roles that do not run.
+        names: Model name by role, including roles that do not run (except the planner, named
+            only when ``AgentConfig.spec`` is on).
         generators: The models of ``AgentConfig.gen_models`` by name, when the strategy
             searches them together (``best_of_n``, ``abmcts``); empty otherwise, and the one
             generator is ``gen``.
+        planner: Planner model, or None when ``AgentConfig.spec`` is off.
     """
 
     gen: Any
@@ -162,6 +189,7 @@ class AgentModels:
     critic: Any
     names: dict[str, str] = field(default_factory=dict)
     generators: dict[str, Any] = field(default_factory=dict)
+    planner: Any = None
 
     @classmethod
     def resolve(cls, cfg: AgentConfig) -> AgentModels:
@@ -189,13 +217,17 @@ class AgentModels:
             model_for("critic"),
             names,
             {name: resolved(name) for name in cfg.searched_generators()},
+            # last, and not cached by name: the planner reasons at its own effort
+            resolve_model(names["planner"], effort=reasoning_level("planner"))
+            if used["planner"]
+            else None,
         )
 
     def reasoning(self, role: str) -> bool:
         """Whether ``role``'s model is asked to reason; for the generator, any of its models."""
         if role == "generator" and self.generators:
             return any(reasons(name) for name in self.generators)
-        return reasons(self.names.get(role))
+        return reasons(self.names.get(role), role)
 
     def generator(self, name: str | None) -> tuple[Any, str]:
         """Return a generator model and its name; None, or the default's name, is ``gen``.
