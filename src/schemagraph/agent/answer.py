@@ -224,10 +224,11 @@ class Answerer:
         )
 
     async def _plan(self) -> QuestionSpec | None:
-        """Run the planner on the question and the wide context; None when it fails.
+        """Run the planner on the question and the wide context; None when the call fails.
 
-        A failure (no key, a refusal, an invalid specification) never fails the answer: its
-        usage record keeps the error, and the search runs without a specification.
+        A failed call (a refusal, an invalid specification, a timeout) never fails the answer: its
+        usage record keeps the error, and the search runs without a specification. A missing key
+        fails earlier, when the models resolve, before any search is paid for.
         """
         prompt = prompts.planner_prompt(
             self.question, self.evidence, self._wide.ddl, evidence_chars=self.cfg.evidence_chars

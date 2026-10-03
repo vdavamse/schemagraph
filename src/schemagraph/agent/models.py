@@ -130,15 +130,16 @@ def _openrouter_model(model: str, level: str) -> Any:
     return OpenRouterModel(model, provider=OpenRouterProvider(), profile=profile, settings=settings)
 
 
-def resolve_model(name: Any) -> Any:
+def resolve_model(name: Any, *, effort: str | None = None) -> Any:
     """Return a pydantic-ai model for ``name``; a model object passes through.
 
     Qwen models on DashScope get ``tool_choice="auto"`` instead of ``"required"`` for structured
     output (pydantic-ai's Qwen profile sets that only for ``qwen-3-coder``; DashScope rejects forced
     tool choice for thinking models, pydantic-ai issue #1265) and no strict tool schemas. A
     text-only reply then triggers pydantic-ai's retry prompt for the output tool, bounded by
-    ``output_retries``. ``openrouter:`` models reason (:func:`_openrouter_model`). Other strings
-    (``"openai:..."``, ``"test"``, ...) are left for pydantic-ai to infer.
+    ``output_retries``. ``openrouter:`` models reason (:func:`_openrouter_model`) at ``effort``,
+    or the shared :func:`reasoning_level` when None. Other strings (``"openai:..."``, ``"test"``,
+    ...) are left for pydantic-ai to infer.
     """
     if not isinstance(name, str):
         return name
@@ -146,19 +147,12 @@ def resolve_model(name: Any) -> Any:
     if provider == "alibaba":
         return _alibaba_model(model)
     if provider == "openrouter":
-        return _openrouter_model(model, reasoning_level())
+        return _openrouter_model(model, effort or reasoning_level())
     if provider == "typesafe":
         from pydantic_ai.models.typesafe import TypeSafeModel
 
         return TypeSafeModel(model)
     return name
-
-
-def _resolve_planner(name: Any) -> Any:
-    """Return the planner's model: :func:`resolve_model`, but reasoning at the planner's effort."""
-    if isinstance(name, str) and name.startswith("openrouter:"):
-        return _openrouter_model(name.partition(":")[2], reasoning_level("planner"))
-    return resolve_model(name)
 
 
 def _roles_used(cfg: AgentConfig) -> dict[str, bool]:
@@ -223,7 +217,10 @@ class AgentModels:
             model_for("critic"),
             names,
             {name: resolved(name) for name in cfg.searched_generators()},
-            _resolve_planner(names["planner"]) if used["planner"] else None,
+            # last, and not cached by name: the planner reasons at its own effort
+            resolve_model(names["planner"], effort=reasoning_level("planner"))
+            if used["planner"]
+            else None,
         )
 
     def reasoning(self, role: str) -> bool:

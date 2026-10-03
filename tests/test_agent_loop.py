@@ -1114,12 +1114,19 @@ def test_model_names_add_the_planner_only_with_the_spec(monkeypatch):
     assert model_names(AgentConfig(spec=True))["planner"] == "env-planner"
     assert model_names(AgentConfig(spec=True, planner_model="p"))["planner"] == "p"
     seen: list[str] = []
-    monkeypatch.setattr(agent_models, "resolve_model", lambda name: seen.append(name) or name)
+
+    def resolve(name, effort=None):
+        seen.append(name if effort is None else f"{name}@{effort}")
+        return name
+
+    monkeypatch.setattr(agent_models, "resolve_model", resolve)
+    monkeypatch.delenv("SCHEMAGRAPH_PLANNER_REASONING", raising=False)
     cfg = AgentConfig(strategy="single", judge=False, gen_model="g")
     assert AgentModels.resolve(cfg).planner is None and seen == ["g"]
     seen.clear()
+    # the planner resolves through resolve_model too, at its own effort
     assert AgentModels.resolve(replace(cfg, spec=True, planner_model="p")).planner == "p"
-    assert seen == ["g", "p"]
+    assert seen == ["g", "p@high"]
 
 
 def test_the_planner_runs_once_and_every_agent_reads_the_spec(store):
